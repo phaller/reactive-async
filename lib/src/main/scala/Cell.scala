@@ -28,6 +28,21 @@ trait Cell[K, V] {
   def onCycle(callback: Seq[K] => Unit)
 }
 
+
+trait CellCompleter[K, V] {
+  def cell: Cell[K, V]
+
+  def putFinal(x: V): Unit
+  def putNext(x: V): Unit
+}
+
+object CellCompleter {
+  def apply[K, V](): CellCompleter[K, V] = {
+    ???
+  }
+}
+
+
 abstract class CellImpl[K, V] extends Cell[K, V] {
 
   private val state = new AtomicReference[AnyRef]()
