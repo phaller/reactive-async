@@ -1,3 +1,6 @@
+
+import java.util.concurrent.atomic._
+
 /**
  * Example:
  *
@@ -23,4 +26,10 @@ trait Cell[K, V] {
   def onNextResult(callback: V => Unit)
 
   def onCycle(callback: Seq[K] => Unit)
+}
+
+abstract class CellImpl[K, V] extends Cell[K, V] {
+
+  private val state = new AtomicReference[AnyRef]()
+
 }
