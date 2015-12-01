@@ -25,7 +25,25 @@ trait Cell[K, V] {
   // internal API
   def onNextResult(callback: V => Unit)
 
-  def onCycle(callback: Seq[K] => Unit)
+  /**
+   * Adds a dependency on some `other` cell.
+   *
+   * Example:
+   *   whenComplete(cell, x => !x, Impure) // if `cell` is completed and the predicate is true (meaning
+   *                                       // `cell` is impure), `this` cell can be completed with constant `Impure`
+   *
+   * @param other  Cell that `this` Cell depends on.
+   * @param pred   Predicate used to decide whether a final result of `this` Cell can be computed early.
+   * @param value  Early result value.
+   */
+  def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit
+
+  /**
+   * Registers a call-back function to be invoked when quiescence is reached, but `this` cell has not been
+   * completed, yet. The call-back function is passed a sequence of the cells that `this` cell depends on.
+   */
+  def onCycle(callback: Seq[Cell[K, V]] => V)
+
 }
 
 
