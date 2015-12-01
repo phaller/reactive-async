@@ -80,14 +80,24 @@ object CellCompleter {
  */
 class Dep[K, V](val cell: Cell[K, V], val pred: V => Boolean, val value: V)
 
-// important that equality is by-reference
-private class State[K, V](val current: V, val deps: List[Dep[K,V]], val callbacks: List[CallbackRunnable[V]])
+
+/* State of a cell that is not yet completed.
+ *
+ * This is not a case class, since it is important that equality is by-reference.
+ *
+ * @param res       current intermediate result
+ * @param deps      dependencies on other cells
+ * @param callbacks list of registered call-back runnables
+ */
+private class State[K, V](val res: Option[V], val deps: List[Dep[K,V]], val callbacks: List[CallbackRunnable[V]])
+
 
 abstract class CellImpl[K, V] extends Cell[K, V] with CellCompleter[K, V] {
 
   /* Contains a value either of type
-   * (a) `Try[V]` for the final result, or
-   * (b) `(Option[V], List[Dep[K,V]])` for an optional intermediate result + deps
+   * (a) `Try[V]`      for the final result, or
+   * (b) `State[K,V]`  for an incomplete state.
+   *
    * Assumes that dependencies need to be kept until a final result is known.
    */
   private val state = new AtomicReference[AnyRef]()
@@ -104,7 +114,7 @@ abstract class CellImpl[K, V] extends Cell[K, V] with CellCompleter[K, V] {
         // do not add dependency
         // in fact, do nothing
 
-      case current @ (res, deps) => // not completed: intermediate result `res` and list of dependencies `deps`
+      case raw: State[_, _] => // not completed
 
         /*val subscription =*/ other.onComplete { otherRes =>
           if (pred(otherRes)) this.tryComplete(Success(value))
@@ -112,18 +122,21 @@ abstract class CellImpl[K, V] extends Cell[K, V] with CellCompleter[K, V] {
 
         // idea: on completion of `this` cell, use `subscription` to cancel completion callback registered with `other`
 
-        val newDep = new Dep(other, pred, value)
-        val newState = (res, newDep :: deps.asInstanceOf[List[Dep[K,V]]])
-        state.compareAndSet(current, newState)
+        val newDep   = new Dep(other, pred, value)
+        val current  = raw.asInstanceOf[State[K, V]]
+        val newState = new State(current.res, newDep :: current.deps, current.callbacks)
+        state.compareAndSet(raw, newState)
     }
   }
 
   @tailrec
-  private def tryCompleteAndGetDeps(v: Try[V]): List[Dep[K,V]] = {
+  private def tryCompleteAndGetState(v: Try[V]): State[K, V] = {
     state.get() match {
-      case current @ (res, rawDeps) =>
-        val deps = rawDeps.asInstanceOf[List[Dep[K,V]]]
-        if (state.compareAndSet(current, v)) deps else tryCompleteAndGetDeps(v)
+      case current: State[_, _] =>
+        if (state.compareAndSet(current, v))
+          current.asInstanceOf[State[K, V]]
+        else
+          tryCompleteAndGetState(v)
 
       case _ => null
     }
