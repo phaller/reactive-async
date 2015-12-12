@@ -17,5 +17,6 @@ def noPublish = Seq(
 lazy val lib: Project = (project in file("lib")).
   settings(commonSettings: _*).
   settings(
-    name := "reactive-async-lib"
+    name := "reactive-async-lib",
+    libraryDependencies += scalaTest
   )
