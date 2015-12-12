@@ -194,12 +194,11 @@ class CellImpl[K, V](val key: K) extends Cell[K, V] with CellCompleter[K, V] {
         val current = pre.asInstanceOf[State[K, V]]
         val newDeps = current.deps.filterNot(_ == dep)
 
-        if (newDeps.isEmpty)
-          nodepslatch.countDown()
-
         val newState = new State(current.res, newDeps, current.callbacks)
         if (!state.compareAndSet(current, newState))
           removeDep(dep)
+        else if (newDeps.isEmpty)
+          nodepslatch.countDown()
 
       case _ => /* do nothing */
     }
