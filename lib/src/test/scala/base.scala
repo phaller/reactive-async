@@ -5,7 +5,7 @@ import java.util.concurrent.CountDownLatch
 import scala.util.{Success, Failure}
 import scala.concurrent.ExecutionContext.Implicits.global
 
-import cell.CellCompleter
+import cell.{CellCompleter, HandlerPool}
 
 
 class BaseSuite extends FunSuite {
@@ -76,8 +76,6 @@ class BaseSuite extends FunSuite {
   }
 
   test("whenComplete: dependency 2") {
-    val latch = new CountDownLatch(1)
-
     val completer1 = CellCompleter[String, Int]("somekey")
     val completer2 = CellCompleter[String, Int]("someotherkey")
 
@@ -89,5 +87,17 @@ class BaseSuite extends FunSuite {
     cell1.waitUntilNoDeps()
 
     assert(cell1.dependencies.isEmpty)
+  }
+
+  test("handler pool") {
+    val pool = new HandlerPool
+    val latch = new CountDownLatch(1)
+    val latch2 = new CountDownLatch(1)
+    pool.execute { () => latch.await() }
+    pool.onQuiescent { () => latch2.countDown() }
+    latch.countDown()
+
+    latch2.await()
+    assert(true)
   }
 }
