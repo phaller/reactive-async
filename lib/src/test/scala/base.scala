@@ -3,7 +3,6 @@ import org.scalatest.FunSuite
 import java.util.concurrent.CountDownLatch
 
 import scala.util.{Success, Failure}
-import scala.concurrent.ExecutionContext.Implicits.global
 
 import cell.{CellCompleter, HandlerPool}
 
@@ -12,7 +11,8 @@ class BaseSuite extends FunSuite {
   test("putFinal") {
     val latch = new CountDownLatch(1)
 
-    val completer = CellCompleter[String, Int]("somekey")
+    val pool = new HandlerPool
+    val completer = CellCompleter[String, Int](pool, "somekey")
     val cell = completer.cell
     cell.onComplete {
       case Success(v) =>
@@ -25,13 +25,16 @@ class BaseSuite extends FunSuite {
     completer.putFinal(5)
 
     latch.await()
+
+    pool.shutdown()
   }
 
   test("whenComplete") {
     val latch = new CountDownLatch(1)
 
-    val completer1 = CellCompleter[String, Int]("somekey")
-    val completer2 = CellCompleter[String, Int]("someotherkey")
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[String, Int](pool, "somekey")
+    val completer2 = CellCompleter[String, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
     cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
@@ -48,13 +51,16 @@ class BaseSuite extends FunSuite {
     completer2.putFinal(10)
 
     latch.await()
+
+    pool.shutdown()
   }
 
   test("whenComplete: dependency 1") {
     val latch = new CountDownLatch(1)
 
-    val completer1 = CellCompleter[String, Int]("somekey")
-    val completer2 = CellCompleter[String, Int]("someotherkey")
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[String, Int](pool, "somekey")
+    val completer2 = CellCompleter[String, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
     cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
@@ -73,11 +79,14 @@ class BaseSuite extends FunSuite {
     latch.await()
 
     assert(cell1.dependencies.isEmpty)
+
+    pool.shutdown()
   }
 
   test("whenComplete: dependency 2") {
-    val completer1 = CellCompleter[String, Int]("somekey")
-    val completer2 = CellCompleter[String, Int]("someotherkey")
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[String, Int](pool, "somekey")
+    val completer2 = CellCompleter[String, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
     cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
@@ -87,6 +96,8 @@ class BaseSuite extends FunSuite {
     cell1.waitUntilNoDeps()
 
     assert(cell1.dependencies.isEmpty)
+
+    pool.shutdown()
   }
 
   test("handler pool") {
@@ -99,5 +110,7 @@ class BaseSuite extends FunSuite {
 
     latch2.await()
     assert(true)
+
+    pool.shutdown()
   }
 }

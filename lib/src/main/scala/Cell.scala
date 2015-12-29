@@ -8,7 +8,7 @@ import scala.annotation.tailrec
 import scala.util.{Try, Success, Failure}
 import scala.util.control.NonFatal
 
-import scala.concurrent.{ExecutionContext, OnCompleteRunnable}
+import scala.concurrent.OnCompleteRunnable
 
 
 /**
@@ -41,7 +41,7 @@ trait Cell[K, V] {
    *               `pred` is applied to value of `other` cell.
    * @param value  Early result value.
    */
-  def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V)(implicit context: ExecutionContext): Unit
+  def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit
 
   /**
    * Registers a call-back function to be invoked when quiescence is reached, but `this` cell has not been
@@ -55,7 +55,7 @@ trait Cell[K, V] {
   // def onNext[U](callback: V => U)(implicit context: ExecutionContext): Unit
 
   // Schedules execution of `callback` when completed with final result.
-  def onComplete[U](callback: Try[V] => U)(implicit context: ExecutionContext): Unit
+  def onComplete[U](callback: Try[V] => U): Unit
 
   def waitUntilNoDeps(): Unit
 }
@@ -76,8 +76,8 @@ trait CellCompleter[K, V] {
 }
 
 object CellCompleter {
-  def apply[K, V](key: K): CellCompleter[K, V] =
-    new CellImpl[K, V](key)
+  def apply[K, V](pool: HandlerPool, key: K): CellCompleter[K, V] =
+    new CellImpl[K, V](pool, key)
 }
 
 
@@ -102,7 +102,7 @@ private object State {
 }
 
 
-class CellImpl[K, V](val key: K) extends Cell[K, V] with CellCompleter[K, V] {
+class CellImpl[K, V](pool: HandlerPool, val key: K) extends Cell[K, V] with CellCompleter[K, V] {
 
   private val nodepslatch = new CountDownLatch(1)
 
@@ -143,14 +143,15 @@ class CellImpl[K, V](val key: K) extends Cell[K, V] with CellCompleter[K, V] {
    *
    *  TODO: distinguish final result from other results.
    */
-  override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V)(implicit context: ExecutionContext): Unit = {
+  override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit = {
     state.get() match {
       case finalRes: Try[_]  => // completed with final result
         // do not add dependency
         // in fact, do nothing
 
       case raw: State[_, _] => // not completed
-        val newDep = new DepRunnable(context, other, pred, value, this)
+        val newDep = new DepRunnable(pool, other, pred, value, this)
+        // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
         other.onComplete(newDep)
 
         val current  = raw.asInstanceOf[State[K, V]]
@@ -209,8 +210,8 @@ class CellImpl[K, V](val key: K) extends Cell[K, V] with CellCompleter[K, V] {
   }
 
   // Schedules execution of `callback` when completed with final result.
-  override def onComplete[U](callback: Try[V] => U)(implicit context: ExecutionContext): Unit = {
-    val runnable = new CallbackRunnable[V](context, callback)
+  override def onComplete[U](callback: Try[V] => U): Unit = {
+    val runnable = new CallbackRunnable[V](pool, callback)
     dispatchOrAddCallback(runnable)
   }
 
@@ -250,7 +251,7 @@ class CellImpl[K, V](val key: K) extends Cell[K, V] with CellCompleter[K, V] {
 
 /* Depend on `cell`. `pred` to decide whether short-cutting is possible. `shortCutValue` is short-cut result.
  */
-private class DepRunnable[K, V](val executor: ExecutionContext,
+private class DepRunnable[K, V](val pool: HandlerPool,
                                 val cell: Cell[K, V],
                                 val pred: V => Boolean,
                                 val shortCutValue: V,
@@ -268,18 +269,18 @@ private class DepRunnable[K, V](val executor: ExecutionContext,
   }
 
   override def run(): Unit = {
-    try apply(value) catch { case NonFatal(e) => executor reportFailure e }
+    try apply(value) catch { case NonFatal(e) => pool reportFailure e }
   }
 
   def executeWithValue(v: Try[V]): Unit = {
     value = v
-    try executor.execute(this) catch { case NonFatal(t) => executor reportFailure t }
+    try pool.execute(this) catch { case NonFatal(t) => pool reportFailure t }
   }
 }
 
 
 // copied from `impl.CallbackRunnable` in Scala core lib.
-private class CallbackRunnable[T](val executor: ExecutionContext, val onComplete: Try[T] => Any) extends Runnable with OnCompleteRunnable {
+private class CallbackRunnable[T](val executor: HandlerPool, val onComplete: Try[T] => Any) extends Runnable with OnCompleteRunnable {
   // must be filled in before running it
   var value: Try[T] = null
 

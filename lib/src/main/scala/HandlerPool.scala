@@ -55,4 +55,7 @@ class HandlerPool(parallelism: Int = 8) {
     t.join() // wait for thread to terminate
     pool.shutdown()
   }
+
+  def reportFailure(t: Throwable): Unit =
+    t.printStackTrace()
 }
