@@ -76,8 +76,11 @@ trait CellCompleter[K, V] {
 }
 
 object CellCompleter {
-  def apply[K, V](pool: HandlerPool, key: K): CellCompleter[K, V] =
-    new CellImpl[K, V](pool, key)
+  def apply[K, V](pool: HandlerPool, key: K): CellCompleter[K, V] = {
+    val impl = new CellImpl[K, V](pool, key)
+    pool.register(impl)
+    impl
+  }
 }
 
 
@@ -119,7 +122,10 @@ class CellImpl[K, V](pool: HandlerPool, val key: K) extends Cell[K, V] with Cell
 
   override def putFinal(x: V): Unit = {
     val res = tryComplete(Success(x))
-    if (!res) throw new IllegalStateException("Cell already completed.")
+    if (res)
+      pool.deregister(this)
+    else
+      throw new IllegalStateException("Cell already completed.")
   }
 
   override def putNext(x: V): Unit = ???

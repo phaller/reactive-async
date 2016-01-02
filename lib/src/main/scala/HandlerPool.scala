@@ -10,6 +10,8 @@ class HandlerPool(parallelism: Int = 8) {
 
   private val quiescentHandlers = new AtomicReference[List[() => Unit]](List())
 
+  private val cellsNotDone = new AtomicReference[List[Cell[_, _]]](List())
+
   private val t = {
     val tmp = new MonitoringThread
     tmp.start()
@@ -41,6 +43,18 @@ class HandlerPool(parallelism: Int = 8) {
     // add handler
     val newHandlers = handler :: handlers
     quiescentHandlers.compareAndSet(handlers, newHandlers)
+  }
+
+  def register[K, V](cell: Cell[K, V]): Unit = {
+    val registered = cellsNotDone.get()
+    val newRegistered = cell :: registered
+    cellsNotDone.compareAndSet(registered, newRegistered)
+  }
+
+  def deregister[K, V](cell: Cell[K, V]): Unit = {
+    val registered = cellsNotDone.get()
+    val newRegistered = registered.filterNot(_ == cell)
+    cellsNotDone.compareAndSet(registered, newRegistered)
   }
 
   def execute(fun: () => Unit): Unit =
