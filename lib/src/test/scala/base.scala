@@ -128,4 +128,19 @@ class BaseSuite extends FunSuite {
     val cells = Await.result(incompleteFut, 2.seconds)
     assert(cells.map(_.key).toString == "List(key2, key1)")
   }
+
+  test("quiescent resolve cycle") {
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "key1")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+    cell1.whenComplete(cell2, x => x == 0, 0)
+    cell2.whenComplete(cell1, x => x == 0, 0)
+    val qfut = pool.quiescentResolveCell
+    Await.ready(qfut, 2.seconds)
+    val incompleteFut = pool.quiescentIncompleteCells
+    val cells = Await.result(incompleteFut, 2.seconds)
+    assert(cells.size == 0)
+  }
 }

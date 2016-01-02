@@ -69,6 +69,8 @@ trait Cell[K <: Key[V], V] {
    */
   // def onCycle(callback: Seq[Cell[K, V]] => V)
 
+  def resolveCycle(): Unit
+
   // internal API
 
   // Schedules execution of `callback` when next intermediate result is available.
@@ -142,9 +144,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
 
   override def putFinal(x: V): Unit = {
     val res = tryComplete(Success(x))
-    if (res)
-      pool.deregister(this)
-    else
+    if (!res)
       throw new IllegalStateException("Cell already completed.")
   }
 
@@ -158,6 +158,10 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         val current = pre.asInstanceOf[State[K, V]]
         current.deps.map(_.cell.key)
     }
+  }
+
+  def resolveCycle(): Unit = {
+    this.putFinal(key.resolve)
   }
 
   /** Adds dependency on `other` cell: when `other` cell is completed, evaluate `pred`
@@ -205,13 +209,16 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
 
   override def tryComplete(value: Try[V]): Boolean = {
     val resolved = resolveTry(value)
-    tryCompleteAndGetState(resolved) match {
+    val res = tryCompleteAndGetState(resolved) match {
       case null                                      => false // was already complete
       case pre: State[_, _] if pre.callbacks.isEmpty => true
       case pre: State[k, v]                          =>
         pre.callbacks.foreach(r => r.executeWithValue(resolved))
         true
     }
+    if (res)
+      pool.deregister(this)
+    res
   }
 
   @tailrec

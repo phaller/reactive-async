@@ -68,6 +68,19 @@ class HandlerPool(parallelism: Int = 8) {
     p.future
   }
 
+  def quiescentResolveCell: Future[Boolean] = {
+    val p = Promise[Boolean]
+    this.onQuiescent { () =>
+      val registered = this.cellsNotDone.get()
+      if (registered.nonEmpty) {
+        val victimCell = registered.head
+        victimCell.resolveCycle()
+      }
+      p.success(true)
+    }
+    p.future
+  }
+
   def execute(fun: () => Unit): Unit =
     execute(new Runnable { def run(): Unit = fun() })
 
