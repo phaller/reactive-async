@@ -3,6 +3,8 @@ package cell
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.ForkJoinPool
 
+import scala.concurrent.{Future, Promise}
+
 
 class HandlerPool(parallelism: Int = 8) {
 
@@ -55,6 +57,15 @@ class HandlerPool(parallelism: Int = 8) {
     val registered = cellsNotDone.get()
     val newRegistered = registered.filterNot(_ == cell)
     cellsNotDone.compareAndSet(registered, newRegistered)
+  }
+
+  def quiescentIncompleteCells: Future[List[Cell[_, _]]] = {
+    val p = Promise[List[Cell[_, _]]]
+    this.onQuiescent { () =>
+      val registered = this.cellsNotDone.get()
+      p.success(registered)
+    }
+    p.future
   }
 
   def execute(fun: () => Unit): Unit =

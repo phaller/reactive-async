@@ -3,6 +3,8 @@ import org.scalatest.FunSuite
 import java.util.concurrent.CountDownLatch
 
 import scala.util.{Success, Failure}
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 import cell.{CellCompleter, HandlerPool}
 
@@ -112,5 +114,18 @@ class BaseSuite extends FunSuite {
     assert(true)
 
     pool.shutdown()
+  }
+
+  test("quiescent incomplete cells") {
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[String, Int](pool, "key1")
+    val completer2 = CellCompleter[String, Int](pool, "key2")
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+    cell1.whenComplete(cell2, x => x == 1, 1)
+    cell2.whenComplete(cell1, x => x == 1, 1)
+    val incompleteFut = pool.quiescentIncompleteCells
+    val cells = Await.result(incompleteFut, 2.seconds)
+    assert(cells.map(_.key).toString == "List(key2, key1)")
   }
 }
