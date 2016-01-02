@@ -1,5 +1,7 @@
 package cell
 
+import scala.language.implicitConversions
+
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ExecutionException, CountDownLatch}
 
@@ -11,12 +13,30 @@ import scala.util.control.NonFatal
 import scala.concurrent.OnCompleteRunnable
 
 
+/*
+ * Contains logic to resolve a cycle of a cell of type `Cell[Key[V], V]`
+ */
+trait Key[V] {
+  def resolve: V
+}
+
+class StringIntKey(s: String) extends Key[Int] {
+  def resolve: Int = 0
+  override def toString = s
+}
+
+object StringIntKey {
+  implicit def strToIntKey(s: String): StringIntKey =
+    new StringIntKey(s)
+}
+
+
 /**
  * Example:
  *
  *   val barRetTypeCell: Cell[(Entity, PropertyKind), ObjectType]
  */
-trait Cell[K, V] {
+trait Cell[K <: Key[V], V] {
   def key: K
   // def property: V
 
@@ -64,7 +84,7 @@ trait Cell[K, V] {
 /**
  * Interface trait for programmatically completing a cell. Analogous to `Promise`.
  */
-trait CellCompleter[K, V] {
+trait CellCompleter[K <: Key[V], V] {
   def cell: Cell[K, V]
 
   def putFinal(x: V): Unit
@@ -76,7 +96,7 @@ trait CellCompleter[K, V] {
 }
 
 object CellCompleter {
-  def apply[K, V](pool: HandlerPool, key: K): CellCompleter[K, V] = {
+  def apply[K <: Key[V], V](pool: HandlerPool, key: K): CellCompleter[K, V] = {
     val impl = new CellImpl[K, V](pool, key)
     pool.register(impl)
     impl
@@ -86,7 +106,7 @@ object CellCompleter {
 
 /* Depend on `cell`. `pred` to decide whether short-cutting is possible. `value` is short-cut result.
  */
-class Dep[K, V](val cell: Cell[K, V], val pred: V => Boolean, val value: V)
+class Dep[K <: Key[V], V](val cell: Cell[K, V], val pred: V => Boolean, val value: V)
 
 
 /* State of a cell that is not yet completed.
@@ -97,15 +117,15 @@ class Dep[K, V](val cell: Cell[K, V], val pred: V => Boolean, val value: V)
  * @param deps      dependencies on other cells
  * @param callbacks list of registered call-back runnables
  */
-private class State[K, V](val res: Option[V], val deps: List[DepRunnable[K,V]], val callbacks: List[CallbackRunnable[V]])
+private class State[K <: Key[V], V](val res: Option[V], val deps: List[DepRunnable[K,V]], val callbacks: List[CallbackRunnable[V]])
 
 private object State {
-  def empty[K, V]: State[K, V] =
+  def empty[K <: Key[V], V]: State[K, V] =
     new State[K, V](None, List(), List())
 }
 
 
-class CellImpl[K, V](pool: HandlerPool, val key: K) extends Cell[K, V] with CellCompleter[K, V] {
+class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V] with CellCompleter[K, V] {
 
   private val nodepslatch = new CountDownLatch(1)
 
@@ -257,11 +277,11 @@ class CellImpl[K, V](pool: HandlerPool, val key: K) extends Cell[K, V] with Cell
 
 /* Depend on `cell`. `pred` to decide whether short-cutting is possible. `shortCutValue` is short-cut result.
  */
-private class DepRunnable[K, V](val pool: HandlerPool,
-                                val cell: Cell[K, V],
-                                val pred: V => Boolean,
-                                val shortCutValue: V,
-                                val completer: CellCompleter[K, V])
+private class DepRunnable[K <: Key[V], V](val pool: HandlerPool,
+                                          val cell: Cell[K, V],
+                                          val pred: V => Boolean,
+                                          val shortCutValue: V,
+                                          val completer: CellCompleter[K, V])
     extends Runnable with OnCompleteRunnable with (Try[V] => Unit) {
   // must be filled in before running it
   var value: Try[V] = null

@@ -47,13 +47,13 @@ class HandlerPool(parallelism: Int = 8) {
     quiescentHandlers.compareAndSet(handlers, newHandlers)
   }
 
-  def register[K, V](cell: Cell[K, V]): Unit = {
+  def register[K <: Key[V], V](cell: Cell[K, V]): Unit = {
     val registered = cellsNotDone.get()
     val newRegistered = cell :: registered
     cellsNotDone.compareAndSet(registered, newRegistered)
   }
 
-  def deregister[K, V](cell: Cell[K, V]): Unit = {
+  def deregister[K <: Key[V], V](cell: Cell[K, V]): Unit = {
     val registered = cellsNotDone.get()
     val newRegistered = registered.filterNot(_ == cell)
     cellsNotDone.compareAndSet(registered, newRegistered)
