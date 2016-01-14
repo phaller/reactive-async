@@ -1,16 +1,13 @@
 package cell
 
-import scala.language.implicitConversions
-
 import java.util.concurrent.atomic._
-import java.util.concurrent.{ExecutionException, CountDownLatch}
+import java.util.concurrent.{CountDownLatch, ExecutionException}
 
 import scala.annotation.tailrec
-
-import scala.util.{Try, Success, Failure}
-import scala.util.control.NonFatal
-
 import scala.concurrent.OnCompleteRunnable
+import scala.language.implicitConversions
+import scala.util.control.NonFatal
+import scala.util.{Failure, Success, Try}
 
 
 /*

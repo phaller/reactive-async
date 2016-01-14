@@ -3,8 +3,6 @@ package cell
 // Exponential backoff
 // Taken, and adapted from ChemistrySet, see: https://github.com/aturon/ChemistrySet
 
-import scala.util._
-
 object Backoff {
   val maxCount: Int = 14
   var procs = Runtime.getRuntime.availableProcessors

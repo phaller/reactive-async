@@ -1,7 +1,7 @@
 package cell
 
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.ForkJoinPool
+import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.{Future, Promise}
 
