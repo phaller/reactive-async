@@ -86,6 +86,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       })
     }
 
+    pool.quiescentResolveCell
 
     BasicReport("pure methods analysis:\n"+pureMethods.asScala.map(_.toJava).mkString("\n"))
   }
