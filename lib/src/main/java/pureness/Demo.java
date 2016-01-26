@@ -73,7 +73,7 @@ class Demo {
         return i % 2 == 0 ? i : foo(i - 1);
     }
 
-    // The following methods are not direct involved in a
+    // The following methods are not directly involved in a
     // mutually recursive dependency, but require information about a set of
     // mutually recursive dependent methods.
     static int fooBar(int i) { // also observed by other methods
@@ -148,7 +148,7 @@ class Demo {
         return cpureCallee(i / 21);
     }
 
-    static int cpureCalleeCalleeCalle(int i) {
+    static int cpureCalleeCalleeCallee(int i) {
         return cpureCalleeCallee1(i / 21) * cpureCalleeCallee2(i / 21);
     }
 
