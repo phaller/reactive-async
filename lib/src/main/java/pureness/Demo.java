@@ -153,7 +153,7 @@ class Demo {
     }
 
     static int cpureCalleeCalleeCalleCallee(int i) {
-        return cpureCalleeCalleeCalle(1299);
+        return cpureCalleeCalleeCallee(1299);
     }
 
     // All methods are involved in multiple cycles of dependent methods
