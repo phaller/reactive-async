@@ -1,14 +1,13 @@
 import Dependencies._ // see project/Dependencies.scala
 import Util._         // see project/Util.scala
 
-resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
-
 val buildVersion = "0.1.0-SNAPSHOT"
 
 def commonSettings = Seq(
   version in ThisBuild := buildVersion,
   scalaVersion := buildScalaVersion,
-  parallelExecution in Test := false
+  parallelExecution in Test := false,
+  resolvers in ThisBuild += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 )
 
 def noPublish = Seq(
