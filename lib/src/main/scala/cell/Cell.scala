@@ -192,7 +192,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
    */
   // TODO: take care of compressing root (as in impl.Promise.DefaultPromise)
   @tailrec
-  private def tryCompleteAndGetState(v: Try[V]): State[K, V] = {
+  private def tryCompleteAndGetState(v: Try[V]): AnyRef = {
     state.get() match {
       case current: State[_, _] =>
         if (state.compareAndSet(current, v))
@@ -200,21 +200,30 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         else
           tryCompleteAndGetState(v)
 
-      case _ => null
+      case finalRes: Try[_] => finalRes
     }
   }
 
   override def tryComplete(value: Try[V]): Boolean = {
-    val resolved = resolveTry(value)
+    val resolved: Try[V] = resolveTry(value)
+
     val res = tryCompleteAndGetState(resolved) match {
-      case null                                      => false // was already complete
+      case finalRes: Try[_]                          => // was already complete
+        val res = finalRes == value
+        if (!res) {
+          println(s"problem with $this; existing value: $finalRes, new value: $value")
+        }
+        res
+
       case pre: State[_, _] if pre.callbacks.isEmpty => true
       case pre: State[k, v]                          =>
-        pre.callbacks.foreach(r => r.executeWithValue(resolved))
+        pre.callbacks.foreach(r => r.executeWithValue(resolved.asInstanceOf[Try[v]]))
         true
     }
-    if (res)
+    if (res) {
+      println(s"deregistering $this")
       pool.deregister(this)
+    }
     res
   }
 

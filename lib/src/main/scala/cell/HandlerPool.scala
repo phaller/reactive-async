@@ -54,9 +54,14 @@ class HandlerPool(parallelism: Int = 8) {
   }
 
   def deregister[K <: Key[V], V](cell: Cell[K, V]): Unit = {
-    val registered = cellsNotDone.get()
-    val newRegistered = registered.filterNot(_ == cell)
-    cellsNotDone.compareAndSet(registered, newRegistered)
+    var success = false
+    while (!success) {
+      val registered = cellsNotDone.get()
+      val newRegistered = registered.filterNot(_ == cell)
+      success = cellsNotDone.compareAndSet(registered, newRegistered)
+      //if (!success) throw new Exception("SHOULD NEVER HAPPEN")
+      //success
+    }
   }
 
   def quiescentIncompleteCells: Future[List[Cell[_, _]]] = {
@@ -73,8 +78,10 @@ class HandlerPool(parallelism: Int = 8) {
     this.onQuiescent { () =>
       val registered = this.cellsNotDone.get()
       if (registered.nonEmpty) {
-        val victimCell = registered.head
-        victimCell.resolveCycle()
+        registered.foreach { victimCell =>
+          //val victimCell = registered.head
+          victimCell.resolveCycle()
+        }
       }
       p.success(true)
     }

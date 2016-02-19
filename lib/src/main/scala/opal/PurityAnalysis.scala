@@ -4,6 +4,9 @@ import java.net.URL
 
 import scala.collection.JavaConverters._
 
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
 import cell.{HandlerPool, CellCompleter, Cell, Key}
 import org.opalj.br.{ClassFile, PC, Method, MethodWithBody}
 import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project}
@@ -86,7 +89,9 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       })
     }
 
-    pool.quiescentResolveCell
+    val fut = pool.quiescentResolveCell
+    Await.ready(fut, 2.minutes)
+    pool.shutdown()
 
     BasicReport("pure methods analysis:\n"+pureMethods.asScala.map(_.toJava).mkString("\n"))
   }
