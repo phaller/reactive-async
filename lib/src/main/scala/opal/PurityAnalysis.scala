@@ -206,7 +206,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     // Every method that is not identified as being impure is (conditionally)pure.
     if (!hasDependencies) {
       cellCompleter.putFinal(Pure)
-      println("Pure method: "+method.toJava(classFile))
+      println("Immediately Pure Method: "+method.toJava(classFile))
       pureMethods.add(method)
     }
   }
