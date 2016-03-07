@@ -35,6 +35,8 @@ object StringIntKey {
  */
 trait Cell[K <: Key[V], V] {
   def key: K
+
+  def getResult(): Option[V]
   // def property: V
 
   def dependencies: Seq[K]
@@ -139,6 +141,16 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
   // `CellCompleter` and corresponding `Cell` are the same run-time object.
   override def cell: Cell[K, V] = this
 
+  override def getResult(): Option[V] = state.get() match {
+    case finalRes: Try[V] =>
+      finalRes match {
+        case Success(result) => Some(result)
+        case Failure(err) => throw new IllegalStateException("Something is wrong with result state")
+        case _ => None
+      }
+    case _ => None
+  }
+
   override def putFinal(x: V): Unit = {
     val res = tryComplete(Success(x))
     if (!res)
@@ -221,7 +233,6 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         true
     }
     if (res) {
-      println(s"deregistering $this")
       pool.deregister(this)
     }
     res
