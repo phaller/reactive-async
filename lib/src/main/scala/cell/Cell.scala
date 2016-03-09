@@ -145,7 +145,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
     case finalRes: Try[V] =>
       finalRes match {
         case Success(result) => Some(result)
-        case Failure(err) => throw new IllegalStateException("Something is wrong with result state")
+        case Failure(err) => throw new IllegalStateException(err)
         case _ => None
       }
     case _ => None
