@@ -8,6 +8,9 @@ import scala.concurrent.duration._
 
 import cell.{CellCompleter, HandlerPool, StringIntKey}
 
+import opal.{PurenessKey, Pure, Impure, PurityAnalysis}
+import org.opalj.br.analyses.Project
+import java.io.File
 
 class BaseSuite extends FunSuite {
   test("putFinal") {
@@ -170,5 +173,64 @@ class BaseSuite extends FunSuite {
     }
 
     assert(result == None)
+  }
+
+  test("purity analysis with Demo.java: pure methods") {
+    val file = new File("lib")
+    val lib = Project(file)
+
+    val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
+
+    val pureMethods = List(
+      "public static int pureThoughItUsesField(int,int)",
+      "public static int pureThoughItUsesField2(int,int)",
+      "public static int simplyPure(int,int)",
+      "static int foo(int)",
+      "static int bar(int)",
+      "static int fooBar(int)",
+      "static int barFoo(int)",
+      "static int m1(int)",
+      "static int m2(int)",
+      "static int m3(int)",
+      "static int cm1(int)",
+      "static int cm2(int)",
+      "static int scc0(int)",
+      "static int scc1(int)",
+      "static int scc2(int)",
+      "static int scc3(int)"
+    )
+
+    val finalRes = pureMethods.filter(!report.contains(_))
+
+    assert(finalRes.size == 0)
+  }
+
+  test("purity analysis with Demo.java: impure methods") {
+    val file = new File("lib")
+    val lib = Project(file)
+
+    val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
+
+    val pureMethods = List(
+      "public static int impure(int)",
+      "static int npfoo(int)",
+      "static int npbar(int)",
+      "static int mm1(int)",
+      "static int mm2(int)",
+      "static int mm3(int)",
+      "static int m1np(int)",
+      "static int m2np(int)",
+      "static int m3np(int)",
+      "static int cpure(int)",
+      "static int cpureCallee(int)",
+      "static int cpureCalleeCallee1(int)",
+      "static int cpureCalleeCallee2(int)",
+      "static int cpureCalleeCalleeCallee(int)",
+      "static int cpureCalleeCalleeCalleeCallee(int)"
+    )
+
+    val finalRes = pureMethods.filter(report.contains(_))
+
+    assert(finalRes.size == 0)
   }
 }
