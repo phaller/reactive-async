@@ -171,7 +171,7 @@ class Demo {
     static int mm3(int i) {
         int j = m3(i);
         int k = mm2(j);
-        return m1(k);
+        return m1np(k);
     }
 
     // Two cycles connected by a "weak link" (fooBar)

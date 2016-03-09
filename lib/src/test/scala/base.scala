@@ -205,7 +205,7 @@ class BaseSuite extends FunSuite {
 
     val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
 
-    val pureMethods = List(
+    val impureMethods = List(
       "public static int impure(int)",
       "static int npfoo(int)",
       "static int npbar(int)",
@@ -223,7 +223,7 @@ class BaseSuite extends FunSuite {
       "static int cpureCalleeCalleeCalleeCallee(int)"
     )
 
-    val finalRes = pureMethods.filter(report.contains(_))
+    val finalRes = impureMethods.filter(report.contains(_))
 
     assert(finalRes.size == 0)
   }
