@@ -37,7 +37,7 @@ package pureness;
  */
 class Demo {
 
-    private static int myValue = -1; /* effectivelyFinal */
+    private static final int myValue = -1; /* effectivelyFinal */
 
     private Demo() {/* empty */
     }
