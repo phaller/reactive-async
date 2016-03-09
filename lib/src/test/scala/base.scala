@@ -143,4 +143,26 @@ class BaseSuite extends FunSuite {
     val cells = Await.result(incompleteFut, 2.seconds)
     assert(cells.size == 0)
   }
+
+  test("getResult: from complete cell") {
+    val pool = new HandlerPool
+    val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val cell = completer.cell
+
+    completer.putFinal(10)
+
+    val result = cell.getResult
+
+    assert(result == Some(10))
+  }
+
+  test("getResult: from incomplete cell") {
+    val pool = new HandlerPool
+    val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val cell = completer.cell
+
+    val result = cell.getResult
+
+    assert(result == None)
+  }
 }
