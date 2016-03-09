@@ -154,12 +154,9 @@ class BaseSuite extends FunSuite {
 
     completer.putFinal(10)
 
-    val result = cell.getResult match {
-      case Some(res) => res
-      case _ => None 
-    }
+    val result = cell.getResult
 
-    assert(result == 10)
+    assert(result == Some(10))
   }
 
   test("getResult: from incomplete cell") {
@@ -167,10 +164,7 @@ class BaseSuite extends FunSuite {
     val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
     val cell = completer.cell
 
-    val result = cell.getResult match {
-      case Some(res) => res
-      case _ => None
-    }
+    val result = cell.getResult
 
     assert(result == None)
   }
