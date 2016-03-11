@@ -60,8 +60,6 @@ case object Impure extends Purity
 
 object PurityAnalysis extends DefaultOneStepAnalysis {
 
-  val pureMethods = new java.util.concurrent.ConcurrentLinkedQueue[Method]()
-
   override def doAnalyze(
                           project: Project[URL],
                           parameters: Seq[String] = List.empty,
@@ -88,12 +86,16 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
         analyze(project,methodToCellCompleter,classFile, method)
       })
     }
-
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 2.minutes)
     pool.shutdown()
 
-    BasicReport("pure methods analysis:\n"+pureMethods.asScala.map(_.toJava).mkString("\n"))
+    val pureMethods = methodToCellCompleter.filter(_._2.cell.getResult match {
+                                                     case Some(v) => v == Pure
+                                                     case _ => false
+                                                   }).map(_._1)
+
+    BasicReport("pure methods analysis:\n"+pureMethods.mkString("\n"))
   }
 
   /**
@@ -175,7 +177,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
                 val targetCellCompleter = methodToCellCompleter(callee)
                 hasDependencies = true
-                cellCompleter.cell.whenComplete(targetCellCompleter.cell,_ == Impure,Impure)
+                cellCompleter.cell.whenComplete(targetCellCompleter.cell,_ == Impure, Impure)
             }
         }
 
@@ -206,8 +208,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     // Every method that is not identified as being impure is (conditionally)pure.
     if (!hasDependencies) {
       cellCompleter.putFinal(Pure)
-      println("Immediately Pure Method: "+method.toJava(classFile))
-      pureMethods.add(method)
+      //println("Immediately Pure Method: "+method.toJava(classFile))
     }
   }
 }
