@@ -79,6 +79,8 @@ trait Cell[K <: Key[V], V] {
   def onComplete[U](callback: Try[V] => U): Unit
 
   def waitUntilNoDeps(): Unit
+
+  private[cell] def cellDependencies: Seq[Cell[K, V]]
 }
 
 
@@ -166,6 +168,16 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
       case pre: State[_, _] => // not completed
         val current = pre.asInstanceOf[State[K, V]]
         current.deps.map(_.cell.key)
+    }
+  }
+
+  override private[cell] def cellDependencies: Seq[Cell[K, V]] = {
+    state.get() match {
+      case finalRes: Try[_] => // completed with final result
+        Seq[Cell[K, V]]()
+      case pre: State[_, _] => // not completed
+        val current = pre.asInstanceOf[State[K, V]]
+        current.deps.map(_.cell)
     }
   }
 
