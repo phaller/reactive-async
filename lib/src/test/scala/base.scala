@@ -8,7 +8,9 @@ import scala.concurrent.duration._
 
 import cell.{CellCompleter, HandlerPool, StringIntKey}
 
-import opal.{PurenessKey, Pure, Impure, PurityAnalysis}
+import lattice._
+
+import opal.PurityAnalysis
 import org.opalj.br.analyses.Project
 import java.io.File
 
@@ -226,5 +228,91 @@ class BaseSuite extends FunSuite {
     val finalRes = impureMethods.filter(report.contains(_))
 
     assert(finalRes.size == 0)
+  }
+
+  test("PurityLattice: successful joins") {
+    val lattice = PurenessKey.lattice
+    val purity = None
+    val newPurity = lattice.join(purity, Pure)
+
+    assert(newPurity == Some(Pure))
+
+    val newNewPurity = lattice.join(newPurity, Pure)
+
+    assert(newNewPurity == None)
+  }
+
+  test("PurityLattice: failed joins") {
+    val lattice = PurenessKey.lattice
+    val purity1 = Some(Impure)
+    val purity2 = Some(Pure)
+
+    try {
+      val newPurity = lattice.join(purity1, Pure)
+      assert(false)
+    } catch {
+      case lve: LatticeViolationException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    try {
+      val newPurity = lattice.join(purity2, Impure)
+      assert(false)
+    } catch {
+      case lve: LatticeViolationException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
+  }
+
+  test("MutabilityLattice: successful joins") {
+    val lattice = MutabilityKey.lattice
+    val mutability = None
+    val newMutability = lattice.join(mutability, ConditionallyImmutable)
+
+    assert(newMutability == Some(ConditionallyImmutable))
+
+    val newNewMutability1 = lattice.join(newMutability, Mutable)
+    val newNewMutability2 = lattice.join(newMutability, Immutable)
+
+    assert(newNewMutability1 == Some(Mutable))
+    assert(newNewMutability2 == Some(Immutable))
+  }
+
+  test("MutabilityLattice: failed joins") {
+    val lattice = MutabilityKey.lattice
+    val mutability1 = Some(Mutable)
+    val mutability2 = Some(Immutable)
+
+    try {
+      val newMutability = lattice.join(mutability1, ConditionallyImmutable)
+      assert(false)
+    } catch {
+      case lve: LatticeViolationException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    try {
+      val newMutability = lattice.join(mutability1, Immutable)
+      assert(false)
+    } catch {
+      case lve: LatticeViolationException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    try {
+      val newMutability = lattice.join(mutability2, ConditionallyImmutable)
+      assert(false)
+    } catch {
+      case lve: LatticeViolationException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    try {
+      val newMutability = lattice.join(mutability2, Mutable)
+      assert(false)
+    } catch {
+      case lve: LatticeViolationException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
   }
 }
