@@ -2,8 +2,11 @@ package lattice
 
 import scala.annotation.implicitNotFound
 
+import cell._
+
 trait Key[V] {
-  def resolve: V
+  def resolve[K <: Key[V]](cells: Seq[Cell[K, V]]): Seq[Option[(Cell[K, V], V)]]
+  def default[K <: Key[V]](cells: Seq[Cell[K, V]]): Seq[Option[(Cell[K, V], V)]]
   def lattice: Lattice[V]
 }
 

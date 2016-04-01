@@ -51,8 +51,6 @@ trait Cell[K <: Key[V], V] {
    */
   // def onCycle(callback: Seq[Cell[K, V]] => V)
 
-  def resolveCycle(): Unit
-
   // internal API
 
   // Schedules execution of `callback` when next intermediate result is available.
@@ -63,6 +61,7 @@ trait Cell[K <: Key[V], V] {
 
   def waitUntilNoDeps(): Unit
 
+  private[cell] def resolveWithValue(value: V): Unit
   private[cell] def cellDependencies: Seq[Cell[K, V]]
 }
 
@@ -169,8 +168,8 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
     }
   }
 
-  def resolveCycle(): Unit = {
-    this.putFinal(key.resolve)
+  override private[cell] def resolveWithValue(value: V): Unit = {
+    this.putFinal(value)
   }
 
   /** Adds dependency on `other` cell: when `other` cell is completed, evaluate `pred`

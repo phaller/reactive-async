@@ -7,6 +7,8 @@ import scala.concurrent.{Future, Promise}
 
 import lattice.Key
 
+import org.opalj.graphs._
+
 
 class HandlerPool(parallelism: Int = 8) {
 
@@ -61,8 +63,6 @@ class HandlerPool(parallelism: Int = 8) {
       val registered = cellsNotDone.get()
       val newRegistered = registered.filterNot(_ == cell)
       success = cellsNotDone.compareAndSet(registered, newRegistered)
-      //if (!success) throw new Exception("SHOULD NEVER HAPPEN")
-      //success
     }
   }
 
@@ -75,19 +75,47 @@ class HandlerPool(parallelism: Int = 8) {
     p.future
   }
 
-  def quiescentResolveCell: Future[Boolean] = {
+  def quiescentResolveCell[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
-      val registered = this.cellsNotDone.get()
+      // Find one closed strongly connected component (cell)
+      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().asInstanceOf[Seq[Cell[K, V]]]
       if (registered.nonEmpty) {
-        registered.foreach { victimCell =>
-          //val victimCell = registered.head
-          victimCell.resolveCycle()
-        }
+        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.cellDependencies)
+        cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
+      }
+      // Finds the rest of the unresolved cells
+      val rest = this.cellsNotDone.get().asInstanceOf[Seq[Cell[K, V]]]
+      if(rest.nonEmpty) {
+        resolveDefault(rest)
       }
       p.success(true)
     }
     p.future
+  }
+
+  /** Resolves a cycle of unfinished cells.
+   */
+  private def resolveCycle[K <: Key[V], V](cells: Seq[Cell[K, V]]): Unit = {
+    val key = cells.head.key
+    val result = key.resolve(cells)
+
+    for(res <- result) res match {
+      case Some((c, v)) => c.resolveWithValue(v)
+      case None => /* do nothing */
+    }
+  }
+
+  /** Resolves a cell with default value.
+   */
+  private def resolveDefault[K <: Key[V], V](cells: Seq[Cell[K, V]]): Unit = {
+    val key = cells.head.key
+    val result = key.default(cells)
+
+    for(res <- result) res match {
+      case Some((c, v)) => c.resolveWithValue(v)
+      case None => /* do nothing */
+    }
   }
 
   // Shouldn't we use:

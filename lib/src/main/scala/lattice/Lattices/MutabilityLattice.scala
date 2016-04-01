@@ -1,8 +1,15 @@
 package lattice
 
+import cell._
+
 object MutabilityKey extends Key[Mutability] {
-	def resolve: Mutability = Immutable
-	def lattice = new MutabilityLattice
+  def resolve[K <: Key[Mutability]](cells: Seq[Cell[K, Mutability]]): Seq[Option[(Cell[K, Mutability], Mutability)]] = {
+    cells.map((cell: Cell[K, Mutability]) => Some((cell, Immutable)))
+  }
+  def default[K <: Key[Mutability]](cells: Seq[Cell[K, Mutability]]): Seq[Option[(Cell[K, Mutability], Mutability)]] = {
+    cells.map((cell: Cell[K, Mutability]) => Some((cell, Mutable)))
+  }
+  def lattice = new MutabilityLattice
   override def toString = "Mutability"
 }
 
