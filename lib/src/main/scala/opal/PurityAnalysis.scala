@@ -7,7 +7,8 @@ import scala.collection.JavaConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-import cell.{HandlerPool, CellCompleter, Cell, Key}
+import lattice.{PurenessKey, Purity, Pure, Impure, Key}
+import cell.{HandlerPool, CellCompleter, Cell}
 import org.opalj.br.{ClassFile, PC, Method, MethodWithBody}
 import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project}
 import org.opalj.br.instructions.GETFIELD
@@ -43,19 +44,6 @@ import org.opalj.br.instructions.INVOKESPECIAL
 import org.opalj.br.instructions.INVOKEVIRTUAL
 import org.opalj.br.instructions.INVOKEINTERFACE
 import org.opalj.br.instructions.MethodInvocationInstruction
-
-
-object PurenessKey extends Key[Purity] {
-  def resolve: Purity = Pure
-
-  override def toString = "Pureness"
-}
-
-sealed trait Purity
-
-case object Pure extends Purity
-
-case object Impure extends Purity
 
 
 object PurityAnalysis extends DefaultOneStepAnalysis {

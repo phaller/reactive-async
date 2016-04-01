@@ -6,7 +6,7 @@ import scala.util.{Success, Failure}
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-import cell.{CellCompleter, HandlerPool, StringIntKey}
+import cell.{CellCompleter, HandlerPool}
 
 import lattice._
 

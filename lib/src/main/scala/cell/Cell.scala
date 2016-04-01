@@ -9,24 +9,7 @@ import scala.language.implicitConversions
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
-
-/*
- * Contains logic to resolve a cycle of a cell of type `Cell[Key[V], V]`
- */
-trait Key[V] {
-  def resolve: V
-}
-
-class StringIntKey(s: String) extends Key[Int] {
-  def resolve: Int = 0
-  override def toString = s
-}
-
-object StringIntKey {
-  implicit def strToIntKey(s: String): StringIntKey =
-    new StringIntKey(s)
-}
-
+import lattice.{Lattice, Key}
 
 /**
  * Example:
@@ -154,7 +137,8 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
   }
 
   override def putFinal(x: V): Unit = {
-    val res = tryComplete(Success(x))
+    val newVal = tryJoin(x)
+    val res = tryComplete(Success(newVal))
     if (!res)
       throw new IllegalStateException("Cell already completed.")
   }
@@ -208,6 +192,20 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         val current  = raw.asInstanceOf[State[K, V]]
         val newState = new State(current.res, newDep :: current.deps, current.callbacks)
         state.compareAndSet(current, newState)
+    }
+  }
+
+  /** Called by 'putFinal'. It will try to join the current state
+    * with the new value by using the given lattice and return the new value.
+    * If 'current == v' then it will return 'v'.
+    */
+  private def tryJoin(v: V): V = {
+    val current = this.getResult()
+    val newVal = key.lattice.join(current, v)
+
+    newVal match {
+      case Some(value) => value
+      case None => v
     }
   }
 
@@ -324,7 +322,7 @@ private class DepRunnable[K <: Key[V], V](val pool: HandlerPool,
 
   override def apply(x: Try[V]): Unit = x match {
     case Success(v) =>
-      if (pred(v)) completer.tryComplete(Success(shortCutValue))
+      if (pred(v)) completer.putFinal(shortCutValue)
       else completer.removeDep(this)
     case Failure(e) =>
       completer.removeDep(this)
