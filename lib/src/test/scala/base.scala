@@ -173,7 +173,7 @@ class BaseSuite extends FunSuite {
 
   test("getResult: from a partially complete cell") {
     val pool = new HandlerPool
-    val completer = CellCompleter[MutabilityKey.type, Mutability](pool, MutabilityKey)
+    val completer = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
     val cell = completer.cell
 
     completer.putNext(ConditionallyImmutable)
@@ -272,31 +272,27 @@ class BaseSuite extends FunSuite {
     }
   }
 
-  test("MutabilityLattice: successful joins") {
-    val lattice = MutabilityKey.lattice
+  test("ImmutabilityLattice: successful joins") {
+    val lattice = ImmutabilityKey.lattice
 
-    val mutability = lattice.join(UnknownMutability, ConditionallyImmutable)
-    assert(mutability == Some(ConditionallyImmutable))
+    val mutability1 = lattice.join(UnknownImmutability, ConditionallyImmutable)
+    assert(mutability1 == Some(ConditionallyImmutable))
 
-    val newMutability1 = lattice.join(mutability.get, Mutable)
-    val newMutability2 = lattice.join(mutability.get, Immutable)
-    assert(newMutability1 == Some(Mutable))
-    assert(newMutability2 == Some(Immutable))
+    val mutability2 = lattice.join(UnknownImmutability, Mutable)
+    assert(mutability2 == Some(Mutable))
+
+    val mutability3 = lattice.join(UnknownImmutability, Immutable)
+    assert(mutability3 == Some(Immutable))
+
+    val mutability4 = lattice.join(ConditionallyImmutable, Immutable)
+    assert(mutability4 == Some(Immutable))
   }
 
-  test("MutabilityLattice: failed joins") {
-    val lattice = MutabilityKey.lattice
+  test("ImmutabilityLattice: failed joins") {
+    val lattice = ImmutabilityKey.lattice
 
     try {
       val mutability = lattice.join(Mutable, ConditionallyImmutable)
-      assert(false)
-    } catch {
-      case lve: LatticeViolationException[_] => assert(true)
-      case e: Exception => assert(false)
-    }
-
-    try {
-      val mutability = lattice.join(Mutable, Immutable)
       assert(false)
     } catch {
       case lve: LatticeViolationException[_] => assert(true)
@@ -312,6 +308,22 @@ class BaseSuite extends FunSuite {
     }
 
     try {
+      val mutability = lattice.join(ConditionallyImmutable, Mutable)
+      assert(false)
+    } catch {
+      case lve: LatticeViolationException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    try {
+      val mutability = lattice.join(Mutable, Immutable)
+      assert(false)
+    } catch {
+      case lve: LatticeViolationException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    try {
       val mutability = lattice.join(Immutable, Mutable)
       assert(false)
     } catch {
@@ -320,30 +332,25 @@ class BaseSuite extends FunSuite {
     }
   }
 
-  test("putNext: Successful, using MutabilityLattce") {
+  test("putNext: Successful, using ImmutabilityLattce") {
     val pool = new HandlerPool
-    val completer1 = CellCompleter[MutabilityKey.type, Mutability](pool, MutabilityKey)
-    val completer2 = CellCompleter[MutabilityKey.type, Mutability](pool, MutabilityKey)
-    val cell1 = completer1.cell
-    val cell2 = completer2.cell
+    val completer = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+    val cell = completer.cell
 
-    completer1.putNext(ConditionallyImmutable)
-    completer2.putNext(ConditionallyImmutable)
+    completer.putNext(ConditionallyImmutable)
 
-    assert(cell1.getResult == ConditionallyImmutable)
+    assert(cell.getResult == ConditionallyImmutable)
 
-    completer1.putNext(Immutable)
-    completer2.putNext(Mutable)
+    completer.putNext(Immutable)
 
-    assert(cell1.getResult == Immutable)
-    assert(cell2.getResult == Mutable)
+    assert(cell.getResult == Immutable)
 
     pool.shutdown()
   }
 
-  test("putNext: Failed, using MutabilityLattce") {
+  test("putNext: Failed, using ImmutabilityLattce") {
     val pool = new HandlerPool
-    val completer = CellCompleter[MutabilityKey.type, Mutability](pool, MutabilityKey)
+    val completer = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
     val cell = completer.cell
 
     completer.putNext(Immutable)
