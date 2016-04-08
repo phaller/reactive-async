@@ -8,7 +8,9 @@ import scala.util.{Success, Failure}
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-import opal.{PurenessKey, Pure, Impure, PurityAnalysis}
+import lattice._
+
+import opal.PurityAnalysis
 import org.opalj.br.analyses.Project
 import java.io.File
 

@@ -5,6 +5,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.{Future, Promise}
 
+import lattice.Key
+
 
 class HandlerPool(parallelism: Int = 8) {
 
