@@ -76,6 +76,7 @@ trait CellCompleter[K <: Key[V], V] {
   def putFinal(x: V): Unit
   def putNext(x: V): Unit
 
+  def tryNewState(value: V): Boolean
   def tryComplete(value: Try[V]): Boolean
 
   private[cell] def removeDep(dep: DepRunnable[K, V]): Unit
@@ -133,7 +134,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         case Failure(err) => throw new IllegalStateException(err)
         case _ => None
       }
-    case _ => None
+    case raw: State[K, V] => raw.res
   }
 
   override def putFinal(x: V): Unit = {
@@ -143,7 +144,11 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
       throw new IllegalStateException("Cell already completed.")
   }
 
-  override def putNext(x: V): Unit = ???
+  override def putNext(x: V): Unit = {
+    val res = tryNewState(x)
+    if (!res)
+      throw new IllegalStateException("Cell already completed.")
+  }
 
   override def dependencies: Seq[K] = {
     state.get() match {
@@ -195,7 +200,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
     }
   }
 
-  /** Called by 'putFinal'. It will try to join the current state
+  /** Called by 'putNext' and 'putFinal'. It will try to join the current state
     * with the new value by using the given lattice and return the new value.
     * If 'current == v' then it will return 'v'.
     */
@@ -206,6 +211,26 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
     newVal match {
       case Some(value) => value
       case None => v
+    }
+  }
+
+  /** Called by 'putNext' which will try creating a new state with some new value
+    * and then set the new state. The function returns 'true' if it succeeds, 'false'
+    * if it fails.
+    */
+  def tryNewState(value: V): Boolean = {
+    val newVal = tryJoin(value)
+    state.get() match {
+      case finalRes: Try[_] => // completed with final result already
+                               // do not put next
+        false
+      case raw: State[_, _] => // not completed
+        val current = raw.asInstanceOf[State[K, V]]
+        val newState = new State(Some(newVal), current.deps, current.callbacks)
+        if(state.compareAndSet(current, newState))
+          true
+        else
+          tryNewState(value)
     }
   }
 

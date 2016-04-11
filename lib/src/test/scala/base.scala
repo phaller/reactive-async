@@ -171,6 +171,18 @@ class BaseSuite extends FunSuite {
     assert(result == None)
   }
 
+  test("getResult: from a partially complete cell") {
+    val pool = new HandlerPool
+    val completer = CellCompleter[MutabilityKey.type, Mutability](pool, MutabilityKey)
+    val cell = completer.cell
+
+    completer.putNext(ConditionallyImmutable)
+
+    val res = cell.getResult
+
+    assert(res == Some(ConditionallyImmutable))
+  }
+
   test("purity analysis with Demo.java: pure methods") {
     val file = new File("lib")
     val lib = Project(file)
@@ -314,5 +326,60 @@ class BaseSuite extends FunSuite {
       case lve: LatticeViolationException[_] => assert(true)
       case e: Exception => assert(false)
     }
+  }
+
+  test("putNext: Successful, using MutabilityLattce") {
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[MutabilityKey.type, Mutability](pool, MutabilityKey)
+    val completer2 = CellCompleter[MutabilityKey.type, Mutability](pool, MutabilityKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+
+    completer1.putNext(ConditionallyImmutable)
+    completer2.putNext(ConditionallyImmutable)
+
+    assert(cell1.getResult == Some(ConditionallyImmutable))
+
+    completer1.putNext(Immutable)
+    completer2.putNext(Mutable)
+
+    assert(cell1.getResult == Some(Immutable))
+    assert(cell2.getResult == Some(Mutable))
+
+    pool.shutdown()
+  }
+
+  test("putNext: Failed, using MutabilityLattce") {
+    val pool = new HandlerPool
+    val completer = CellCompleter[MutabilityKey.type, Mutability](pool, MutabilityKey)
+    val cell = completer.cell
+
+    completer.putNext(Immutable)
+
+    assert(cell.getResult == Some(Immutable))
+
+    // Should fail putNext with LatticeViolationException
+    try {
+      completer.putNext(ConditionallyImmutable)
+      assert(false)
+    } catch {
+      case lve: LatticeViolationException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    completer.putFinal(Immutable)
+
+    assert(cell.getResult == Some(Immutable))
+
+    // Should fail putNext because of IllegalStateException, cell is already complete
+    try {
+      completer.putNext(Immutable)
+      assert(false)
+    } catch {
+      case ise: IllegalStateException => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    pool.shutdown()
   }
 }
