@@ -73,7 +73,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       pool.execute(() => analyze(project,methodToCellCompleter,classFile, method))
     }
     val fut = pool.quiescentResolveCell
-    Await.ready(fut, 2.minutes)
+    Await.ready(fut, 30.minutes)
     pool.shutdown()
 
     val pureMethods = methodToCellCompleter.filter(_._2.cell.getResult match {
