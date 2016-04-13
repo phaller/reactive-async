@@ -59,7 +59,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     var methodToCellCompleter = Map.empty[Method, CellCompleter[PurenessKey.type, Purity]]
     for {
       classFile <- project.allProjectClassFiles
-      method@MethodWithBody(body) <- classFile.methods
+      method <- classFile.methods
     } {
       val cellCompleter = CellCompleter[PurenessKey.type, Purity](pool, PurenessKey)
       methodToCellCompleter = methodToCellCompleter + ((method, cellCompleter))
@@ -67,19 +67,17 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
     // 2. trigger analyses
     for {
-      classFile <- project.allProjectClassFiles
-      method@MethodWithBody(body) <- classFile.methods
+      classFile <- project.allProjectClassFiles.par
+      method <- classFile.methods
     } {
-      pool.execute(() => {
-        analyze(project,methodToCellCompleter,classFile, method)
-      })
+      pool.execute(() => analyze(project,methodToCellCompleter,classFile, method))
     }
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 2.minutes)
     pool.shutdown()
 
     val pureMethods = methodToCellCompleter.filter(_._2.cell.getResult match {
-                                                     case Some(v) => v == Pure
+                                                     case Some(Pure) => true
                                                      case _ => false
                                                    }).map(_._1)
 
