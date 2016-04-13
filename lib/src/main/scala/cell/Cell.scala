@@ -137,8 +137,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
   }
 
   override def putFinal(x: V): Unit = {
-    val newVal = tryJoin(x)
-    val res = tryComplete(Success(newVal))
+    val res = tryComplete(Success(x))
     if (!res)
       throw new IllegalStateException("Cell already completed.")
   }
@@ -228,10 +227,11 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
 
   override def tryComplete(value: Try[V]): Boolean = {
     val resolved: Try[V] = resolveTry(value)
+    val newVal = Success(tryJoin(resolved.get))
 
     val res = tryCompleteAndGetState(resolved) match {
       case finalRes: Try[_]                          => // was already complete
-        val res = finalRes == value
+        val res = finalRes == newVal
         if (!res) {
           println(s"problem with $this; existing value: $finalRes, new value: $value")
         }
@@ -239,7 +239,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
 
       case pre: State[_, _] if pre.callbacks.isEmpty => true
       case pre: State[k, v]                          =>
-        pre.callbacks.foreach(r => r.executeWithValue(resolved.asInstanceOf[Try[v]]))
+        pre.callbacks.foreach(r => r.executeWithValue(newVal.asInstanceOf[Try[v]]))
         true
     }
     if (res) {
