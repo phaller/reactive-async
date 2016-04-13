@@ -90,6 +90,10 @@ class HandlerPool(parallelism: Int = 8) {
     p.future
   }
 
+  // Shouldn't we use:
+  //def execute(f : => Unit) : Unit =
+  //  execute(new Runnable{def run() : Unit = f})
+
   def execute(fun: () => Unit): Unit =
     execute(new Runnable { def run(): Unit = fun() })
 
