@@ -1,8 +1,15 @@
 package lattice
 
+import cell._
+
 class StringIntKey(s: String) extends Key[Int] {
-  def resolve: Int = 0
-	def lattice = new StringIntLattice
+  def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[Option[(Cell[K, Int], Int)]] = {
+    cells.map((cell: Cell[K, Int]) => Some((cell, 0)))
+  }
+  def default[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[Option[(Cell[K, Int], Int)]] = {
+    cells.map((cell: Cell[K, Int]) => Some((cell, 1)))
+  }
+  def lattice = new StringIntLattice
   override def toString = s
 }
 
