@@ -158,7 +158,7 @@ class BaseSuite extends FunSuite {
 
     val result = cell.getResult
 
-    assert(result == Some(10))
+    assert(result == 10)
   }
 
   test("getResult: from incomplete cell") {
@@ -168,7 +168,7 @@ class BaseSuite extends FunSuite {
 
     val result = cell.getResult
 
-    assert(result == None)
+    assert(result == 0)
   }
 
   test("getResult: from a partially complete cell") {
@@ -180,7 +180,7 @@ class BaseSuite extends FunSuite {
 
     val res = cell.getResult
 
-    assert(res == Some(ConditionallyImmutable))
+    assert(res == ConditionallyImmutable)
   }
 
   test("purity analysis with Demo.java: pure methods") {
@@ -244,23 +244,19 @@ class BaseSuite extends FunSuite {
 
   test("PurityLattice: successful joins") {
     val lattice = PurenessKey.lattice
-    val purity = None
-    val newPurity = lattice.join(purity, Pure)
 
-    assert(newPurity == Some(Pure))
+    val purity = lattice.join(UnknownPurity, Pure)
+    assert(purity == Some(Pure))
 
-    val newNewPurity = lattice.join(newPurity, Pure)
-
-    assert(newNewPurity == None)
+    val newPurity = lattice.join(purity.get, Pure)
+    assert(newPurity == None)
   }
 
   test("PurityLattice: failed joins") {
     val lattice = PurenessKey.lattice
-    val purity1 = Some(Impure)
-    val purity2 = Some(Pure)
 
     try {
-      val newPurity = lattice.join(purity1, Pure)
+      val newPurity = lattice.join(Impure, Pure)
       assert(false)
     } catch {
       case lve: LatticeViolationException[_] => assert(true)
@@ -268,7 +264,7 @@ class BaseSuite extends FunSuite {
     }
 
     try {
-      val newPurity = lattice.join(purity2, Impure)
+      val newPurity = lattice.join(Pure, Impure)
       assert(false)
     } catch {
       case lve: LatticeViolationException[_] => assert(true)
@@ -278,25 +274,21 @@ class BaseSuite extends FunSuite {
 
   test("MutabilityLattice: successful joins") {
     val lattice = MutabilityKey.lattice
-    val mutability = None
-    val newMutability = lattice.join(mutability, ConditionallyImmutable)
 
-    assert(newMutability == Some(ConditionallyImmutable))
+    val mutability = lattice.join(UnknownMutability, ConditionallyImmutable)
+    assert(mutability == Some(ConditionallyImmutable))
 
-    val newNewMutability1 = lattice.join(newMutability, Mutable)
-    val newNewMutability2 = lattice.join(newMutability, Immutable)
-
-    assert(newNewMutability1 == Some(Mutable))
-    assert(newNewMutability2 == Some(Immutable))
+    val newMutability1 = lattice.join(mutability.get, Mutable)
+    val newMutability2 = lattice.join(mutability.get, Immutable)
+    assert(newMutability1 == Some(Mutable))
+    assert(newMutability2 == Some(Immutable))
   }
 
   test("MutabilityLattice: failed joins") {
     val lattice = MutabilityKey.lattice
-    val mutability1 = Some(Mutable)
-    val mutability2 = Some(Immutable)
 
     try {
-      val newMutability = lattice.join(mutability1, ConditionallyImmutable)
+      val mutability = lattice.join(Mutable, ConditionallyImmutable)
       assert(false)
     } catch {
       case lve: LatticeViolationException[_] => assert(true)
@@ -304,7 +296,7 @@ class BaseSuite extends FunSuite {
     }
 
     try {
-      val newMutability = lattice.join(mutability1, Immutable)
+      val mutability = lattice.join(Mutable, Immutable)
       assert(false)
     } catch {
       case lve: LatticeViolationException[_] => assert(true)
@@ -312,7 +304,7 @@ class BaseSuite extends FunSuite {
     }
 
     try {
-      val newMutability = lattice.join(mutability2, ConditionallyImmutable)
+      val mutability = lattice.join(Immutable, ConditionallyImmutable)
       assert(false)
     } catch {
       case lve: LatticeViolationException[_] => assert(true)
@@ -320,7 +312,7 @@ class BaseSuite extends FunSuite {
     }
 
     try {
-      val newMutability = lattice.join(mutability2, Mutable)
+      val mutability = lattice.join(Immutable, Mutable)
       assert(false)
     } catch {
       case lve: LatticeViolationException[_] => assert(true)
@@ -338,13 +330,13 @@ class BaseSuite extends FunSuite {
     completer1.putNext(ConditionallyImmutable)
     completer2.putNext(ConditionallyImmutable)
 
-    assert(cell1.getResult == Some(ConditionallyImmutable))
+    assert(cell1.getResult == ConditionallyImmutable)
 
     completer1.putNext(Immutable)
     completer2.putNext(Mutable)
 
-    assert(cell1.getResult == Some(Immutable))
-    assert(cell2.getResult == Some(Mutable))
+    assert(cell1.getResult == Immutable)
+    assert(cell2.getResult == Mutable)
 
     pool.shutdown()
   }
@@ -356,7 +348,7 @@ class BaseSuite extends FunSuite {
 
     completer.putNext(Immutable)
 
-    assert(cell.getResult == Some(Immutable))
+    assert(cell.getResult == Immutable)
 
     // Should fail putNext with LatticeViolationException
     try {
@@ -369,7 +361,7 @@ class BaseSuite extends FunSuite {
 
     completer.putFinal(Immutable)
 
-    assert(cell.getResult == Some(Immutable))
+    assert(cell.getResult == Immutable)
 
     // Should fail putNext because of IllegalStateException, cell is already complete
     try {

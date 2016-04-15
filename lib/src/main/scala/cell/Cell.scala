@@ -19,7 +19,7 @@ import lattice.{Lattice, Key}
 trait Cell[K <: Key[V], V] {
   def key: K
 
-  def getResult(): Option[V]
+  def getResult(): V
   // def property: V
 
   def dependencies: Seq[K]
@@ -103,11 +103,11 @@ class Dep[K <: Key[V], V](val cell: Cell[K, V], val pred: V => Boolean, val valu
  * @param deps      dependencies on other cells
  * @param callbacks list of registered call-back runnables
  */
-private class State[K <: Key[V], V](val res: Option[V], val deps: List[DepRunnable[K,V]], val callbacks: List[CallbackRunnable[V]])
+private class State[K <: Key[V], V](val res: V, val deps: List[DepRunnable[K,V]], val callbacks: List[CallbackRunnable[V]])
 
 private object State {
-  def empty[K <: Key[V], V]: State[K, V] =
-    new State[K, V](None, List(), List())
+  def empty[K <: Key[V], V](key: K): State[K, V] =
+    new State[K, V](key.lattice.empty, List(), List())
 }
 
 
@@ -121,17 +121,17 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
    *
    * Assumes that dependencies need to be kept until a final result is known.
    */
-  private val state = new AtomicReference[AnyRef](State.empty[K, V])
+  private val state = new AtomicReference[AnyRef](State.empty[K, V](key))
 
   // `CellCompleter` and corresponding `Cell` are the same run-time object.
   override def cell: Cell[K, V] = this
 
-  override def getResult(): Option[V] = state.get() match {
+  override def getResult(): V = state.get() match {
     case finalRes: Try[V] =>
       finalRes match {
-        case Success(result) => Some(result)
+        case Success(result) => result
         case Failure(err) => throw new IllegalStateException(err)
-        case _ => None
+        case _ => key.lattice.empty
       }
     case raw: State[K, V] => raw.res
   }
@@ -224,7 +224,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         false
       case raw: State[_, _] => // not completed
         val current = raw.asInstanceOf[State[K, V]]
-        val newState = new State(Some(newVal), current.deps, current.callbacks)
+        val newState = new State(newVal, current.deps, current.callbacks)
         if(state.compareAndSet(current, newState))
           true
         else
