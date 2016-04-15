@@ -81,7 +81,9 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
                                                      case _ => false
                                                    }).map(_._1)
 
-    BasicReport("pure methods analysis:\n"+pureMethods.mkString("\n"))
+    val pureMethodsInfo = pureMethods.map(m => m.toJava(project.classFile(m)))
+
+    BasicReport("pure methods analysis:\n"+pureMethodsInfo.mkString("\n"))
   }
 
   /**
