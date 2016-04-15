@@ -178,22 +178,22 @@ class BaseSuite extends FunSuite {
     val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
 
     val pureMethods = List(
-      "public static int pureThoughItUsesField(int,int)",
-      "public static int pureThoughItUsesField2(int,int)",
-      "public static int simplyPure(int,int)",
-      "static int foo(int)",
-      "static int bar(int)",
-      "static int fooBar(int)",
-      "static int barFoo(int)",
-      "static int m1(int)",
-      "static int m2(int)",
-      "static int m3(int)",
-      "static int cm1(int)",
-      "static int cm2(int)",
-      "static int scc0(int)",
-      "static int scc1(int)",
-      "static int scc2(int)",
-      "static int scc3(int)"
+      "pureness.Demo{ public int pureThoughItUsesField(int,int) }",
+      "pureness.Demo{ public int pureThoughItUsesField2(int,int) }",
+      "pureness.Demo{ public int simplyPure(int,int) }",
+      "pureness.Demo{ int foo(int) }",
+      "pureness.Demo{ int bar(int) }",
+      "pureness.Demo{ int fooBar(int) }",
+      "pureness.Demo{ int barFoo(int) }",
+      "pureness.Demo{ int m1(int) }",
+      "pureness.Demo{ int m2(int) }",
+      "pureness.Demo{ int m3(int) }",
+      "pureness.Demo{ int cm1(int) }",
+      "pureness.Demo{ int cm2(int) }",
+      "pureness.Demo{ int scc0(int) }",
+      "pureness.Demo{ int scc1(int) }",
+      "pureness.Demo{ int scc2(int) }",
+      "pureness.Demo{ int scc3(int) }"
     )
 
     val finalRes = pureMethods.filter(!report.contains(_))
