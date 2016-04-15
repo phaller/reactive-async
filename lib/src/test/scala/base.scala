@@ -6,7 +6,7 @@ import scala.util.{Success, Failure}
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-import cell.{CellCompleter, HandlerPool}
+import cell.{WhenNext, WhenNextComplete, FalsePred, CellCompleter, HandlerPool}
 
 import lattice._
 
@@ -32,6 +32,23 @@ class BaseSuite extends FunSuite {
     completer.putFinal(5)
 
     latch.await()
+
+    pool.shutdown()
+  }
+
+  test("putFinal: 2 putFinals with same value to the same cell") {
+    val pool = new HandlerPool
+    val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val cell = completer.cell
+
+    completer.putFinal(5)
+
+    try {
+      completer.putFinal(5)
+      assert(true)
+    } catch {
+      case e: Exception => assert(false)
+    }
 
     pool.shutdown()
   }
@@ -103,6 +120,261 @@ class BaseSuite extends FunSuite {
     cell1.waitUntilNoDeps()
 
     assert(cell1.dependencies.isEmpty)
+
+    pool.shutdown()
+  }
+
+  test("onNext") {
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
+
+    val cell = completer.cell
+
+    cell.onNext {
+      case Success(x) =>
+        assert(x === 9)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+
+    completer.putNext(9)
+
+    latch.await()
+
+    pool.shutdown()
+  }
+
+  test("whenNext") {
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, (x: Int) => {
+                     if(x == 10) WhenNext
+                     else FalsePred
+                   }, 20)
+
+    cell1.onNext {
+      case Success(x) =>
+        assert(x === 20)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+
+    completer2.putNext(10)
+    latch.await()
+
+    assert(cell1.nextDependencies.size == 1)
+
+    pool.shutdown()
+  }
+
+  test("whenNext: dependency 1") {
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, (x: Int) => {
+                     if(x == 10) WhenNext
+                     else FalsePred
+                   }, 20)
+
+    cell1.onNext {
+      case Success(x) =>
+        assert(x === 8)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+
+    completer2.putNext(9)
+    completer1.putNext(8)
+
+    latch.await()
+
+    pool.shutdown()
+  }
+
+  test("whenNext: dependency 2") {
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, (x: Int) => {
+                     if(x == 10) WhenNext
+                     else FalsePred
+                   }, 30)
+    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
+
+    assert(cell1.nextDependencies.size == 1)
+
+    cell1.onComplete {
+      case Success(x) =>
+        assert(x === 20)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+    cell1.onNext {
+      case Success(x) =>
+        assert(false)
+      case Failure(e) =>
+        assert(false)
+    }
+
+    completer2.putFinal(10)
+    latch.await()
+
+    assert(cell1.nextDependencies.isEmpty)
+
+    pool.shutdown()
+  }
+
+  test("whenNext: Remove whenNext dependencies from cells that depend on a completing cell") {
+    /* Needs the dependees from the feature/cscc-resolving branch */
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, (x: Int) => {
+                     if(x == 10) WhenNext
+                     else FalsePred
+                   }, 20)
+
+    completer2.putFinal(9)
+
+    //cell1.waitUntilNoNextDeps()
+
+    //assert(cell1.nextDependencies.isEmpty)
+    assert(true)
+
+    pool.shutdown()
+  }
+
+  test("whenNextComplete") {
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, (x: Int) => {
+                     if(x == 10) WhenNextComplete
+                     else FalsePred
+                   }, 20)
+
+    cell1.onComplete {
+      case Success(v) =>
+        assert(v === 20)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+
+    // This will complete `cell1`
+    completer2.putNext(10)
+
+    latch.await()
+
+    // cell1 should be completed, so putNext(5) should not succeed
+    try {
+      completer1.putNext(5)
+      assert(false)
+    } catch {
+      case ise: IllegalStateException => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    pool.shutdown()
+  }
+
+  test("whenNextComplete: dependency 1") {
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, (x: Int) => {
+                     if(x == 10) WhenNextComplete
+                     else FalsePred
+                   }, 20)
+
+    cell1.onComplete {
+      case Success(x) =>
+        assert(x === 20)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+
+    completer2.putNext(9)
+    completer2.putNext(10)
+
+    latch.await()
+
+    pool.shutdown()
+  }
+
+  test("whenNextComplete: dependency 2") {
+    val latch1 = new CountDownLatch(1)
+    val latch2 = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, (x: Int) => {
+                     if(x == 10) WhenNextComplete
+                     else FalsePred
+                   }, 20)
+
+    cell1.onNext {
+      case Success(x) =>
+        assert(x === 8)
+        latch1.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch1.countDown()
+    }
+
+    cell1.onComplete {
+      case Success(x) =>
+        assert(x === 20)
+        latch2.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch2.countDown()
+    }
+
+    completer1.putNext(8)
+    latch1.await()
+
+    completer2.putNext(10)
+    latch2.await()
 
     pool.shutdown()
   }
@@ -338,41 +610,68 @@ class BaseSuite extends FunSuite {
     val cell = completer.cell
 
     completer.putNext(ConditionallyImmutable)
-
     assert(cell.getResult == ConditionallyImmutable)
 
     completer.putNext(Immutable)
-
     assert(cell.getResult == Immutable)
+
+    // Should be allowed because it's the same value and is allowed by the lattice
+    try {
+      completer.putFinal(Immutable)
+      assert(cell.getResult == Immutable)
+    } catch {
+      case e: Exception => assert(false)
+    }
+
+    // Even though cell is completed, this should be allowed because it's the same
+    // value and is allowed by the lattice
+    try {
+      completer.putNext(Immutable)
+      assert(cell.getResult == Immutable)
+    } catch {
+      case e: Exception => assert(false)
+    }
 
     pool.shutdown()
   }
 
   test("putNext: Failed, using ImmutabilityLattce") {
     val pool = new HandlerPool
-    val completer = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
-    val cell = completer.cell
+    val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+    val cell1 = completer1.cell
 
-    completer.putNext(Immutable)
+    completer1.putNext(Immutable)
 
-    assert(cell.getResult == Immutable)
+    assert(cell1.getResult == Immutable)
 
     // Should fail putNext with LatticeViolationException
     try {
-      completer.putNext(ConditionallyImmutable)
+      completer1.putNext(ConditionallyImmutable)
       assert(false)
     } catch {
       case lve: LatticeViolationException[_] => assert(true)
       case e: Exception => assert(false)
     }
 
-    completer.putFinal(Immutable)
+    // Should fail putFinal with LatticeViolationException
+    try {
+      completer1.putFinal(ConditionallyImmutable)
+      assert(false)
+    } catch {
+      case ise: IllegalStateException => assert(true)
+      case e: Exception => assert(false)
+    }
 
-    assert(cell.getResult == Immutable)
+    assert(cell1.getResult == Immutable)
+
+    val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+    val cell2 = completer2.cell
+
+    completer2.putFinal(ConditionallyImmutable)
 
     // Should fail putNext because of IllegalStateException, cell is already complete
     try {
-      completer.putNext(Immutable)
+      completer2.putNext(Immutable)
       assert(false)
     } catch {
       case ise: IllegalStateException => assert(true)

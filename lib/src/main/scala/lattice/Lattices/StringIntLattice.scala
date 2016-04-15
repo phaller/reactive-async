@@ -22,9 +22,8 @@ object StringIntKey {
 
 class StringIntLattice extends Lattice[Int] {
 	override def join(current: Int, next: Int): Option[Int] = {
-    if(current == 0) Some(next)
-    else if(current == next) None
-    else throw LatticeViolationException(current, next)
+      if(current != next) Some(next)
+      else None
   }
 
   override def empty: Int = 0

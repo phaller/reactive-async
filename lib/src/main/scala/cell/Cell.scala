@@ -4,12 +4,18 @@ import java.util.concurrent.atomic._
 import java.util.concurrent.{CountDownLatch, ExecutionException}
 
 import scala.annotation.tailrec
-import scala.concurrent.OnCompleteRunnable
+import scala.concurrent.{OnCompleteRunnable, ExecutionContext}
 import scala.language.implicitConversions
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
 import lattice.{Lattice, Key}
+
+
+sealed trait WhenNextPredicate
+case object WhenNext extends WhenNextPredicate
+case object WhenNextComplete extends WhenNextPredicate
+case object FalsePred extends WhenNextPredicate
 
 /**
  * Example:
@@ -25,6 +31,8 @@ trait Cell[K <: Key[V], V] {
   def dependencies: Seq[K]
   // def addDependency(other: K)
   // def removeDependency(other: K)
+
+  def nextDependencies: Seq[K]
 
   // sobald sich der Wert dieser Cell ändert, müssen die dependee Cells benachrichtigt werden
   // def dependees: Seq[K]
@@ -46,6 +54,22 @@ trait Cell[K <: Key[V], V] {
   def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit
 
   /**
+   * Adds a dependency on some `other` cell.
+   *
+   * Example:
+   *   whenNext(cell, x => !x, Impure) // if a preliminary result is put in `cell` using 
+   *                                   // `putNext`and the predicate is true (meaning `cell`
+   *                                   // is impure), `this`cell can receive next intermediate
+   *                                   // result with constant `Impure`
+   *
+   * @param other  Cell that `this` Cell depends on.
+   * @param pred   Predicate used to decide whether an intermediate or final result of `this` Cell can be computed early, depending on what the predicate returns.
+   *               `pred` is applied to value of `other` cell.
+   * @param value  Early result value.
+   */
+  def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: V): Unit
+
+  /**
    * Registers a call-back function to be invoked when quiescence is reached, but `this` cell has not been
    * completed, yet. The call-back function is passed a sequence of the cells that `this` cell depends on.
    */
@@ -54,12 +78,16 @@ trait Cell[K <: Key[V], V] {
   // internal API
 
   // Schedules execution of `callback` when next intermediate result is available.
-  // def onNext[U](callback: V => U)(implicit context: ExecutionContext): Unit
+  def onNext[U](callback: Try[V] => U): Unit //(implicit context: ExecutionContext): Unit
 
   // Schedules execution of `callback` when completed with final result.
   def onComplete[U](callback: Try[V] => U): Unit
 
   def waitUntilNoDeps(): Unit
+  def waitUntilNoNextDeps(): Unit
+
+  private[cell] def addCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit
+  private[cell] def addNextCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit
 
   private[cell] def resolveWithValue(value: V): Unit
   private[cell] def cellDependencies: Seq[Cell[K, V]]
@@ -78,7 +106,8 @@ trait CellCompleter[K <: Key[V], V] {
   def tryNewState(value: V): Boolean
   def tryComplete(value: Try[V]): Boolean
 
-  private[cell] def removeDep(dep: DepRunnable[K, V]): Unit
+  private[cell] def removeDep(dep: CompleteDepRunnable[K, V]): Unit
+  private[cell] def removeNextDep(cell: Cell[K, V]): Unit
 }
 
 object CellCompleter {
@@ -103,17 +132,18 @@ class Dep[K <: Key[V], V](val cell: Cell[K, V], val pred: V => Boolean, val valu
  * @param deps      dependencies on other cells
  * @param callbacks list of registered call-back runnables
  */
-private class State[K <: Key[V], V](val res: V, val deps: List[DepRunnable[K,V]], val callbacks: List[CallbackRunnable[V]])
+private class State[K <: Key[V], V](val res: V, val deps: List[CompleteDepRunnable[K, V]], val callbacks: List[CallbackRunnable[K, V]], val nextDeps: List[NextDepRunnable[K, V]], val nextCallbacks: List[NextCallbackRunnable[K, V]])
 
 private object State {
   def empty[K <: Key[V], V](key: K): State[K, V] =
-    new State[K, V](key.lattice.empty, List(), List())
+    new State[K, V](key.lattice.empty, List(), List(), List(), List())
 }
 
 
 class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V] with CellCompleter[K, V] {
 
   private val nodepslatch = new CountDownLatch(1)
+  private val nonextdepslatch = new CountDownLatch(1)
 
   /* Contains a value either of type
    * (a) `Try[V]`      for the final result, or
@@ -168,8 +198,44 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
     }
   }
 
+  override def nextDependencies: Seq[K] = {
+    state.get() match {
+      case finalRes: Try[_] => // completed with final result
+        Seq[K]()
+      case pre: State[_, _] => // not completed
+        val current = pre.asInstanceOf[State[K, V]]
+        current.nextDeps.map(_.cell.key)
+    }
+  }
+
   override private[cell] def resolveWithValue(value: V): Unit = {
     this.putFinal(value)
+  }
+
+  /** Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
+   *  `putNext`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
+   *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `value`
+   *  respectively.
+   *
+   *  The thereby introduced dependency is removed when `this` cell
+   *  is completed (either prior or after an invocation of `whenNext`).
+   */
+  override def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: V): Unit = {
+    state.get() match {
+      case finalRes: Try[_]  => // completed with final result
+        // do not add dependency
+        // in fact, do nothing
+
+      case raw: State[_, _] => // not completed
+        val newDep = new NextDepRunnable(pool, other, pred, value, this)
+        // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
+        other.addNextCallback(newDep, this)
+
+        val current  = raw.asInstanceOf[State[K, V]]
+        val newState = new State(current.res, current.deps, current.callbacks, newDep :: current.nextDeps, current.nextCallbacks)
+        if(!state.compareAndSet(current, newState))
+          whenNext(other, pred, value)
+    }
   }
 
   /** Adds dependency on `other` cell: when `other` cell is completed, evaluate `pred`
@@ -178,8 +244,6 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
    *
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenComplete`).
-   *
-   *  TODO: distinguish final result from other results.
    */
   override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit = {
     state.get() match {
@@ -188,14 +252,24 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         // in fact, do nothing
 
       case raw: State[_, _] => // not completed
-        val newDep = new DepRunnable(pool, other, pred, value, this)
+        val newDep = new CompleteDepRunnable(pool, other, pred, value, this)
         // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
-        other.onComplete(newDep)
+        other.addCallback(newDep, this)
 
         val current  = raw.asInstanceOf[State[K, V]]
-        val newState = new State(current.res, newDep :: current.deps, current.callbacks)
+        val newState = new State(current.res, newDep :: current.deps, current.callbacks, current.nextDeps, current.nextCallbacks)
         state.compareAndSet(current, newState)
     }
+  }
+
+  override private[cell] def addCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit = {
+    val runnable = new CallbackRunnable[K, V](pool, callback, Some(cell))
+    dispatchOrAddCallback(runnable)
+  }
+
+  override private[cell] def addNextCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit = {
+    val runnable = new NextCallbackRunnable[K, V](pool, callback, Some(cell))
+    dispatchOrAddNextCallback(runnable)
   }
 
   /** Called by 'putNext' and 'putFinal'. It will try to join the current state
@@ -220,15 +294,20 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
     val newVal = tryJoin(value)
     state.get() match {
       case finalRes: Try[_] => // completed with final result already
-                               // do not put next
-        false
+        val res = finalRes == Success(newVal)
+        if(!res) {
+          println(s"problem with $this; existing value: $finalRes, new value: $newVal")
+        }
+        res
       case raw: State[_, _] => // not completed
         val current = raw.asInstanceOf[State[K, V]]
-        val newState = new State(newVal, current.deps, current.callbacks)
-        if(state.compareAndSet(current, newState))
-          true
-        else
+        val newState = new State(newVal, current.deps, current.callbacks, current.nextDeps, current.nextCallbacks)
+        if(!state.compareAndSet(current, newState))
           tryNewState(value)
+        else {
+          current.nextCallbacks.foreach(r => r.executeWithValue(Success(value)))
+          true
+        }
     }
   }
 
@@ -261,9 +340,20 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         }
         res
 
-      case pre: State[_, _] if pre.callbacks.isEmpty => true
-      case pre: State[k, v]                          =>
-        pre.callbacks.foreach(r => r.executeWithValue(newVal.asInstanceOf[Try[v]]))
+      case pre: State[k, v] =>
+        if(pre.callbacks.isEmpty)
+          pre.nextCallbacks.foreach(r => r.executeWithValue(resolved.asInstanceOf[Try[v]]))
+        else {
+          // NextCallbacks with these cells should not be triggered, because they have
+          // an onComplete event that are triggered instead.
+          val cellsWithCompleteCallbacks = pre.callbacks.map(_.cell)
+          pre.callbacks.foreach(r => r.executeWithValue(resolved.asInstanceOf[Try[v]]))
+          for(callback <- pre.nextCallbacks) {
+            if(!cellsWithCompleteCallbacks.contains(callback.cell))
+              callback.executeWithValue(resolved.asInstanceOf[Try[v]])
+          }
+        }
+
         true
     }
     if (res) {
@@ -273,13 +363,13 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
   }
 
   @tailrec
-  override private[cell] final def removeDep(dep: DepRunnable[K, V]): Unit = {
+  override private[cell] final def removeDep(dep: CompleteDepRunnable[K, V]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]
         val newDeps = current.deps.filterNot(_ == dep)
 
-        val newState = new State(current.res, newDeps, current.callbacks)
+        val newState = new State(current.res, newDeps, current.callbacks, current.nextDeps, current.nextCallbacks)
         if (!state.compareAndSet(current, newState))
           removeDep(dep)
         else if (newDeps.isEmpty)
@@ -289,13 +379,40 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
     }
   }
 
+  @tailrec
+  override private[cell] final def removeNextDep(cell: Cell[K, V]): Unit = {
+    state.get() match {
+      case pre: State[_, _] =>
+        val current = pre.asInstanceOf[State[K, V]]
+        val newNextDeps = current.nextDeps.filterNot(_.cell == cell)
+
+        val newState = new State(current.res, current.deps, current.callbacks, newNextDeps, current.nextCallbacks)
+        if (!state.compareAndSet(current, newState))
+          removeNextDep(cell)
+        else if (newNextDeps.isEmpty)
+          nonextdepslatch.countDown()
+
+      case _ => /* do nothing */
+    }
+  }
+
   def waitUntilNoDeps(): Unit = {
     nodepslatch.await()
   }
 
+  def waitUntilNoNextDeps(): Unit = {
+    nonextdepslatch.await()
+  }
+
+  // Schedules execution of `callback` when next intermediate result is available.
+  override def onNext[U](callback: Try[V] => U): Unit = {
+    val runnable = new NextCallbackRunnable[K, V](pool, callback, None)
+    dispatchOrAddNextCallback(runnable)
+  }
+
   // Schedules execution of `callback` when completed with final result.
   override def onComplete[U](callback: Try[V] => U): Unit = {
-    val runnable = new CallbackRunnable[V](pool, callback)
+    val runnable = new CallbackRunnable[K, V](pool, callback, None)
     dispatchOrAddCallback(runnable)
   }
 
@@ -304,15 +421,32 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
    *  to the root promise when linking two promises together.
    */
   @tailrec
-  private def dispatchOrAddCallback(runnable: CallbackRunnable[V]): Unit = {
+  private def dispatchOrAddCallback(runnable: CallbackRunnable[K, V]): Unit = {
     state.get() match {
       case r: Try[_]  => runnable.executeWithValue(r.asInstanceOf[Try[V]])
       // case _: DefaultPromise[_] => compressedRoot().dispatchOrAddCallback(runnable)
       case pre: State[_, _] =>
         // assemble new state
         val current  = pre.asInstanceOf[State[K, V]]
-        val newState = new State(current.res, current.deps, runnable :: current.callbacks)
+        val newState = new State(current.res, current.deps, runnable :: current.callbacks, current.nextDeps, current.nextCallbacks)
         if (!state.compareAndSet(pre, newState)) dispatchOrAddCallback(runnable)
+    }
+  }
+
+  /** Tries to add the callback, if already completed, it dispatches the callback to be executed.
+    *  Used by `onNext()` to add callbacks to a promise and by `link()` to transfer callbacks
+    *  to the root promise when linking two promises together.
+    */
+  @tailrec
+  private def dispatchOrAddNextCallback(runnable: NextCallbackRunnable[K, V]): Unit = {
+    state.get() match {
+      case r: Try[_]  => /* Cell is completed, do nothing emit an onNext callback */
+                         // case _: DefaultPromise[_] => compressedRoot().dispatchOrAddCallback(runnable)
+      case pre: State[_, _] =>
+        // assemble new state
+        val current  = pre.asInstanceOf[State[K, V]]
+        val newState = new State(current.res, current.deps, current.callbacks, current.nextDeps, runnable :: current.nextCallbacks)
+        if (!state.compareAndSet(pre, newState)) dispatchOrAddNextCallback(runnable)
     }
   }
 
@@ -333,21 +467,19 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
 
 }
 
-/* Depend on `cell`. `pred` to decide whether short-cutting is possible. `shortCutValue` is short-cut result.
- */
-private class DepRunnable[K <: Key[V], V](val pool: HandlerPool,
-                                          val cell: Cell[K, V],
-                                          val pred: V => Boolean,
-                                          val shortCutValue: V,
-                                          val completer: CellCompleter[K, V])
+private class CompleteDepRunnable[K <: Key[V], V](val pool: HandlerPool,
+                                                  val cell: Cell[K, V],
+                                                  val pred: V => Boolean,
+                                                  val shortCutValue: V,
+                                                  val completer: CellCompleter[K, V])
     extends Runnable with OnCompleteRunnable with (Try[V] => Unit) {
-  // must be filled in before running it
   var value: Try[V] = null
 
   override def apply(x: Try[V]): Unit = x match {
     case Success(v) =>
       if (pred(v)) completer.putFinal(shortCutValue)
       else completer.removeDep(this)
+      completer.removeNextDep(cell)
     case Failure(e) =>
       completer.removeDep(this)
   }
@@ -362,18 +494,22 @@ private class DepRunnable[K <: Key[V], V](val pool: HandlerPool,
   }
 }
 
-
 // copied from `impl.CallbackRunnable` in Scala core lib.
-private class CallbackRunnable[T](val executor: HandlerPool, val onComplete: Try[T] => Any) extends Runnable with OnCompleteRunnable {
+/**
+  * @param executor The thread that runs the callback function
+  * @param onNext   Callback function that is triggered on an onNext event
+  * @param cell     The cell that is depends on this callback
+  */
+private class CallbackRunnable[K <: Key[V], V](val executor: HandlerPool, val onComplete: Try[V] => Any, val cell: Option[Cell[K, V]]) extends Runnable with OnCompleteRunnable {
   // must be filled in before running it
-  var value: Try[T] = null
+  var value: Try[V] = null
 
   override def run() = {
     require(value ne null) // must set value to non-null before running!
     try onComplete(value) catch { case NonFatal(e) => executor reportFailure e }
   }
 
-  def executeWithValue(v: Try[T]): Unit = {
+  def executeWithValue(v: Try[V]): Unit = {
     require(value eq null) // can't complete it twice
     value = v
     // Note that we cannot prepare the ExecutionContext at this point, since we might
@@ -381,3 +517,56 @@ private class CallbackRunnable[T](val executor: HandlerPool, val onComplete: Try
     try executor.execute(this) catch { case NonFatal(t) => executor reportFailure t }
   }
 }
+
+/* Depend on `cell`. `pred` to decide whether short-cutting is possible. `shortCutValue` is short-cut result.
+ */
+private class NextDepRunnable[K <: Key[V], V](val pool: HandlerPool,
+                                              val cell: Cell[K, V],
+                                              val pred: V => WhenNextPredicate,
+                                              val shortCutValue: V,
+                                              val completer: CellCompleter[K, V])
+    extends Runnable with OnCompleteRunnable with (Try[V] => Unit) {
+  var value: Try[V] = null
+
+  override def apply(x: Try[V]): Unit = x match {
+    case Success(v) =>
+      pred(v) match {
+        case WhenNext => completer.putNext(shortCutValue)
+        case WhenNextComplete => completer.putFinal(shortCutValue)
+        case _ => /* do nothing */
+      } 
+    case Failure(e) => /* do nothing */
+  }
+
+  override def run(): Unit = {
+    try apply(value) catch { case NonFatal(e) => pool reportFailure e }
+  }
+
+  def executeWithValue(v: Try[V]): Unit = {
+    value = v
+    try pool.execute(this) catch { case NonFatal(t) => pool reportFailure t }
+  }
+}
+
+/**
+ * @param executor The thread that runs the callback function
+ * @param onNext   Callback function that is triggered on an onNext event
+ * @param cell     The cell that is depends on this callback
+ */
+private class NextCallbackRunnable[K <: Key[V], V](val executor: HandlerPool, val onNext: Try[V] => Any, val cell: Option[Cell[K, V]]) extends Runnable with OnCompleteRunnable {
+  // must be filled in before running it
+  var value: Try[V] = null
+
+  override def run() = {
+    require(value ne null) // must set value to non-null before running!
+    try onNext(value) catch { case NonFatal(e) => executor reportFailure e }
+  }
+
+  def executeWithValue(v: Try[V]): Unit = {
+    value = v
+    // Note that we cannot prepare the ExecutionContext at this point, since we might
+    // already be running on a different thread!
+    try executor.execute(this) catch { case NonFatal(t) => executor reportFailure t }
+  }
+}
+
