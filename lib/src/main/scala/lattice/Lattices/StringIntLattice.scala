@@ -3,13 +3,15 @@ package lattice
 import cell._
 
 class StringIntKey(s: String) extends Key[Int] {
+	val lattice = new StringIntLattice
+
   def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[Option[(Cell[K, Int], Int)]] = {
     cells.map((cell: Cell[K, Int]) => Some((cell, 0)))
   }
   def default[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[Option[(Cell[K, Int], Int)]] = {
     cells.map((cell: Cell[K, Int]) => Some((cell, 1)))
   }
-  def lattice = new StringIntLattice
+
   override def toString = s
 }
 
@@ -19,10 +21,11 @@ object StringIntKey {
 }
 
 class StringIntLattice extends Lattice[Int] {
-	override def join(current: Option[Int], next: Int): Option[Int] = current match {
-    case Some(c) =>
-      if(c != next) throw LatticeViolationException(current, next)
-      else None
-    case _ => Some(next)
+	override def join(current: Int, next: Int): Option[Int] = {
+    if(current == 0) Some(next)
+    else if(current == next) None
+    else throw LatticeViolationException(current, next)
   }
+
+  override def empty: Int = 0
 }

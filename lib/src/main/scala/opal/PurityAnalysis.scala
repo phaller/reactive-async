@@ -77,7 +77,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     pool.shutdown()
 
     val pureMethods = methodToCellCompleter.filter(_._2.cell.getResult match {
-                                                     case Some(Pure) => true
+                                                     case Pure => true
                                                      case _ => false
                                                    }).map(_._1)
 
