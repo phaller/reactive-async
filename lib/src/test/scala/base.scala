@@ -3,14 +3,17 @@ import org.scalatest.FunSuite
 import java.util.concurrent.CountDownLatch
 
 import scala.util.{Success, Failure}
-import scala.concurrent.Await
+import scala.concurrent.{Promise, Await}
 import scala.concurrent.duration._
 
 import cell.{WhenNext, WhenNextComplete, FalsePred, CellCompleter, HandlerPool}
 
 import lattice._
 
-import opal.PurityAnalysis
+import org.opalj.fpcf.analysis.extensibility.ClassExtensibilityAnalysis
+import org.opalj.fpcf.analysis.fields.{FieldMutability, FieldMutabilityAnalysis}
+import org.opalj.fpcf.analysis.{FPCFAnalysesManager, FPCFAnalysis, FPCFAnalysesManagerKey}
+import opal.{ImmutabilityAnalysis, PurityAnalysis}
 import org.opalj.br.analyses.Project
 import java.io.File
 
@@ -47,6 +50,42 @@ class BaseSuite extends FunSuite {
       completer.putFinal(5)
       assert(true)
     } catch {
+      case e: Exception => assert(false)
+    }
+
+    pool.shutdown()
+  }
+
+  test("putFinal: putFinal on complete cell without adding new information") {
+    val pool = new HandlerPool
+    val completer = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+    val cell = completer.cell
+
+    completer.putFinal(Mutable)
+
+    try {
+      completer.putFinal(ConditionallyImmutable)
+      assert(false)
+    } catch {
+      case ise: IllegalStateException => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    pool.shutdown()
+  }
+
+  test("putFinal: putFinal on complete cell adding new information") {
+    val pool = new HandlerPool
+    val completer = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+    val cell = completer.cell
+
+    completer.putFinal(ConditionallyImmutable)
+
+    try {
+      completer.putFinal(Mutable)
+      assert(false)
+    } catch {
+      case ise: IllegalStateException => assert(true)
       case e: Exception => assert(false)
     }
 
@@ -159,7 +198,7 @@ class BaseSuite extends FunSuite {
     cell1.whenNext(completer2.cell, (x: Int) => {
                      if(x == 10) WhenNext
                      else FalsePred
-                   }, 20)
+                   }, Some(20))
 
     cell1.onNext {
       case Success(x) =>
@@ -189,7 +228,7 @@ class BaseSuite extends FunSuite {
     cell1.whenNext(completer2.cell, (x: Int) => {
                      if(x == 10) WhenNext
                      else FalsePred
-                   }, 20)
+                   }, Some(20))
 
     cell1.onNext {
       case Success(x) =>
@@ -219,7 +258,7 @@ class BaseSuite extends FunSuite {
     cell1.whenNext(completer2.cell, (x: Int) => {
                      if(x == 10) WhenNext
                      else FalsePred
-                   }, 30)
+                   }, Some(30))
     cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
 
     assert(cell1.nextDependencies.size == 1)
@@ -247,6 +286,36 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("whenNext: Triggered by putFinal when no whenComplete exist for same cell") {
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, (x: Int) => {
+                     if(x == 10) WhenNext
+                     else FalsePred
+                   }, Some(20))
+
+    assert(cell1.nextDependencies.size == 1)
+
+    cell1.onNext {
+      case Success(x) =>
+        assert(x === 20)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+
+    completer2.putFinal(10)
+    latch.await()
+
+    pool.shutdown()
+  }
+
   test("whenNext: Remove whenNext dependencies from cells that depend on a completing cell") {
     /* Needs the dependees from the feature/cscc-resolving branch */
     val pool = new HandlerPool
@@ -257,14 +326,61 @@ class BaseSuite extends FunSuite {
     cell1.whenNext(completer2.cell, (x: Int) => {
                      if(x == 10) WhenNext
                      else FalsePred
-                   }, 20)
+                   }, Some(20))
 
-    completer2.putFinal(9)
+    completer2.putFinal(10)
 
-    //cell1.waitUntilNoNextDeps()
+    cell1.waitUntilNoNextDeps()
 
-    //assert(cell1.nextDependencies.isEmpty)
-    assert(true)
+    assert(cell1.nextDependencies.isEmpty)
+
+    pool.shutdown()
+  }
+
+  test("whenNext: Dependencies concurrency test") {
+    val pool = new HandlerPool
+    val latch = new CountDownLatch(10000)
+    val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+    val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+
+    for (i <- 1 to 10000) {
+      pool.execute( () => {
+        completer1.cell.whenNext(completer2.cell, x => {
+          if (x == Mutable) WhenNext else FalsePred
+        }, Some(Mutable))
+        latch.countDown()
+      })
+    }
+
+    latch.await()
+
+    assert(completer1.cell.nextDependencies.size == 10000)
+
+    pool.shutdown()
+  }
+
+  test("whenNext: One cell with several dependencies on the same cell concurrency test") {
+    val pool = new HandlerPool
+
+    for (i <- 1 to 100000) {
+      val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+      val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+      completer1.cell.whenNext(completer2.cell, _ match {
+        case Immutable | ConditionallyImmutable => FalsePred
+        case Mutable => WhenNext
+      }, Some(Mutable))
+
+      assert(completer1.cell.totalDependencies.size == 1)
+
+      pool.execute(() => completer2.putNext(ConditionallyImmutable))
+      pool.execute(() => completer2.putFinal(Mutable))
+
+      val fut = pool.quiescentResolveCell
+      Await.result(fut, 2.second)
+
+      assert(completer2.cell.getResult() == Mutable)
+      assert(completer1.cell.getResult() == Mutable)
+    }
 
     pool.shutdown()
   }
@@ -280,7 +396,7 @@ class BaseSuite extends FunSuite {
     cell1.whenNext(completer2.cell, (x: Int) => {
                      if(x == 10) WhenNextComplete
                      else FalsePred
-                   }, 20)
+                   }, Some(20))
 
     cell1.onComplete {
       case Success(v) =>
@@ -319,7 +435,7 @@ class BaseSuite extends FunSuite {
     cell1.whenNext(completer2.cell, (x: Int) => {
                      if(x == 10) WhenNextComplete
                      else FalsePred
-                   }, 20)
+                   }, Some(20))
 
     cell1.onComplete {
       case Success(x) =>
@@ -350,7 +466,7 @@ class BaseSuite extends FunSuite {
     cell1.whenNext(completer2.cell, (x: Int) => {
                      if(x == 10) WhenNextComplete
                      else FalsePred
-                   }, 20)
+                   }, Some(20))
 
     cell1.onNext {
       case Success(x) =>
@@ -544,134 +660,45 @@ class BaseSuite extends FunSuite {
     }
   }
 
-  test("ImmutabilityLattice: successful joins") {
-    val lattice = ImmutabilityKey.lattice
-
-    val mutability1 = lattice.join(UnknownImmutability, ConditionallyImmutable)
-    assert(mutability1 == Some(ConditionallyImmutable))
-
-    val mutability2 = lattice.join(UnknownImmutability, Mutable)
-    assert(mutability2 == Some(Mutable))
-
-    val mutability3 = lattice.join(UnknownImmutability, Immutable)
-    assert(mutability3 == Some(Immutable))
-
-    val mutability4 = lattice.join(ConditionallyImmutable, Immutable)
-    assert(mutability4 == Some(Immutable))
-  }
-
-  test("ImmutabilityLattice: failed joins") {
-    val lattice = ImmutabilityKey.lattice
-
-    try {
-      val mutability = lattice.join(Mutable, ConditionallyImmutable)
-      assert(false)
-    } catch {
-      case lve: LatticeViolationException[_] => assert(true)
-      case e: Exception => assert(false)
-    }
-
-    try {
-      val mutability = lattice.join(Immutable, ConditionallyImmutable)
-      assert(false)
-    } catch {
-      case lve: LatticeViolationException[_] => assert(true)
-      case e: Exception => assert(false)
-    }
-
-    try {
-      val mutability = lattice.join(ConditionallyImmutable, Mutable)
-      assert(false)
-    } catch {
-      case lve: LatticeViolationException[_] => assert(true)
-      case e: Exception => assert(false)
-    }
-
-    try {
-      val mutability = lattice.join(Mutable, Immutable)
-      assert(false)
-    } catch {
-      case lve: LatticeViolationException[_] => assert(true)
-      case e: Exception => assert(false)
-    }
-
-    try {
-      val mutability = lattice.join(Immutable, Mutable)
-      assert(false)
-    } catch {
-      case lve: LatticeViolationException[_] => assert(true)
-      case e: Exception => assert(false)
-    }
-  }
-
   test("putNext: Successful, using ImmutabilityLattce") {
     val pool = new HandlerPool
     val completer = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
     val cell = completer.cell
 
-    completer.putNext(ConditionallyImmutable)
-    assert(cell.getResult == ConditionallyImmutable)
-
     completer.putNext(Immutable)
     assert(cell.getResult == Immutable)
 
+    completer.putNext(ConditionallyImmutable)
+    assert(cell.getResult == ConditionallyImmutable)
+
     // Should be allowed because it's the same value and is allowed by the lattice
-    try {
-      completer.putFinal(Immutable)
-      assert(cell.getResult == Immutable)
-    } catch {
-      case e: Exception => assert(false)
-    }
+    completer.putFinal(ConditionallyImmutable)
+    assert(cell.getResult == ConditionallyImmutable)
 
     // Even though cell is completed, this should be allowed because it's the same
     // value and is allowed by the lattice
-    try {
-      completer.putNext(Immutable)
-      assert(cell.getResult == Immutable)
-    } catch {
-      case e: Exception => assert(false)
-    }
+    completer.putNext(ConditionallyImmutable)
+    assert(cell.getResult == ConditionallyImmutable)
+
+    // Even though cell is completed, this should be allowed because it wont add any new information
+    completer.putNext(Immutable)
+    assert(cell.getResult() == ConditionallyImmutable)
 
     pool.shutdown()
   }
 
   test("putNext: Failed, using ImmutabilityLattce") {
     val pool = new HandlerPool
-    val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
-    val cell1 = completer1.cell
-
-    completer1.putNext(Immutable)
-
-    assert(cell1.getResult == Immutable)
-
-    // Should fail putNext with LatticeViolationException
-    try {
-      completer1.putNext(ConditionallyImmutable)
-      assert(false)
-    } catch {
-      case lve: LatticeViolationException[_] => assert(true)
-      case e: Exception => assert(false)
-    }
-
-    // Should fail putFinal with LatticeViolationException
-    try {
-      completer1.putFinal(ConditionallyImmutable)
-      assert(false)
-    } catch {
-      case ise: IllegalStateException => assert(true)
-      case e: Exception => assert(false)
-    }
-
-    assert(cell1.getResult == Immutable)
 
     val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
     val cell2 = completer2.cell
 
-    completer2.putFinal(ConditionallyImmutable)
+    completer2.putFinal(Immutable)
 
-    // Should fail putNext because of IllegalStateException, cell is already complete
+    // Should fail putNext with IllegalStateException because of adding new information
+    // to an already complete cell
     try {
-      completer2.putNext(Immutable)
+      completer2.putNext(ConditionallyImmutable)
       assert(false)
     } catch {
       case ise: IllegalStateException => assert(true)
@@ -680,4 +707,102 @@ class BaseSuite extends FunSuite {
 
     pool.shutdown()
   }
+
+  test("putNext: concurrency test") {
+    val pool = new HandlerPool
+
+    for (i <- 1 to 10000) {
+      val completer = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+
+      pool.execute(() => completer.putNext(Immutable))
+      pool.execute(() => completer.putNext(ConditionallyImmutable))
+      pool.execute(() => completer.putNext(Mutable))
+
+      val p = Promise[Boolean]()
+      pool.onQuiescent { () => p.success(true) }
+
+      try {
+        Await.result(p.future, 2.seconds)
+      } catch {
+        case t: Throwable => assert(false, s"failure after $i iterations")
+      }
+
+      assert(completer.cell.getResult() == Mutable)
+    }
+
+    pool.shutdown()
+  }
+
+  test("putNext and putFinal: concurrency test") {
+    val pool = new HandlerPool
+
+    for (i <- 1 to 10000) {
+      val completer = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+
+      pool.execute(() => completer.putNext(Immutable))
+      pool.execute(() => completer.putNext(ConditionallyImmutable))
+      pool.execute(() => completer.putFinal(Mutable))
+
+      val p = Promise[Boolean]()
+      pool.onQuiescent { () => p.success(true) }
+
+      try {
+        Await.result(p.future, 2.seconds)
+      } catch {
+        case t: Throwable => assert(false, s"failure after $i iterations")
+      }
+
+      assert(completer.cell.getResult() == Mutable)
+    }
+
+    pool.shutdown()
+  }
+
+  test("New ImmutabilityLattice: successful joins") {
+    val lattice = ImmutabilityKey.lattice
+
+    val mutability1 = lattice.join(Immutable, ConditionallyImmutable)
+    assert(mutability1 == Some(ConditionallyImmutable))
+
+    val mutability2 = lattice.join(ConditionallyImmutable, Mutable)
+    assert(mutability2 == Some(Mutable))
+
+    val mutability3 = lattice.join(Immutable, Mutable)
+    assert(mutability3 == Some(Mutable))
+
+    val mutability4 = lattice.join(ConditionallyImmutable, Immutable)
+    assert(mutability4 == None)
+
+    val mutability5 = lattice.join(Mutable, ConditionallyImmutable)
+    assert(mutability5 == None)
+
+    val mutability6 = lattice.join(Mutable, Immutable)
+    assert(mutability6 == None)
+  }
+
+  /*test("ImmutabilityAnalysis: Concurrency") {
+    val file = new File("lib")
+    val lib = Project(file)
+
+    val manager = lib.get(FPCFAnalysesManagerKey)
+    manager.run(ClassExtensibilityAnalysis)
+    manager.runAll(
+      FieldMutabilityAnalysis
+    )
+
+    // Compare every next result received from the same analysis to `report`
+    val report = ImmutabilityAnalysis.analyzeWithoutClassExtensibilityAndFieldMutabilityAnalysis(lib, manager).toConsoleString.split("\n")
+
+    for (i <- 0 to 1000) {
+      // Next result
+      val newReport = ImmutabilityAnalysis.analyzeWithoutClassExtensibilityAndFieldMutabilityAnalysis(lib, manager).toConsoleString.split("\n")
+
+      // Differs between the elements in `report` and `newReport`.
+      // If they have the exact same elements, `finalRes` should be an
+      // empty list.
+      val finalRes = report.filterNot(newReport.toSet)
+
+      assert(finalRes.isEmpty)
+    }
+  }*/
 }

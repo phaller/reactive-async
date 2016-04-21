@@ -3,6 +3,10 @@ package cell
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.annotation.tailrec
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
 import scala.concurrent.{Future, Promise}
 
 import lattice.Key
@@ -75,18 +79,25 @@ class HandlerPool(parallelism: Int = 8) {
     p.future
   }
 
+  final def whileQuiescentResolveCell[K <: Key[V], V]: Unit = {
+    while (!cellsNotDone.get().isEmpty) {
+      val fut = this.quiescentResolveCell
+      Await.ready(fut, 15.minutes)
+    }
+  }
+
   def quiescentResolveCell[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Find one closed strongly connected component (cell)
       val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().asInstanceOf[Seq[Cell[K, V]]]
       if (registered.nonEmpty) {
-        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.cellDependencies)
+        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
       }
       // Finds the rest of the unresolved cells
       val rest = this.cellsNotDone.get().asInstanceOf[Seq[Cell[K, V]]]
-      if(rest.nonEmpty) {
+      if (rest.nonEmpty) {
         resolveDefault(rest)
       }
       p.success(true)
