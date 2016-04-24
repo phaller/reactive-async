@@ -3,6 +3,8 @@ package cell
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.annotation.tailrec
+
 import scala.concurrent.{Future, Promise}
 
 import lattice.Key
@@ -10,45 +12,32 @@ import lattice.Key
 import org.opalj.graphs._
 
 
+/* Need to have reference equality for CAS.
+ */
+class PoolState(val handlers: List[() => Unit] = List(), val submittedTasks: Int = 0) {
+  def isQuiescent(): Boolean =
+    submittedTasks == 0
+}
+
 class HandlerPool(parallelism: Int = 8) {
 
   private val pool: ForkJoinPool = new ForkJoinPool(parallelism)
 
-  private val quiescentHandlers = new AtomicReference[List[() => Unit]](List())
+  private val poolState = new AtomicReference[PoolState](new PoolState)
 
   private val cellsNotDone = new AtomicReference[List[Cell[_, _]]](List())
 
-  private val t = {
-    val tmp = new MonitoringThread
-    tmp.start()
-    tmp
-  }
-
-  private class MonitoringThread extends Thread {
-    private val backoff = Backoff()
-    @volatile var terminate = false
-
-    override def run(): Unit = {
-      // periodically check whether fork/join pool is quiescent
-      while (!terminate) {
-        if (pool.isQuiescent) {
-          // schedule registered quiescent handlers
-          val handlers = quiescentHandlers.get()
-          quiescentHandlers.compareAndSet(handlers, List())
-          handlers.foreach { handler =>
-            pool.execute(new Runnable { def run(): Unit = handler() })
-          }
-        } else
-          backoff.once() // exponential back-off
-      }
+  @tailrec
+  final def onQuiescent(handler: () => Unit): Unit = {
+    val state = poolState.get()
+    if (state.isQuiescent) {
+      execute(new Runnable { def run(): Unit = handler() })
+    } else {
+      val newState = new PoolState(handler :: state.handlers, state.submittedTasks)
+      val success = poolState.compareAndSet(state, newState)
+      if (!success)
+        onQuiescent(handler)
     }
-  }
-
-  def onQuiescent(handler: () => Unit): Unit = {
-    val handlers = quiescentHandlers.get()
-    // add handler
-    val newHandlers = handler :: handlers
-    quiescentHandlers.compareAndSet(handlers, newHandlers)
   }
 
   def register[K <: Key[V], V](cell: Cell[K, V]): Unit = {
@@ -126,14 +115,43 @@ class HandlerPool(parallelism: Int = 8) {
     execute(new Runnable { def run(): Unit = fun() })
 
   def execute(task: Runnable): Unit =
-    pool.execute(task)
+    pool.execute(new Runnable {
+      def run(): Unit = {
+        var success = false
+        while (!success) {
+          val state = poolState.get()
+          val newState = new PoolState(state.handlers, state.submittedTasks + 1)
+          success = poolState.compareAndSet(state, newState)
+        }
 
-  def shutdown(): Unit = {
-    // signal thread to terminate
-    t.terminate = true
-    t.join() // wait for thread to terminate
+        task.run()
+
+        success = false
+        var handlersToRun: Option[List[() => Unit]] = None
+        while (!success) {
+          val state = poolState.get()
+          if (state.submittedTasks > 1) {
+            handlersToRun = None
+            val newState = new PoolState(state.handlers, state.submittedTasks - 1)
+            success = poolState.compareAndSet(state, newState)
+          } else if (state.submittedTasks == 1) {
+            handlersToRun = Some(state.handlers)
+            val newState = new PoolState()
+            success = poolState.compareAndSet(state, newState)
+          } else {
+            throw new Exception("BOOM")
+          }
+        }
+        if (handlersToRun.nonEmpty) {
+          handlersToRun.get.foreach { handler =>
+            execute(new Runnable { def run(): Unit = handler() })
+          }
+        }
+      }
+    })
+
+  def shutdown(): Unit =
     pool.shutdown()
-  }
 
   def reportFailure(t: Throwable): Unit =
     t.printStackTrace()

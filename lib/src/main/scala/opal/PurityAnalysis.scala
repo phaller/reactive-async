@@ -147,12 +147,16 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
           case MethodInvocationInstruction(declaringClassType, methodName, methodDescriptor) ⇒
             import project.classHierarchy.lookupMethodDefinition
             val calleeOpt =
-              lookupMethodDefinition(
-                declaringClassType.asObjectType /* this is safe...*/ ,
-                methodName,
-                methodDescriptor,
-                project
-              )
+              try {
+                lookupMethodDefinition(
+                  declaringClassType.asObjectType /* this is safe...*/ ,
+                  methodName,
+                  methodDescriptor,
+                  project
+                )
+              } catch {
+                case t: Throwable => None
+              }
             calleeOpt match {
               case None ⇒
                 // We know nothing about the target method (it is not
