@@ -114,19 +114,21 @@ class HandlerPool(parallelism: Int = 8) {
   def execute(fun: () => Unit): Unit =
     execute(new Runnable { def run(): Unit = fun() })
 
-  def execute(task: Runnable): Unit =
+  def execute(task: Runnable): Unit = {
+    // Submit task to the pool
+    var submitSuccess = false
+    while (!submitSuccess) {
+      val state = poolState.get()
+      val newState = new PoolState(state.handlers, state.submittedTasks + 1)
+      submitSuccess = poolState.compareAndSet(state, newState)
+    }
+
+    // Run the task
     pool.execute(new Runnable {
       def run(): Unit = {
-        var success = false
-        while (!success) {
-          val state = poolState.get()
-          val newState = new PoolState(state.handlers, state.submittedTasks + 1)
-          success = poolState.compareAndSet(state, newState)
-        }
-
         task.run()
 
-        success = false
+        var success = false
         var handlersToRun: Option[List[() => Unit]] = None
         while (!success) {
           val state = poolState.get()
@@ -144,11 +146,14 @@ class HandlerPool(parallelism: Int = 8) {
         }
         if (handlersToRun.nonEmpty) {
           handlersToRun.get.foreach { handler =>
-            execute(new Runnable { def run(): Unit = handler() })
+            execute(new Runnable {
+              def run(): Unit = handler()
+            })
           }
         }
       }
     })
+  }
 
   def shutdown(): Unit =
     pool.shutdown()
