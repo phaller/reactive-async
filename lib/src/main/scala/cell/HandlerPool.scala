@@ -27,7 +27,7 @@ class HandlerPool(parallelism: Int = 8) {
 
   private val poolState = new AtomicReference[PoolState](new PoolState)
 
-  private val cellsNotDone = new AtomicReference[List[Cell[_, _]]](List())
+  private val cellsNotDone = new AtomicReference[Map[Cell[_, _], Cell[_, _]]](Map())
 
   @tailrec
   final def onQuiescent(handler: () => Unit): Unit = {
@@ -44,7 +44,7 @@ class HandlerPool(parallelism: Int = 8) {
 
   def register[K <: Key[V], V](cell: Cell[K, V]): Unit = {
     val registered = cellsNotDone.get()
-    val newRegistered = cell :: registered
+    val newRegistered = registered + (cell -> cell)
     cellsNotDone.compareAndSet(registered, newRegistered)
   }
 
@@ -52,7 +52,7 @@ class HandlerPool(parallelism: Int = 8) {
     var success = false
     while (!success) {
       val registered = cellsNotDone.get()
-      val newRegistered = registered.filterNot(_ == cell)
+      val newRegistered = registered - cell
       success = cellsNotDone.compareAndSet(registered, newRegistered)
     }
   }
@@ -61,29 +61,64 @@ class HandlerPool(parallelism: Int = 8) {
     val p = Promise[List[Cell[_, _]]]
     this.onQuiescent { () =>
       val registered = this.cellsNotDone.get()
-      p.success(registered)
+      p.success(registered.values.toList)
     }
     p.future
   }
 
-  final def whileQuiescentResolveCell[K <: Key[V], V]: Unit = {
+  def whileQuiescentResolveCell[K <: Key[V], V]: Unit = {
     while (!cellsNotDone.get().isEmpty) {
       val fut = this.quiescentResolveCell
       Await.ready(fut, 15.minutes)
     }
   }
 
+  def whileQuiescentResolveDefault[K <: Key[V], V]: Unit = {
+    while (!cellsNotDone.get().isEmpty) {
+      val fut = this.quiescentResolveDefaults
+      Await.ready(fut, 15.minutes)
+    }
+  }
+
+  def quiescentResolveCycles[K <: Key[V], V]: Future[Boolean] = {
+    val p = Promise[Boolean]
+    this.onQuiescent { () =>
+      // Find one closed strongly connected component (cell)
+      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      println(registered.size)
+      if (registered.nonEmpty) {
+        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
+        cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
+      }
+      p.success(true)
+    }
+    p.future
+  }
+
+  def quiescentResolveDefaults[K <: Key[V], V]: Future[Boolean] = {
+    val p = Promise[Boolean]
+    this.onQuiescent { () =>
+      // Finds the rest of the unresolved cells
+      val rest = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      if (rest.nonEmpty) {
+        resolveDefault(rest)
+      }
+      p.success(true)
+    }
+    p.future
+  }
+
   def quiescentResolveCell[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Find one closed strongly connected component (cell)
-      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().asInstanceOf[Seq[Cell[K, V]]]
+      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (registered.nonEmpty) {
         val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
       }
       // Finds the rest of the unresolved cells
-      val rest = this.cellsNotDone.get().asInstanceOf[Seq[Cell[K, V]]]
+      val rest = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (rest.nonEmpty) {
         resolveDefault(rest)
       }
@@ -98,10 +133,7 @@ class HandlerPool(parallelism: Int = 8) {
     val key = cells.head.key
     val result = key.resolve(cells)
 
-    for(res <- result) res match {
-      case Some((c, v)) => c.resolveWithValue(v)
-      case None => /* do nothing */
-    }
+    for((c, v) <- result) c.resolveWithValue(v)
   }
 
   /** Resolves a cell with default value.
@@ -110,10 +142,7 @@ class HandlerPool(parallelism: Int = 8) {
     val key = cells.head.key
     val result = key.default(cells)
 
-    for(res <- result) res match {
-      case Some((c, v)) => c.resolveWithValue(v)
-      case None => /* do nothing */
-    }
+    for((c, v) <- result) c.resolveWithValue(v)
   }
 
   // Shouldn't we use:

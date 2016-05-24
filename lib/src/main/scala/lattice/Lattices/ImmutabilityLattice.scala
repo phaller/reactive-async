@@ -5,18 +5,19 @@ import cell._
 object ImmutabilityKey extends Key[Immutability] {
 	val lattice = new ImmutabilityLattice
 
-  def resolve[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[Option[(Cell[K, Immutability], Immutability)]] = {
+  def resolve[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[(Cell[K, Immutability], Immutability)] = {
     val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
     if (conditionallyImmutableCells.nonEmpty)
-      Seq(Some(conditionallyImmutableCells.head, ConditionallyImmutable))
+      cells.map(cell => (cell, ConditionallyImmutable))
     else
-      Seq(Some(cells.filter(_.getResult() == Immutable).head, Immutable))
+      cells.map(cell => (cell, Immutable))
   }
-  def default[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[Option[(Cell[K, Immutability], Immutability)]] = {
-    val defaultCells = cells.filter { _.totalDependencies.isEmpty }
-    defaultCells.map { cell =>
-      Some((cell, cell.getResult()))
-    }
+  def default[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[(Cell[K, Immutability], Immutability)] = {
+    val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
+    if(conditionallyImmutableCells.nonEmpty)
+      conditionallyImmutableCells.map(cell => (cell, cell.getResult()))
+    else
+      cells.map(cell => (cell, Immutable))
   }
 
   override def toString = "Immutability"
@@ -28,9 +29,9 @@ case object ConditionallyImmutable extends Immutability
 case object Immutable extends Immutability
 
 class ImmutabilityLattice extends Lattice[Immutability] {
-	override def join(current: Immutability, next: Immutability): Option[Immutability] = {
-    if (current == next || current == Mutable || <(next, current)) None
-    else Some(next)
+	override def join(current: Immutability, next: Immutability): Immutability = {
+    if (current == next || current == Mutable || <(next, current)) current
+    else next
   }
 
   def <(lhs: Immutability, rhs: Immutability): Boolean = {

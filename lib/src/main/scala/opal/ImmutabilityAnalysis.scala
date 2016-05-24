@@ -92,12 +92,19 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
           typeImmutabilityAnalysis(project, classFileToObjectTypeCellCompleter, manager, classFile)
       })
     }
-    pool.whileQuiescentResolveCell
+    //pool.whileQuiescentResolveCell
+    pool.whileQuiescentResolveDefault
+    //val fut1 = pool.quiescentResolveCycles
+    //Await.ready(fut1, 15.minutes)
+    //pool.whileQuiescentResolveCycle
+    //pool.whileQuiescentResolveDefault
+    //val fut = pool.quiescentResolveCell
+    //Await.ready(fut, 15.minutes)
     pool.shutdown()
-
+    //println("VARFÖR KOMMER DU HIT INNAN FLIEPP?!")
     val endTime = System.currentTimeMillis
 
-    //println("EXECUTION TIME:   " + ((endTime-startTime)/1000) + "s")
+    println("EXECUTION TIME:   " + (endTime-startTime) + "ms")
 
 
     /* Fixes the results so the output looks good */

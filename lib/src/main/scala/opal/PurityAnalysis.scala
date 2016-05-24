@@ -54,6 +54,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
                           isInterrupted: () ⇒ Boolean
                         ): BasicReport = {
 
+    val startTime = System.currentTimeMillis // Used for measuring execution time
     // 1. Initialization of key data structures (one cell(completer) per method)
     val pool = new HandlerPool()
     var methodToCellCompleter = Map.empty[Method, CellCompleter[PurenessKey.type, Purity]]
@@ -65,6 +66,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       methodToCellCompleter = methodToCellCompleter + ((method, cellCompleter))
     }
 
+
     // 2. trigger analyses
     for {
       classFile <- project.allProjectClassFiles.par
@@ -75,6 +77,10 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 30.minutes)
     pool.shutdown()
+
+    val endTime = System.currentTimeMillis
+
+    println("EXECUTION TIME:   " + (endTime-startTime) + "ms")
 
     val pureMethods = methodToCellCompleter.filter(_._2.cell.getResult match {
                                                      case Pure => true
@@ -169,7 +175,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
                 val targetCellCompleter = methodToCellCompleter(callee)
                 hasDependencies = true
-                cellCompleter.cell.whenComplete(targetCellCompleter.cell,_ == Impure, Impure)
+                cellCompleter.cell.whenComplete(targetCellCompleter.cell,_ == Impure, Some(Impure))
             }
         }
 

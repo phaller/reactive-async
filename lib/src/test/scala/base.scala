@@ -100,7 +100,7 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
+    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, Some(20))
 
     cell1.onComplete {
       case Success(v) =>
@@ -126,7 +126,7 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
+    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, Some(20))
 
     cell1.onComplete {
       case Success(v) =>
@@ -141,7 +141,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    assert(cell1.dependencies.isEmpty)
+    assert(cell1.amountOfCompleteDependencies == 0)
 
     pool.shutdown()
   }
@@ -152,13 +152,13 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
+    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, Some(20))
 
     completer2.putFinal(9)
 
     cell1.waitUntilNoDeps()
 
-    assert(cell1.dependencies.isEmpty)
+    assert(cell1.amountOfCompleteDependencies == 0)
 
     pool.shutdown()
   }
@@ -212,7 +212,7 @@ class BaseSuite extends FunSuite {
     completer2.putNext(10)
     latch.await()
 
-    assert(cell1.nextDependencies.size == 1)
+    assert(cell1.amountOfNextDependencies == 1)
 
     pool.shutdown()
   }
@@ -259,9 +259,9 @@ class BaseSuite extends FunSuite {
                      if(x == 10) WhenNext
                      else FalsePred
                    }, Some(30))
-    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
+    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, Some(20))
 
-    assert(cell1.nextDependencies.size == 1)
+    assert(cell1.amountOfNextDependencies == 1)
 
     cell1.onComplete {
       case Success(x) =>
@@ -281,7 +281,7 @@ class BaseSuite extends FunSuite {
     completer2.putFinal(10)
     latch.await()
 
-    assert(cell1.nextDependencies.isEmpty)
+    assert(cell1.amountOfNextDependencies == 0)
 
     pool.shutdown()
   }
@@ -299,7 +299,7 @@ class BaseSuite extends FunSuite {
                      else FalsePred
                    }, Some(20))
 
-    assert(cell1.nextDependencies.size == 1)
+    assert(cell1.amountOfNextDependencies == 1)
 
     cell1.onNext {
       case Success(x) =>
@@ -332,7 +332,7 @@ class BaseSuite extends FunSuite {
 
     cell1.waitUntilNoNextDeps()
 
-    assert(cell1.nextDependencies.isEmpty)
+    assert(cell1.amountOfNextDependencies == 0)
 
     pool.shutdown()
   }
@@ -354,7 +354,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    assert(completer1.cell.nextDependencies.size == 10000)
+    assert(completer1.cell.amountOfNextDependencies == 10000)
 
     pool.shutdown()
   }
@@ -362,7 +362,7 @@ class BaseSuite extends FunSuite {
   test("whenNext: One cell with several dependencies on the same cell concurrency test") {
     val pool = new HandlerPool
 
-    for (i <- 1 to 100000) {
+    for (i <- 1 to 1000) {
       val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
       val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
       completer1.cell.whenNext(completer2.cell, _ match {
@@ -370,7 +370,7 @@ class BaseSuite extends FunSuite {
         case Mutable => WhenNext
       }, Some(Mutable))
 
-      assert(completer1.cell.totalDependencies.size == 1)
+      assert(completer1.cell.amountOfTotalDependencies == 1)
 
       pool.execute(() => completer2.putNext(ConditionallyImmutable))
       pool.execute(() => completer2.putFinal(Mutable))
@@ -515,11 +515,11 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, x => x == 1, 1)
-    cell2.whenComplete(cell1, x => x == 1, 1)
+    cell1.whenComplete(cell2, x => x == 1, Some(1))
+    cell2.whenComplete(cell1, x => x == 1, Some(1))
     val incompleteFut = pool.quiescentIncompleteCells
     val cells = Await.result(incompleteFut, 2.seconds)
-    assert(cells.map(_.key).toString == "List(key2, key1)")
+    assert(cells.map(_.key).toString == "List(key1, key2)")
   }
 
   test("quiescent resolve cycle") {
@@ -528,8 +528,8 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, x => x == 0, 0)
-    cell2.whenComplete(cell1, x => x == 0, 0)
+    cell1.whenComplete(cell2, x => x == 0, Some(0))
+    cell2.whenComplete(cell1, x => x == 0, Some(0))
     val qfut = pool.quiescentResolveCell
     Await.ready(qfut, 2.seconds)
     val incompleteFut = pool.quiescentIncompleteCells
@@ -634,10 +634,10 @@ class BaseSuite extends FunSuite {
     val lattice = PurenessKey.lattice
 
     val purity = lattice.join(UnknownPurity, Pure)
-    assert(purity == Some(Pure))
+    assert(purity == Pure)
 
-    val newPurity = lattice.join(purity.get, Pure)
-    assert(newPurity == None)
+    val newPurity = lattice.join(purity, Pure)
+    assert(newPurity == Pure)
   }
 
   test("PurityLattice: failed joins") {
@@ -762,22 +762,22 @@ class BaseSuite extends FunSuite {
     val lattice = ImmutabilityKey.lattice
 
     val mutability1 = lattice.join(Immutable, ConditionallyImmutable)
-    assert(mutability1 == Some(ConditionallyImmutable))
+    assert(mutability1 == ConditionallyImmutable)
 
     val mutability2 = lattice.join(ConditionallyImmutable, Mutable)
-    assert(mutability2 == Some(Mutable))
+    assert(mutability2 == Mutable)
 
     val mutability3 = lattice.join(Immutable, Mutable)
-    assert(mutability3 == Some(Mutable))
+    assert(mutability3 == Mutable)
 
     val mutability4 = lattice.join(ConditionallyImmutable, Immutable)
-    assert(mutability4 == None)
+    assert(mutability4 == ConditionallyImmutable)
 
     val mutability5 = lattice.join(Mutable, ConditionallyImmutable)
-    assert(mutability5 == None)
+    assert(mutability5 == Mutable)
 
     val mutability6 = lattice.join(Mutable, Immutable)
-    assert(mutability6 == None)
+    assert(mutability6 == Mutable)
   }
 
   /*test("ImmutabilityAnalysis: Concurrency") {
