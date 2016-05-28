@@ -66,6 +66,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       methodToCellCompleter = methodToCellCompleter + ((method, cellCompleter))
     }
 
+    val middleTime = System.currentTimeMillis
 
     // 2. trigger analyses
     for {
@@ -80,7 +81,9 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
     val endTime = System.currentTimeMillis
 
-    println("EXECUTION TIME:   " + (endTime-startTime) + "ms")
+    val setupTime = middleTime - startTime
+    val analysisTime = endTime - middleTime
+    val combinedTime = endTime - startTime
 
     val pureMethods = methodToCellCompleter.filter(_._2.cell.getResult match {
                                                      case Pure => true
@@ -89,7 +92,10 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
     val pureMethodsInfo = pureMethods.map(m => m.toJava(project.classFile(m))).toList.sorted
 
-    BasicReport("pure methods analysis:\n"+pureMethodsInfo.mkString("\n"))
+    BasicReport("pure methods analysis:\n"+pureMethodsInfo.mkString("\n")+
+      s"\nSETUP TIME: $setupTime"+
+      s"\nANALYIS TIME: $analysisTime"+
+      s"\nCOMBINED TIME: $combinedTime")
   }
 
   /**

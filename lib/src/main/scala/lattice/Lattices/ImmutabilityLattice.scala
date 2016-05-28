@@ -35,10 +35,8 @@ class ImmutabilityLattice extends Lattice[Immutability] {
   }
 
   def <=(lhs: Immutability, rhs: Immutability): Boolean = {
-    if (lhs == Immutable) true
-    else if (lhs == ConditionallyImmutable && rhs != Immutable) true
-    else if (lhs == rhs) true
-    else false
+    lhs == rhs || lhs == Immutable ||
+      (lhs == ConditionallyImmutable && rhs != Immutable)
   }
 
   override def empty: Immutability = Immutable

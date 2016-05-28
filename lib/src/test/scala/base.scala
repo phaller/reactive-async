@@ -163,6 +163,24 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("whenComplete: callback removal") {
+    val pool = new HandlerPool
+
+    val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+    val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+
+    completer1.cell.whenComplete(completer2.cell, _  == Mutable, Some(Mutable))
+
+    completer1.putFinal(Immutable)
+    assert(completer2.cell.amountOfCompleteCallbacks == 0)
+    completer2.putFinal(Mutable)
+
+    assert(completer1.cell.getResult() == Immutable)
+    assert(completer2.cell.getResult() == Mutable)
+
+    pool.shutdown()
+  }
+
   test("onNext") {
     val latch = new CountDownLatch(1)
 
@@ -333,6 +351,29 @@ class BaseSuite extends FunSuite {
     cell1.waitUntilNoNextDeps()
 
     assert(cell1.amountOfNextDependencies == 0)
+
+    pool.shutdown()
+  }
+
+
+
+  test("whenNext: callback removal") {
+    val pool = new HandlerPool
+
+    val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+    val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+
+    completer1.cell.whenNext(completer2.cell, _ match {
+      case Mutable => WhenNext
+      case _ => FalsePred
+    }, Some(Mutable))
+
+    completer1.putFinal(Immutable)
+    assert(completer2.cell.amountOfNextCallbacks == 0)
+    completer2.putNext(Mutable)
+
+    assert(completer1.cell.getResult() == Immutable)
+    assert(completer2.cell.getResult() == Mutable)
 
     pool.shutdown()
   }
