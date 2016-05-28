@@ -30,13 +30,14 @@ case object Immutable extends Immutability
 
 class ImmutabilityLattice extends Lattice[Immutability] {
 	override def join(current: Immutability, next: Immutability): Immutability = {
-    if (current == next || current == Mutable || <(next, current)) current
+    if (<=(next, current)) current
     else next
   }
 
-  def <(lhs: Immutability, rhs: Immutability): Boolean = {
+  def <=(lhs: Immutability, rhs: Immutability): Boolean = {
     if (lhs == Immutable) true
     else if (lhs == ConditionallyImmutable && rhs != Immutable) true
+    else if (lhs == rhs) true
     else false
   }
 
