@@ -53,6 +53,8 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
       classFileToObjectTypeCellCompleter = classFileToObjectTypeCellCompleter + ((classFile, (cellCompleter1, cellCompleter2)))
     }
 
+    val middleTime = System.currentTimeMillis
+
     // java.lang.Object is by definition immutable
     val objectClassFileOption = project.classFile(ObjectType.Object)
     objectClassFileOption.foreach { cf =>
@@ -92,20 +94,14 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
           typeImmutabilityAnalysis(project, classFileToObjectTypeCellCompleter, manager, classFile)
       })
     }
-    //pool.whileQuiescentResolveCell
     pool.whileQuiescentResolveDefault
-    //val fut1 = pool.quiescentResolveCycles
-    //Await.ready(fut1, 15.minutes)
-    //pool.whileQuiescentResolveCycle
-    //pool.whileQuiescentResolveDefault
-    //val fut = pool.quiescentResolveCell
-    //Await.ready(fut, 15.minutes)
     pool.shutdown()
-    //println("VARFÖR KOMMER DU HIT INNAN FLIEPP?!")
+
     val endTime = System.currentTimeMillis
 
-    println("EXECUTION TIME:   " + (endTime-startTime) + "ms")
-
+    val setupTime = middleTime - startTime
+    val analysisTime = endTime - middleTime
+    val combinedTime = endTime - startTime
 
     /* Fixes the results so the output looks good */
     val resultClassFiles = project.allProjectClassFiles.par.filter(!allInterfaces.contains(_))
@@ -129,7 +125,10 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
 
     val sortedClassFilesInfo = (immutableClassFilesInfo.toList.sorted ++
       conditionallyImmutableClassFilesInfo.toList.sorted ++ mutableClassFilesInfo.toList.sorted)
-    BasicReport(sortedClassFilesInfo)
+    BasicReport(sortedClassFilesInfo.mkString("\n")+
+                s"\nSETUP TIME: $setupTime"+
+                s"\nANALYIS TIME: $analysisTime"+
+                s"\nCOMBINED TIME: $combinedTime")
   }
 
   /**
