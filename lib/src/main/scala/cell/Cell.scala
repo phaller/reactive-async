@@ -23,29 +23,19 @@ case object FalsePred extends WhenNextPredicate
  *   val barRetTypeCell: Cell[(Entity, PropertyKind), ObjectType]
  */
 trait Cell[K <: Key[V], V] {
+
   def key: K
 
   def getResult(): V
-  // def property: V
+
   def isComplete(): Boolean
 
-  //def dependencies: Seq[K]
-  // def addDependency(other: K)
-  // def removeDependency(other: K)
-
-  //def nextDependencies: Seq[K]
-  //def totalDependencies: Seq[K]
   def amountOfTotalDependencies: Int
   def amountOfNextDependencies: Int
   def amountOfCompleteDependencies: Int
 
   def amountOfNextCallbacks: Int
   def amountOfCompleteCallbacks: Int
-
-  // sobald sich der Wert dieser Cell ändert, müssen die dependee Cells benachrichtigt werden
-  // def dependees: Seq[K]
-  // def addDependee(k: K): Unit
-  // def removeDependee(k: K): Unit
 
   /**
    * Adds a dependency on some `other` cell.
@@ -110,6 +100,10 @@ trait Cell[K <: Key[V], V] {
  * Interface trait for programmatically completing a cell. Analogous to `Promise`.
  */
 trait CellCompleter[K <: Key[V], V] {
+
+  /**
+   * The cell associated with this completer.
+   */
   def cell: Cell[K, V]
 
   def putFinal(x: V): Unit
@@ -118,18 +112,22 @@ trait CellCompleter[K <: Key[V], V] {
   def tryNewState(value: V): Boolean
   def tryComplete(value: Try[V]): Boolean
 
-  //private[cell] def removeDep(dep: CompleteDepRunnable[K, V]): Unit
   private[cell] def removeDep(cell: Cell[K, V]): Unit
   private[cell] def removeNextDep(cell: Cell[K, V]): Unit
-  //private[cell] def removeNextDep(callback: Try[V] => Any): Unit
 }
 
 object CellCompleter {
+
+  /**
+   * Create a completer for a cell holding values of type `V`
+   * given a `HandlerPool` and a `Key[V]`.
+   */
   def apply[K <: Key[V], V](pool: HandlerPool, key: K): CellCompleter[K, V] = {
     val impl = new CellImpl[K, V](pool, key)
     pool.register(impl)
     impl
   }
+
 }
 
 
@@ -196,53 +194,30 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
       throw new IllegalStateException("Cell already completed.")
   }
 
-  /*override def dependencies: Seq[CompleteDepRunnable[K, V]] = {
+  private[this] def currentState(): State[K, V] =
     state.get() match {
       case finalRes: Try[_] => // completed with final result
-        Seq[CompleteDepRunnable[K, V]]()
+        null
       case pre: State[_, _] => // not completed
-        val current = pre.asInstanceOf[State[K, V]]
-        current.deps.values.flatten.toSeq
+        pre.asInstanceOf[State[K, V]]
     }
-  }*/
 
-  /*override def totalDependencies: Seq[K] = {
-    state.get() match {
-      case finalRes: Try[_] => // completed with final result
-        Seq[K]()
-      case pre: State[_, _] => // not completed
-        val current = pre.asInstanceOf[State[K, V]]
-        current.deps.keys.map(_.key).toSeq ++ current.nextDeps.keys.map(_.key).toSeq
-    }
-  }*/
   override def amountOfCompleteDependencies: Int = {
-    state.get() match {
-      case finalRes: Try[_] => // completed with final result
-        0
-      case pre: State[_, _] => // not completed
-        val current = pre.asInstanceOf[State[K, V]]
-        current.deps.values.flatten.size
-    }
+    val current = currentState()
+    if (current == null) 0
+    else current.deps.values.flatten.size
   }
 
   override def amountOfNextDependencies: Int = {
-    state.get() match {
-      case finalRes: Try[_] => // completed with final result
-        0
-      case pre: State[_, _] => // not completed
-        val current = pre.asInstanceOf[State[K, V]]
-        current.nextDeps.values.flatten.size
-    }
+    val current = currentState()
+    if (current == null) 0
+    else current.nextDeps.values.flatten.size
   }
 
   override def amountOfTotalDependencies: Int = {
-    state.get() match {
-      case finalRes: Try[_] => // completed with final result
-        0
-      case pre: State[_, _] => // not completed
-        val current = pre.asInstanceOf[State[K, V]]
-        (current.deps.values.flatten ++ current.nextDeps.values.flatten).size
-    }
+    val current = currentState()
+    if (current == null) 0
+    (current.deps.values.flatten ++ current.nextDeps.values.flatten).size
   }
 
   override private[cell] def cellDependencies: Seq[Cell[K, V]] = {
@@ -283,16 +258,6 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         current.callbacks.values.size
     }
   }
-
-  /*override def nextDependencies: Seq[NextDepRunnable[K, V]] = {
-    state.get() match {
-      case finalRes: Try[_] => // completed with final result
-        Seq[NextDepRunnable[K, V]]()
-      case pre: State[_, _] => // not completed
-        val current = pre.asInstanceOf[State[K, V]]
-        current.nextDeps.values.flatten.toSeq
-    }
-  }*/
 
   override private[cell] def resolveWithValue(value: V): Unit = {
     this.putFinal(value)
