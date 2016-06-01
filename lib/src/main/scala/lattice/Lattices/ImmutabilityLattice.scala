@@ -1,0 +1,45 @@
+package lattice
+
+import cell._
+
+object ImmutabilityKey extends Key[Immutability] {
+	val lattice = new ImmutabilityLattice
+
+  def resolve[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[(Cell[K, Immutability], Immutability)] = {
+    val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
+    if (conditionallyImmutableCells.nonEmpty)
+      cells.map(cell => (cell, ConditionallyImmutable))
+    else
+      cells.map(cell => (cell, Immutable))
+  }
+  def default[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[(Cell[K, Immutability], Immutability)] = {
+    val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
+    if(conditionallyImmutableCells.nonEmpty)
+      conditionallyImmutableCells.map(cell => (cell, cell.getResult()))
+    else
+      cells.map(cell => (cell, Immutable))
+  }
+
+  override def toString = "Immutability"
+}
+
+sealed trait Immutability
+case object Mutable extends Immutability
+case object ConditionallyImmutable extends Immutability
+case object Immutable extends Immutability
+
+class ImmutabilityLattice extends Lattice[Immutability] {
+	override def join(current: Immutability, next: Immutability): Immutability = {
+    if (<=(next, current)) current
+    else next
+  }
+
+  def <=(lhs: Immutability, rhs: Immutability): Boolean = {
+    if (lhs == Immutable) true
+    else if (lhs == ConditionallyImmutable && rhs != Immutable) true
+    else if (lhs == rhs) true
+    else false
+  }
+
+  override def empty: Immutability = Immutable
+}

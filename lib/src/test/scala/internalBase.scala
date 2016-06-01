@@ -21,11 +21,11 @@ class InternalBaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, x => x == 0, 0)
-    cell1.whenComplete(cell2, x => x == 0, 0)
+    cell1.whenComplete(cell2, x => x == 0, Some(0))
+    cell1.whenComplete(cell2, x => x == 0, Some(0))
 
-    assert(cell1.cellDependencies.size == 2)
-    assert(cell2.cellDependencies.size == 0)
+    assert(cell1.amountOfCompleteDependencies == 2)
+    assert(cell2.amountOfCompleteDependencies == 0)
   }
 
   test("cellDependencies: By removing dependencies") {
@@ -34,13 +34,13 @@ class InternalBaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, x => x == 0, 0)
-    cell1.whenComplete(cell2, x => x == 0, 0)
+    cell1.whenComplete(cell2, x => x == 0, Some(0))
+    cell1.whenComplete(cell2, x => x == 0, Some(0))
 
     completer1.putFinal(0)
 
-    assert(cell1.cellDependencies.size == 0)
-    assert(cell2.cellDependencies.size == 0)
+    assert(cell1.amountOfCompleteDependencies == 0)
+    assert(cell2.amountOfCompleteDependencies == 0)
 
   }
 }

@@ -20,5 +20,6 @@ lazy val lib: Project = (project in file("lib")).
   settings(
     name := "reactive-async-lib",
     libraryDependencies += scalaTest,
-    libraryDependencies += opal
+    libraryDependencies += opal,
+    libraryDependencies += opalFixpoint
   )

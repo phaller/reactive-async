@@ -3,6 +3,10 @@ package cell
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.annotation.tailrec
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
 import scala.concurrent.{Future, Promise}
 
 import lattice.Key
@@ -10,50 +14,37 @@ import lattice.Key
 import org.opalj.graphs._
 
 
+/* Need to have reference equality for CAS.
+ */
+class PoolState(val handlers: List[() => Unit] = List(), val submittedTasks: Int = 0) {
+  def isQuiescent(): Boolean =
+    submittedTasks == 0
+}
+
 class HandlerPool(parallelism: Int = 8) {
 
   private val pool: ForkJoinPool = new ForkJoinPool(parallelism)
 
-  private val quiescentHandlers = new AtomicReference[List[() => Unit]](List())
+  private val poolState = new AtomicReference[PoolState](new PoolState)
 
-  private val cellsNotDone = new AtomicReference[List[Cell[_, _]]](List())
+  private val cellsNotDone = new AtomicReference[Map[Cell[_, _], Cell[_, _]]](Map())
 
-  private val t = {
-    val tmp = new MonitoringThread
-    tmp.start()
-    tmp
-  }
-
-  private class MonitoringThread extends Thread {
-    private val backoff = Backoff()
-    @volatile var terminate = false
-
-    override def run(): Unit = {
-      // periodically check whether fork/join pool is quiescent
-      while (!terminate) {
-        if (pool.isQuiescent) {
-          // schedule registered quiescent handlers
-          val handlers = quiescentHandlers.get()
-          quiescentHandlers.compareAndSet(handlers, List())
-          handlers.foreach { handler =>
-            pool.execute(new Runnable { def run(): Unit = handler() })
-          }
-        } else
-          backoff.once() // exponential back-off
-      }
+  @tailrec
+  final def onQuiescent(handler: () => Unit): Unit = {
+    val state = poolState.get()
+    if (state.isQuiescent) {
+      execute(new Runnable { def run(): Unit = handler() })
+    } else {
+      val newState = new PoolState(handler :: state.handlers, state.submittedTasks)
+      val success = poolState.compareAndSet(state, newState)
+      if (!success)
+        onQuiescent(handler)
     }
-  }
-
-  def onQuiescent(handler: () => Unit): Unit = {
-    val handlers = quiescentHandlers.get()
-    // add handler
-    val newHandlers = handler :: handlers
-    quiescentHandlers.compareAndSet(handlers, newHandlers)
   }
 
   def register[K <: Key[V], V](cell: Cell[K, V]): Unit = {
     val registered = cellsNotDone.get()
-    val newRegistered = cell :: registered
+    val newRegistered = registered + (cell -> cell)
     cellsNotDone.compareAndSet(registered, newRegistered)
   }
 
@@ -61,7 +52,7 @@ class HandlerPool(parallelism: Int = 8) {
     var success = false
     while (!success) {
       val registered = cellsNotDone.get()
-      val newRegistered = registered.filterNot(_ == cell)
+      val newRegistered = registered - cell
       success = cellsNotDone.compareAndSet(registered, newRegistered)
     }
   }
@@ -70,7 +61,49 @@ class HandlerPool(parallelism: Int = 8) {
     val p = Promise[List[Cell[_, _]]]
     this.onQuiescent { () =>
       val registered = this.cellsNotDone.get()
-      p.success(registered)
+      p.success(registered.values.toList)
+    }
+    p.future
+  }
+
+  def whileQuiescentResolveCell[K <: Key[V], V]: Unit = {
+    while (!cellsNotDone.get().isEmpty) {
+      val fut = this.quiescentResolveCell
+      Await.ready(fut, 15.minutes)
+    }
+  }
+
+  def whileQuiescentResolveDefault[K <: Key[V], V]: Unit = {
+    while (!cellsNotDone.get().isEmpty) {
+      val fut = this.quiescentResolveDefaults
+      Await.ready(fut, 15.minutes)
+    }
+  }
+
+  def quiescentResolveCycles[K <: Key[V], V]: Future[Boolean] = {
+    val p = Promise[Boolean]
+    this.onQuiescent { () =>
+      // Find one closed strongly connected component (cell)
+      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      println(registered.size)
+      if (registered.nonEmpty) {
+        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
+        cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
+      }
+      p.success(true)
+    }
+    p.future
+  }
+
+  def quiescentResolveDefaults[K <: Key[V], V]: Future[Boolean] = {
+    val p = Promise[Boolean]
+    this.onQuiescent { () =>
+      // Finds the rest of the unresolved cells
+      val rest = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      if (rest.nonEmpty) {
+        resolveDefault(rest)
+      }
+      p.success(true)
     }
     p.future
   }
@@ -79,14 +112,14 @@ class HandlerPool(parallelism: Int = 8) {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Find one closed strongly connected component (cell)
-      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().asInstanceOf[Seq[Cell[K, V]]]
+      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (registered.nonEmpty) {
-        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.cellDependencies)
+        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
       }
       // Finds the rest of the unresolved cells
-      val rest = this.cellsNotDone.get().asInstanceOf[Seq[Cell[K, V]]]
-      if(rest.nonEmpty) {
+      val rest = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      if (rest.nonEmpty) {
         resolveDefault(rest)
       }
       p.success(true)
@@ -100,10 +133,7 @@ class HandlerPool(parallelism: Int = 8) {
     val key = cells.head.key
     val result = key.resolve(cells)
 
-    for(res <- result) res match {
-      case Some((c, v)) => c.resolveWithValue(v)
-      case None => /* do nothing */
-    }
+    for((c, v) <- result) c.resolveWithValue(v)
   }
 
   /** Resolves a cell with default value.
@@ -112,10 +142,7 @@ class HandlerPool(parallelism: Int = 8) {
     val key = cells.head.key
     val result = key.default(cells)
 
-    for(res <- result) res match {
-      case Some((c, v)) => c.resolveWithValue(v)
-      case None => /* do nothing */
-    }
+    for((c, v) <- result) c.resolveWithValue(v)
   }
 
   // Shouldn't we use:
@@ -125,15 +152,49 @@ class HandlerPool(parallelism: Int = 8) {
   def execute(fun: () => Unit): Unit =
     execute(new Runnable { def run(): Unit = fun() })
 
-  def execute(task: Runnable): Unit =
-    pool.execute(task)
+  def execute(task: Runnable): Unit = {
+    // Submit task to the pool
+    var submitSuccess = false
+    while (!submitSuccess) {
+      val state = poolState.get()
+      val newState = new PoolState(state.handlers, state.submittedTasks + 1)
+      submitSuccess = poolState.compareAndSet(state, newState)
+    }
 
-  def shutdown(): Unit = {
-    // signal thread to terminate
-    t.terminate = true
-    t.join() // wait for thread to terminate
-    pool.shutdown()
+    // Run the task
+    pool.execute(new Runnable {
+      def run(): Unit = {
+        task.run()
+
+        var success = false
+        var handlersToRun: Option[List[() => Unit]] = None
+        while (!success) {
+          val state = poolState.get()
+          if (state.submittedTasks > 1) {
+            handlersToRun = None
+            val newState = new PoolState(state.handlers, state.submittedTasks - 1)
+            success = poolState.compareAndSet(state, newState)
+          } else if (state.submittedTasks == 1) {
+            handlersToRun = Some(state.handlers)
+            val newState = new PoolState()
+            success = poolState.compareAndSet(state, newState)
+          } else {
+            throw new Exception("BOOM")
+          }
+        }
+        if (handlersToRun.nonEmpty) {
+          handlersToRun.get.foreach { handler =>
+            execute(new Runnable {
+              def run(): Unit = handler()
+            })
+          }
+        }
+      }
+    })
   }
+
+  def shutdown(): Unit =
+    pool.shutdown()
 
   def reportFailure(t: Throwable): Unit =
     t.printStackTrace()
