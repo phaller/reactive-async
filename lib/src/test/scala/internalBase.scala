@@ -2,6 +2,7 @@ package cell
 
 import org.scalatest.FunSuite
 
+import java.io.File
 import java.util.concurrent.CountDownLatch
 
 import scala.util.{Success, Failure}
@@ -12,7 +13,7 @@ import lattice._
 
 import opal.PurityAnalysis
 import org.opalj.br.analyses.Project
-import java.io.File
+
 
 class InternalBaseSuite extends FunSuite {
   test("cellDependencies: By adding dependencies") {
@@ -24,8 +25,8 @@ class InternalBaseSuite extends FunSuite {
     cell1.whenComplete(cell2, x => x == 0, Some(0))
     cell1.whenComplete(cell2, x => x == 0, Some(0))
 
-    assert(cell1.amountOfCompleteDependencies == 2)
-    assert(cell2.amountOfCompleteDependencies == 0)
+    assert(cell1.numCompleteDependencies == 2)
+    assert(cell2.numCompleteDependencies == 0)
   }
 
   test("cellDependencies: By removing dependencies") {
@@ -39,8 +40,7 @@ class InternalBaseSuite extends FunSuite {
 
     completer1.putFinal(0)
 
-    assert(cell1.amountOfCompleteDependencies == 0)
-    assert(cell2.amountOfCompleteDependencies == 0)
-
+    assert(cell1.numCompleteDependencies == 0)
+    assert(cell2.numCompleteDependencies == 0)
   }
 }

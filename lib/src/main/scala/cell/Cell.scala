@@ -1,15 +1,15 @@
 package cell
 
-import java.util.concurrent.atomic._
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{CountDownLatch, ExecutionException}
 
 import scala.annotation.tailrec
+
 import scala.concurrent.{ExecutionContext, OnCompleteRunnable}
-import scala.language.implicitConversions
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
-import lattice.{Key, Lattice, LatticeViolationException}
+import lattice.{Key, LatticeViolationException}
 
 
 sealed trait WhenNextPredicate
@@ -30,12 +30,12 @@ trait Cell[K <: Key[V], V] {
 
   def isComplete(): Boolean
 
-  def amountOfTotalDependencies: Int
-  def amountOfNextDependencies: Int
-  def amountOfCompleteDependencies: Int
+  def numTotalDependencies: Int
+  def numNextDependencies: Int
+  def numCompleteDependencies: Int
 
-  def amountOfNextCallbacks: Int
-  def amountOfCompleteCallbacks: Int
+  def numNextCallbacks: Int
+  def numCompleteCallbacks: Int
 
   /**
    * Adds a dependency on some `other` cell.
@@ -202,19 +202,19 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         pre.asInstanceOf[State[K, V]]
     }
 
-  override def amountOfCompleteDependencies: Int = {
+  override def numCompleteDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     else current.deps.values.flatten.size
   }
 
-  override def amountOfNextDependencies: Int = {
+  override def numNextDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     else current.nextDeps.values.flatten.size
   }
 
-  override def amountOfTotalDependencies: Int = {
+  override def numTotalDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     (current.deps.values.flatten ++ current.nextDeps.values.flatten).size
@@ -240,7 +240,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
     }
   }
 
-  override def amountOfNextCallbacks: Int = {
+  override def numNextCallbacks: Int = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result
         0
@@ -249,7 +249,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
         current.nextCallbacks.values.size
     }
   }
-  override def amountOfCompleteCallbacks: Int = {
+  override def numCompleteCallbacks: Int = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result
         0

@@ -141,7 +141,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    assert(cell1.amountOfCompleteDependencies == 0)
+    assert(cell1.numCompleteDependencies == 0)
 
     pool.shutdown()
   }
@@ -158,7 +158,7 @@ class BaseSuite extends FunSuite {
 
     cell1.waitUntilNoDeps()
 
-    assert(cell1.amountOfCompleteDependencies == 0)
+    assert(cell1.numCompleteDependencies == 0)
 
     pool.shutdown()
   }
@@ -172,7 +172,7 @@ class BaseSuite extends FunSuite {
     completer1.cell.whenComplete(completer2.cell, _  == Mutable, Some(Mutable))
 
     completer1.putFinal(Immutable)
-    assert(completer2.cell.amountOfCompleteCallbacks == 0)
+    assert(completer2.cell.numCompleteCallbacks == 0)
     completer2.putFinal(Mutable)
 
     assert(completer1.cell.getResult() == Immutable)
@@ -230,7 +230,7 @@ class BaseSuite extends FunSuite {
     completer2.putNext(10)
     latch.await()
 
-    assert(cell1.amountOfNextDependencies == 1)
+    assert(cell1.numNextDependencies == 1)
 
     pool.shutdown()
   }
@@ -279,7 +279,7 @@ class BaseSuite extends FunSuite {
                    }, Some(30))
     cell1.whenComplete(completer2.cell, (x: Int) => x == 10, Some(20))
 
-    assert(cell1.amountOfNextDependencies == 1)
+    assert(cell1.numNextDependencies == 1)
 
     cell1.onComplete {
       case Success(x) =>
@@ -299,7 +299,7 @@ class BaseSuite extends FunSuite {
     completer2.putFinal(10)
     latch.await()
 
-    assert(cell1.amountOfNextDependencies == 0)
+    assert(cell1.numNextDependencies == 0)
 
     pool.shutdown()
   }
@@ -317,7 +317,7 @@ class BaseSuite extends FunSuite {
                      else FalsePred
                    }, Some(20))
 
-    assert(cell1.amountOfNextDependencies == 1)
+    assert(cell1.numNextDependencies == 1)
 
     cell1.onNext {
       case Success(x) =>
@@ -350,7 +350,7 @@ class BaseSuite extends FunSuite {
 
     cell1.waitUntilNoNextDeps()
 
-    assert(cell1.amountOfNextDependencies == 0)
+    assert(cell1.numNextDependencies == 0)
 
     pool.shutdown()
   }
@@ -369,7 +369,7 @@ class BaseSuite extends FunSuite {
     }, Some(Mutable))
 
     completer1.putFinal(Immutable)
-    assert(completer2.cell.amountOfNextCallbacks == 0)
+    assert(completer2.cell.numNextCallbacks == 0)
     completer2.putNext(Mutable)
 
     assert(completer1.cell.getResult() == Immutable)
@@ -395,7 +395,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    assert(completer1.cell.amountOfNextDependencies == 10000)
+    assert(completer1.cell.numNextDependencies == 10000)
 
     pool.shutdown()
   }
@@ -411,7 +411,7 @@ class BaseSuite extends FunSuite {
         case Mutable => WhenNext
       }, Some(Mutable))
 
-      assert(completer1.cell.amountOfTotalDependencies == 1)
+      assert(completer1.cell.numTotalDependencies == 1)
 
       pool.execute(() => completer2.putNext(ConditionallyImmutable))
       pool.execute(() => completer2.putFinal(Mutable))
