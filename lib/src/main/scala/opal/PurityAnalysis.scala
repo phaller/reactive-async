@@ -7,7 +7,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-import lattice.{PurenessKey, Purity, Pure, Impure, Key}
+import lattice.{PurityKey, Purity, Pure, Impure, Key}
 import cell.{HandlerPool, CellCompleter, Cell}
 import org.opalj.br.{ClassFile, PC, Method, MethodWithBody}
 import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project}
@@ -57,12 +57,12 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     val startTime = System.currentTimeMillis // Used for measuring execution time
     // 1. Initialization of key data structures (one cell(completer) per method)
     val pool = new HandlerPool()
-    var methodToCellCompleter = Map.empty[Method, CellCompleter[PurenessKey.type, Purity]]
+    var methodToCellCompleter = Map.empty[Method, CellCompleter[PurityKey.type, Purity]]
     for {
       classFile <- project.allProjectClassFiles
       method <- classFile.methods
     } {
-      val cellCompleter = CellCompleter[PurenessKey.type, Purity](pool, PurenessKey)
+      val cellCompleter = CellCompleter[PurityKey.type, Purity](pool, PurityKey)
       methodToCellCompleter = methodToCellCompleter + ((method, cellCompleter))
     }
 
@@ -103,7 +103,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     */
   def analyze(
                project: Project[URL],
-               methodToCellCompleter: Map[Method, CellCompleter[PurenessKey.type, Purity]],
+               methodToCellCompleter: Map[Method, CellCompleter[PurityKey.type, Purity]],
                classFile : ClassFile,
                method: Method
              ): Unit = {

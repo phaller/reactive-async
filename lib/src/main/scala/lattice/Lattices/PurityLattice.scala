@@ -2,7 +2,7 @@ package lattice
 
 import cell._
 
-object PurenessKey extends Key[Purity] {
+object PurityKey extends Key[Purity] {
 
   val lattice = new PurityLattice
 
@@ -14,7 +14,7 @@ object PurenessKey extends Key[Purity] {
     cells.map(cell => (cell, Pure))
   }
 
-  override def toString = "Pureness"
+  override def toString = "Purity"
 }
 
 sealed trait Purity

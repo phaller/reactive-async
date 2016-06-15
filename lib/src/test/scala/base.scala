@@ -672,7 +672,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("PurityLattice: successful joins") {
-    val lattice = PurenessKey.lattice
+    val lattice = PurityKey.lattice
 
     val purity = lattice.join(UnknownPurity, Pure)
     assert(purity == Pure)
@@ -682,7 +682,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("PurityLattice: failed joins") {
-    val lattice = PurenessKey.lattice
+    val lattice = PurityKey.lattice
 
     try {
       val newPurity = lattice.join(Impure, Pure)
