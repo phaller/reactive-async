@@ -2,7 +2,7 @@
 import java.util.Random
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import cell.{Cell, CellCompleter, HandlerPool}
+import cell.{Cell, CellCompleter, HandlerPool, WhenNext}
 import lattice.{Lattice, LatticeViolationException, Key}
 
 import scala.annotation.tailrec
@@ -102,6 +102,27 @@ object BFSBenchmark {
     }
   }
 
+  def bfs4(i: Int, root: Vertex, completer: CellCompleter[VertexSetKey.type, Set[Vertex]])(implicit pool: HandlerPool): Unit = {
+    val notYetVisited = root.visited.compareAndSet(false, true)
+    if (notYetVisited) {
+      if (root.value < CutOff) {
+        //println(s"adding vertex ${root.value}")
+        completer.putNext(Set(root))
+      }
+      for (n <- root.neighbors) {
+        if (i > 14) {
+          pool.execute { () =>
+            val subcompleter = CellCompleter[VertexSetKey.type, Set[Vertex]](pool, VertexSetKey)
+            completer.cell.whenNext(subcompleter.cell, (nset: Set[Vertex]) => WhenNext, None)
+            bfs4(i-1, n, subcompleter)
+          }
+        } else {
+          bfs4(i-1, n, completer)
+        }
+      }
+    }
+  }
+
   val pools = (1 to 8).map(i => new HandlerPool(i))
 
   // pass duration in micro secs to continuation
@@ -144,6 +165,25 @@ object BFSBenchmark {
         innerCont((t2 - t1)/1000)
       }
     }
+    repeat(7, List[Long]())(todo)(cont)
+  }
+
+  def runBfs4Repeatedly(nthreads: Int, root: Vertex)(cont: List[Long] => Unit): Unit = {
+    implicit val pool = pools(nthreads - 1)
+    // reset all visited members in root
+    resetVisited(root)
+    val completer = CellCompleter[VertexSetKey.type, Set[Vertex]](pool, VertexSetKey)
+    val todo: (Long => Unit) => Unit = { (innerCont: Long => Unit) =>
+      val t1 = System.nanoTime()
+      pool.execute { () =>
+        bfs4(BinTreeDepth, root, completer)
+      }
+      pool.onQuiescent { () =>
+        val t2 = System.nanoTime()
+        innerCont((t2 - t1)/1000)
+      }
+    }
+
     repeat(7, List[Long]())(todo)(cont)
   }
 
@@ -202,20 +242,37 @@ object BFSBenchmark {
         val avg8 = times.drop(1).reduce(_ + _) / 6
         println(s"bfs3, concurrent, 8 threads: took on average (6 runs) $avg8 micro secs")
 
-        rnd = new Random(seed)
         runBfs3Repeatedly(4, root) { times =>
           val avg4 = times.drop(1).reduce(_ + _) / 6
           println(s"bfs3, concurrent, 4 threads: took on average (6 runs) $avg4 micro secs")
 
-          rnd = new Random(seed)
           runBfs3Repeatedly(2, root) { times =>
             val avg2 = times.drop(1).reduce(_ + _) / 6
             println(s"bfs3, concurrent, 2 threads: took on average (6 runs) $avg2 micro secs")
 
-            rnd = new Random(seed)
             runBfs3Repeatedly(1, root) { times =>
               val avg1 = times.drop(1).reduce(_ + _) / 6
               println(s"bfs3, concurrent, 1 threads: took on average (6 runs) $avg1 micro secs")
+
+              runBfs4Repeatedly(8, root) { times =>
+                val aavg8 = times.drop(1).reduce(_ + _) / 6
+                println(s"bfs4, concurrent, 8 threads: took on average (6 runs) $aavg8 micro secs")
+
+                runBfs4Repeatedly(4, root) { times =>
+                  val aavg4 = times.drop(1).reduce(_ + _) / 6
+                  println(s"bfs4, concurrent, 4 threads: took on average (6 runs) $aavg4 micro secs")
+
+                  runBfs4Repeatedly(2, root) { times =>
+                    val aavg2 = times.drop(1).reduce(_ + _) / 6
+                    println(s"bfs4, concurrent, 2 threads: took on average (6 runs) $aavg2 micro secs")
+
+                    runBfs4Repeatedly(1, root) { times =>
+                      val aavg1 = times.drop(1).reduce(_ + _) / 6
+                      println(s"bfs4, concurrent, 1 threads: took on average (6 runs) $aavg1 micro secs")
+                    }
+                  }
+                }
+              }
             }
           }
         }
