@@ -140,7 +140,7 @@ class HandlerPool(parallelism: Int = 8) {
    */
   private def resolveDefault[K <: Key[V], V](cells: Seq[Cell[K, V]]): Unit = {
     val key = cells.head.key
-    val result = key.default(cells)
+    val result = key.fallback(cells)
 
     for((c, v) <- result) c.resolveWithValue(v)
   }

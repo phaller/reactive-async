@@ -22,5 +22,5 @@ trait Key[V] {
   val lattice: Lattice[V]
 
   def resolve[K <: Key[V]](cells: Seq[Cell[K, V]]): Seq[(Cell[K, V], V)]
-  def default[K <: Key[V]](cells: Seq[Cell[K, V]]): Seq[(Cell[K, V], V)]
+  def fallback[K <: Key[V]](cells: Seq[Cell[K, V]]): Seq[(Cell[K, V], V)]
 }
