@@ -10,7 +10,7 @@ object PurityKey extends Key[Purity] {
     cells.map(cell => (cell, Pure))
   }
 
-  def default[K <: Key[Purity]](cells: Seq[Cell[K, Purity]]): Seq[(Cell[K, Purity], Purity)] = {
+  def fallback[K <: Key[Purity]](cells: Seq[Cell[K, Purity]]): Seq[(Cell[K, Purity], Purity)] = {
     cells.map(cell => (cell, Pure))
   }
 

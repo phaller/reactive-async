@@ -12,7 +12,7 @@ object ImmutabilityKey extends Key[Immutability] {
     else
       cells.map(cell => (cell, Immutable))
   }
-  def default[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[(Cell[K, Immutability], Immutability)] = {
+  def fallback[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[(Cell[K, Immutability], Immutability)] = {
     val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
     if(conditionallyImmutableCells.nonEmpty)
       conditionallyImmutableCells.map(cell => (cell, cell.getResult()))
