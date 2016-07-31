@@ -9,7 +9,7 @@ import scala.concurrent.{ExecutionContext, OnCompleteRunnable}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
-import lattice.{Lattice, LatticeViolationException, Key}
+import lattice.{Lattice, LatticeViolationException, Key, DefaultKey}
 
 
 sealed trait WhenNextPredicate
@@ -67,7 +67,7 @@ trait Cell[K <: Key[V], V] {
    */
   def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: Option[V]): Unit
 
-  //def zipFinal(that: Cell[K, V]):
+  def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)]
 
   /**
    * Registers a call-back function to be invoked when quiescence is reached, but `this` cell has not been
@@ -199,6 +199,24 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
     val res = tryNewState(x)
     if (!res)
       throw new IllegalStateException("Cell already completed.")
+  }
+
+  def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)] = {
+    implicit val theLattice: Lattice[V] = lattice
+    val completer =
+      CellCompleter[DefaultKey[(V, V)], (V, V)](pool, new DefaultKey[(V, V)])
+    this.onComplete {
+      case Success(x) =>
+        that.onComplete {
+          case Success(y) =>
+            completer.putFinal((x, y))
+          case f @ Failure(_) =>
+            completer.tryComplete(f.asInstanceOf[Try[(V, V)]])
+        }
+      case f @ Failure(_) =>
+        completer.tryComplete(f.asInstanceOf[Try[(V, V)]])
+    }
+    completer.cell
   }
 
   private[this] def currentState(): State[K, V] =

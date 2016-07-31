@@ -12,6 +12,19 @@ trait Lattice[V] {
   def empty: V
 }
 
+object Lattice {
+
+  implicit def pair[T](implicit lattice: Lattice[T]): Lattice[(T, T)] = {
+    new Lattice[(T, T)] {
+      def join(current: (T, T), next: (T, T)): (T, T) =
+        (lattice.join(current._1, next._1), lattice.join(current._2, next._2))
+      def empty: (T, T) =
+        (lattice.empty, lattice.empty)
+    }
+  }
+
+}
+
 final case class LatticeViolationException[D](current: D, next: D) extends IllegalStateException(
   s"Violation of lattice with current $current and next $next!"
 )
