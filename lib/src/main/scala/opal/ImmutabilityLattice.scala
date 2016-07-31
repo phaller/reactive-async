@@ -4,7 +4,6 @@ import cell._
 import lattice.{Lattice, Key}
 
 object ImmutabilityKey extends Key[Immutability] {
-	val lattice = new ImmutabilityLattice
 
   def resolve[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[(Cell[K, Immutability], Immutability)] = {
     val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
@@ -29,16 +28,20 @@ case object Mutable extends Immutability
 case object ConditionallyImmutable extends Immutability
 case object Immutable extends Immutability
 
-class ImmutabilityLattice extends Lattice[Immutability] {
-	override def join(current: Immutability, next: Immutability): Immutability = {
-    if (<=(next, current)) current
-    else next
-  }
+object Immutability {
 
-  def <=(lhs: Immutability, rhs: Immutability): Boolean = {
-    lhs == rhs || lhs == Immutable ||
+  implicit object ImmutabilityLattice extends Lattice[Immutability] {
+    override def join(current: Immutability, next: Immutability): Immutability = {
+      if (<=(next, current)) current
+      else next
+    }
+
+    def <=(lhs: Immutability, rhs: Immutability): Boolean = {
+      lhs == rhs || lhs == Immutable ||
       (lhs == ConditionallyImmutable && rhs != Immutable)
+    }
+
+    override def empty: Immutability = Immutable
   }
 
-  override def empty: Immutability = Immutable
 }

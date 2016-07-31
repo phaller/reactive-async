@@ -8,7 +8,7 @@ import scala.concurrent.duration._
 
 import cell.{WhenNext, WhenNextComplete, FalsePred, CellCompleter, HandlerPool}
 
-import lattice.{StringIntKey, LatticeViolationException}
+import lattice.{Lattice, StringIntLattice, LatticeViolationException, StringIntKey}
 
 import org.opalj.fpcf.analysis.extensibility.ClassExtensibilityAnalysis
 import org.opalj.fpcf.analysis.fields.{FieldMutability, FieldMutabilityAnalysis}
@@ -18,6 +18,9 @@ import org.opalj.br.analyses.Project
 import java.io.File
 
 class BaseSuite extends FunSuite {
+
+  implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
+
   test("putFinal") {
     val latch = new CountDownLatch(1)
 
@@ -672,7 +675,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("PurityLattice: successful joins") {
-    val lattice = PurityKey.lattice
+    val lattice = Purity.PurityLattice
 
     val purity = lattice.join(UnknownPurity, Pure)
     assert(purity == Pure)
@@ -682,7 +685,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("PurityLattice: failed joins") {
-    val lattice = PurityKey.lattice
+    val lattice = Purity.PurityLattice
 
     try {
       val newPurity = lattice.join(Impure, Pure)
@@ -800,7 +803,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("New ImmutabilityLattice: successful joins") {
-    val lattice = ImmutabilityKey.lattice
+    val lattice = Immutability.ImmutabilityLattice
 
     val mutability1 = lattice.join(Immutable, ConditionallyImmutable)
     assert(mutability1 == ConditionallyImmutable)

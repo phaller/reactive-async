@@ -1,17 +1,7 @@
-import cell.Cell
-import lattice.Lattice
-import lattice.Key
+package lattice
 
-object NaturalNumberKey extends Key[Int] {
-  val lattice = new NaturalNumberLattice
 
-  def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
-    cells.map(cell => (cell, cell.getResult()))
-  }
-  def fallback[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
-    cells.map(cell => (cell, cell.getResult()))
-  }
-}
+object NaturalNumberKey extends DefaultKey[Int]
 
 class NaturalNumberLattice extends Lattice[Int] {
   override def join(current: Int, next: Int): Int = {
