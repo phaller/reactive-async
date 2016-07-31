@@ -9,7 +9,6 @@ import scala.collection.JavaConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-import lattice.{ImmutabilityKey, Immutability, Mutable, Immutable, ConditionallyImmutable, Key}
 import cell._
 import org.opalj.br.{Field, ClassFile, ObjectType}
 import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project, SourceElementsPropertyStoreKey}
