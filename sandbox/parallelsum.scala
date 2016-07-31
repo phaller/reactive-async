@@ -4,7 +4,9 @@ import cell.{Cell, CellCompleter, HandlerPool}
 import scala.util.{Try, Success, Failure}
 import scala.collection.immutable.{IndexedSeq, Vector}
 
-import java.util.concurrent.CountDownLatch
+import scala.concurrent.{Future, Promise, ExecutionContext}
+
+import java.util.concurrent.{CountDownLatch, ForkJoinPool}
 import java.util.concurrent.atomic.AtomicLong
 
 
@@ -14,23 +16,42 @@ object ParallelSum {
 
   implicit val intLattice: Lattice[Int] = new NaturalNumberLattice
 
+  def parallelSumFut(l: IndexedSeq[Int])(implicit ctx: ExecutionContext): Future[Int] = {
+    val chunk = l.size / 2
+    // chunk = half of sequential size
+    if (chunk == 16384) {  // sequential
+      val sum = l.reduce(_ + _)
+      val p = Promise[Int]()
+      p.success(sum).future
+    } else {
+      val (left, right) = l.splitAt(chunk)
+      // introduce parallelism
+      val leftPromise = Promise[Int]()
+      ctx.execute(new Runnable {
+        def run(): Unit = {
+          val res = parallelSumFut(left)
+          leftPromise.completeWith(res)
+        }
+      })
+      val rightFut = parallelSumFut(right)
+      val zipped = leftPromise.future.zip(rightFut)
+      zipped.map(tup => tup._1 + tup._2)
+    }
+  }
+
   // final result is eventually put into returned cell
   def parallelSum(l: IndexedSeq[Int])(implicit pool: HandlerPool): Cell[K, Int] = {
     val chunk = l.size / 2
     // chunk = half of sequential size
-    if (chunk == 16384) {
-      // sequential
+    if (chunk == 16384) {  // sequential
       val sum = l.reduce(_ + _)
-      val completer =
-        CellCompleter[K, Int](pool, new DefaultKey[Int])
+      val completer = CellCompleter[K, Int](pool, new DefaultKey[Int])
       completer.putFinal(sum)
       completer.cell
     } else {
       val (left, right) = l.splitAt(chunk)
-
       // introduce parallelism
-      val leftCompleter =
-        CellCompleter[K, Int](pool, new DefaultKey[Int])
+      val leftCompleter = CellCompleter[K, Int](pool, new DefaultKey[Int])
       pool.execute { () =>
         val res = parallelSum(left)
         // TODO: replace with whenCompleteEx
@@ -42,8 +63,7 @@ object ParallelSum {
       }
       val rightCell = parallelSum(right)
       val zipped = leftCompleter.cell.zipFinal(rightCell)
-      val completer =
-        CellCompleter[K, Int](pool, new DefaultKey[Int])
+      val completer = CellCompleter[K, Int](pool, new DefaultKey[Int])
       // TODO: replace with `mapFinal`
       zipped.onComplete {
         case Success((x, y)) => completer.putFinal(x + y)
@@ -64,6 +84,27 @@ object ParallelSum {
       case Success(x) =>
         val endCell = System.nanoTime()
         time.lazySet(endCell - startCell)
+        latch.countDown()
+      case Failure(t) =>
+        assert(false)
+        latch.countDown()
+    }
+
+    latch.await()
+    time.get()
+  }
+
+  // returns duration in ns
+  def oneIterationFut(list: IndexedSeq[Int])(implicit ctx: ExecutionContext): Long = {
+    val latch = new CountDownLatch(1)
+    val time  = new AtomicLong
+
+    val start = System.nanoTime()
+    val res = parallelSumFut(list)
+    res.onComplete {
+      case Success(x) =>
+        val end = System.nanoTime()
+        time.lazySet(end - start)
         latch.countDown()
       case Failure(t) =>
         assert(false)
@@ -124,6 +165,17 @@ object ParallelSum {
     val durationSum = durations.map(d => d / 1000000).reduce(_ + _)
     val res = durationSum / 9
     println(s"time (cells): $res ms")
+
+    implicit val ctx = ExecutionContext.fromExecutorService(new ForkJoinPool(numThreads))
+    // reach steady state
+    for (_ <- 1 to 100)
+      oneIterationFut(list)
+
+    // average of 9 iterations
+    val durationsFut = (1 to 9).map(i => oneIterationFut(list))
+    val durationSumFut = durationsFut.map(d => d / 1000000).reduce(_ + _)
+    val resFut = durationSumFut / 9
+    println(s"time (futures): $resFut ms")
 
     // clean up
     pool.shutdown()
