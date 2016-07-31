@@ -8,12 +8,12 @@ import scala.concurrent.duration._
 
 import cell.{WhenNext, WhenNextComplete, FalsePred, CellCompleter, HandlerPool}
 
-import lattice._
+import lattice.{StringIntKey, LatticeViolationException}
 
 import org.opalj.fpcf.analysis.extensibility.ClassExtensibilityAnalysis
 import org.opalj.fpcf.analysis.fields.{FieldMutability, FieldMutabilityAnalysis}
 import org.opalj.fpcf.analysis.{FPCFAnalysesManager, FPCFAnalysis, FPCFAnalysesManagerKey}
-import opal.{ImmutabilityAnalysis, PurityAnalysis}
+import opal._
 import org.opalj.br.analyses.Project
 import java.io.File
 

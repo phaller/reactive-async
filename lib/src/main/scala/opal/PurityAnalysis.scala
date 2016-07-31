@@ -7,7 +7,6 @@ import scala.collection.JavaConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-import lattice.{PurityKey, Purity, Pure, Impure, Key}
 import cell.{HandlerPool, CellCompleter, Cell}
 import org.opalj.br.{ClassFile, PC, Method, MethodWithBody}
 import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project}

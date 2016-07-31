@@ -1,6 +1,7 @@
-package lattice
+package opal
 
 import cell._
+import lattice.{Lattice, Key}
 
 object ImmutabilityKey extends Key[Immutability] {
 	val lattice = new ImmutabilityLattice

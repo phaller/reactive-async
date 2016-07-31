@@ -1,6 +1,7 @@
-package lattice
+package opal
 
 import cell._
+import lattice.{Lattice, LatticeViolationException, Key}
 
 object PurityKey extends Key[Purity] {
 
