@@ -1,6 +1,8 @@
 import cell.{CellCompleter, HandlerPool}
+import lattice.{Lattice, NaturalNumberLattice, NaturalNumberKey}
 
 import scala.annotation.tailrec
+
 import org.scalameter.api._
 import org.scalameter.picklers.noPickler._
 
@@ -20,6 +22,9 @@ object ReactiveAsyncBenchmarks extends PerformanceTest.Microbenchmark {
   val nrOfCells = 100000
   val nrOfThreads = 8
   val size = Gen.single(s"$nrOfCells cells")(nrOfCells)
+
+  /* lattice instance for cells */
+  implicit val naturalNumberLattice: Lattice[Int] = new NaturalNumberLattice
 
   /* creation of cells/cell completers */
   performance of "Cells" in {

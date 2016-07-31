@@ -9,7 +9,7 @@ import scala.concurrent.{ExecutionContext, OnCompleteRunnable}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
-import lattice.{Key, LatticeViolationException}
+import lattice.{Lattice, LatticeViolationException, Key}
 
 
 sealed trait WhenNextPredicate
@@ -67,6 +67,8 @@ trait Cell[K <: Key[V], V] {
    */
   def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: Option[V]): Unit
 
+  //def zipFinal(that: Cell[K, V]):
+
   /**
    * Registers a call-back function to be invoked when quiescence is reached, but `this` cell has not been
    * completed, yet. The call-back function is passed a sequence of the cells that `this` cell depends on.
@@ -97,7 +99,7 @@ trait Cell[K <: Key[V], V] {
 
 
 /**
- * Interface trait for programmatically completing a cell. Analogous to `Promise`.
+ * Interface trait for programmatically completing a cell. Analogous to `Promise[V]`.
  */
 trait CellCompleter[K <: Key[V], V] {
 
@@ -122,8 +124,8 @@ object CellCompleter {
    * Create a completer for a cell holding values of type `V`
    * given a `HandlerPool` and a `Key[V]`.
    */
-  def apply[K <: Key[V], V](pool: HandlerPool, key: K): CellCompleter[K, V] = {
-    val impl = new CellImpl[K, V](pool, key)
+  def apply[K <: Key[V], V](pool: HandlerPool, key: K)(implicit lattice: Lattice[V]): CellCompleter[K, V] = {
+    val impl = new CellImpl[K, V](pool, key, lattice)
     pool.register(impl)
     impl
   }
@@ -153,11 +155,11 @@ private class State[K <: Key[V], V](
 )
 
 private object State {
-  def empty[K <: Key[V], V](key: K): State[K, V] =
-    new State[K, V](key.lattice.empty, Map(), Map(), Map(), Map())
+  def empty[K <: Key[V], V](lattice: Lattice[V]): State[K, V] =
+    new State[K, V](lattice.empty, Map(), Map(), Map(), Map())
 }
 
-class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V] with CellCompleter[K, V] {
+class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V]) extends Cell[K, V] with CellCompleter[K, V] {
 
   private val nodepslatch = new CountDownLatch(1)
   private val nonextdepslatch = new CountDownLatch(1)
@@ -168,7 +170,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
    *
    * Assumes that dependencies need to be kept until a final result is known.
    */
-  private val state = new AtomicReference[AnyRef](State.empty[K, V](key))
+  private val state = new AtomicReference[AnyRef](State.empty[K, V](lattice))
 
   // `CellCompleter` and corresponding `Cell` are the same run-time object.
   override def cell: Cell[K, V] = this
@@ -178,7 +180,6 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
       finalRes match {
         case Success(result) => result
         case Failure(err) => throw new IllegalStateException(err)
-        case _ => key.lattice.empty
       }
     case raw: State[K, V] => raw.res
   }
@@ -350,7 +351,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K) extends Cell[K, V]
     */
   private def tryJoin(current: V, next: V): V = {
     try {
-      key.lattice.join(current, next)
+      lattice.join(current, next)
     } catch {
       case LatticeViolationException(c, n) => current
     }
