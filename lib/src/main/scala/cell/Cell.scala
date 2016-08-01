@@ -97,6 +97,45 @@ trait Cell[K <: Key[V], V] {
   private[cell] def removeNextCallbacks(cell: Cell[K, V]): Unit
 }
 
+object Cell {
+
+  def completed[V](pool: HandlerPool, result: V)(implicit lattice: Lattice[V]): Cell[DefaultKey[V], V] = {
+    val completer = CellCompleter.completed(pool, result)
+    completer.cell
+  }
+
+  def sequence[K <: Key[V], V](in: List[Cell[K, V]])(implicit pool: HandlerPool): Cell[DefaultKey[List[V]], List[V]] = {
+    implicit val lattice: Lattice[List[V]] = Lattice.trivial[List[V]]
+    val completer =
+      CellCompleter[DefaultKey[List[V]], List[V]](pool, new DefaultKey[List[V]])
+    in match {
+      case List(c) =>
+        c.onComplete {
+          case Success(x) =>
+            completer.putFinal(List(x))
+          case f @ Failure(_) =>
+            completer.tryComplete(f.asInstanceOf[Failure[List[V]]])
+        }
+      case c :: cs =>
+        val fst = in.head
+        fst.onComplete {
+          case Success(x) =>
+            val tailCell = sequence(in.tail)
+            tailCell.onComplete {
+              case Success(xs) =>
+                completer.putFinal(x :: xs)
+              case f @ Failure(_) =>
+                completer.tryComplete(f)
+            }
+          case f @ Failure(_) =>
+            completer.tryComplete(f.asInstanceOf[Failure[List[V]]])
+        }
+    }
+    completer.cell
+  }
+
+}
+
 
 /**
  * Interface trait for programmatically completing a cell. Analogous to `Promise[V]`.
@@ -127,6 +166,16 @@ object CellCompleter {
   def apply[K <: Key[V], V](pool: HandlerPool, key: K)(implicit lattice: Lattice[V]): CellCompleter[K, V] = {
     val impl = new CellImpl[K, V](pool, key, lattice)
     pool.register(impl)
+    impl
+  }
+
+  // note:
+  // no K type parameter, since we always use type DefaultKey[V],
+  // no other key would make sense
+  def completed[V](pool: HandlerPool, result: V)(implicit lattice: Lattice[V]): CellCompleter[DefaultKey[V], V] = {
+    val impl = new CellImpl[DefaultKey[V], V](pool, new DefaultKey[V], lattice)
+    pool.register(impl)
+    impl.putFinal(result)
     impl
   }
 
