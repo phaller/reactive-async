@@ -5,7 +5,7 @@ import scala.concurrent.{Promise, Future, ExecutionContext}
 
 object NpvTask {
 
-  private def calculateMin(flows: Seq[Distribution], rate: Distribution): Double = {
+  def calculateMin(flows: Seq[Distribution], rate: Distribution): Double = {
     val minFlows = Array.ofDim[Double](flows.length)
     for (i <- 0 until flows.length) {
       minFlows(i) = flows(i).getMin()
@@ -13,7 +13,7 @@ object NpvTask {
     NetPresentValue.npv(minFlows, rate.getMax())
   }
 
-  private def calculateMax(flows: Seq[Distribution], rate: Distribution): Double = {
+  def calculateMax(flows: Seq[Distribution], rate: Distribution): Double = {
     val maxFlows = Array.ofDim[Double](flows.length)
     for (i <- 0 until flows.length) {
       maxFlows(i) = flows(i).getMax()
@@ -24,27 +24,11 @@ object NpvTask {
 }
 
 class NpvTask(p: Promise[StatsCollector], min: Double, max: Double, numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)
-             (implicit ctx: ExecutionContext) extends Runnable {
-
-  private var minChunkSize: Int = 100
-  private var numChunks: Int = 2
+             (implicit ctx: ExecutionContext) extends AbstractNpvTask {
 
   def this(p: Promise[StatsCollector], numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)
           (implicit ctx: ExecutionContext) {
     this(p, NpvTask.calculateMin(flows, rate), NpvTask.calculateMax(flows, rate), numBuckets, numIterations, rate, flows: _*)
-  }
-
-  def setMinChunkSize(minChunkSize: Int): Unit = {
-    this.minChunkSize = minChunkSize
-  }
-
-  def setNumChunks(numChunks: Int): Unit = {
-    this.numChunks = numChunks
-  }
-
-  def calcNumChunks(n: Int): Int = {
-    val nc: Int = Math.ceil(Math.sqrt(n/minChunkSize)).asInstanceOf[Int]
-    nc
   }
 
   private def sampleFlows(): Array[Double] = {

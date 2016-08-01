@@ -23,6 +23,16 @@ object Lattice {
     }
   }
 
+  def trivial[T >: Null]: Lattice[T] = {
+    new Lattice[T] {
+      override def empty: T = null
+      override def join(current: T, next: T): T = {
+        if (current == null) next
+        else throw LatticeViolationException(current, next)
+      }
+    }
+  }
+
 }
 
 final case class LatticeViolationException[D](current: D, next: D) extends IllegalStateException(
