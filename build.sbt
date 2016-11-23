@@ -22,7 +22,8 @@ lazy val lib: Project = (project in file("lib")).
     name := "reactive-async-lib",
     libraryDependencies += scalaTest,
     libraryDependencies += opal,
-    libraryDependencies += opalFixpoint
+    libraryDependencies += opalFixpoint,
+    scalacOptions += "-feature"
   )
 
 lazy val Benchmark = config("bench") extend Test

@@ -17,25 +17,19 @@ case object WhenNext extends WhenNextPredicate
 case object WhenNextComplete extends WhenNextPredicate
 case object FalsePred extends WhenNextPredicate
 
-/**
- * Example:
- *
- *   val barRetTypeCell: Cell[(Entity, PropertyKind), ObjectType]
- */
+
 trait Cell[K <: Key[V], V] {
 
   def key: K
 
+  /** Returns the current value of `this` `Cell`.
+    *
+    * Note that this method may return non-deterministic values. To ensure
+    * deterministic executions use the quiescence API of class `HandlerPool`.
+    */
   def getResult(): V
 
-  def isComplete(): Boolean
-
-  def numTotalDependencies: Int
-  def numNextDependencies: Int
-  def numCompleteDependencies: Int
-
-  def numNextCallbacks: Int
-  def numCompleteCallbacks: Int
+  def isComplete: Boolean
 
   /**
    * Adds a dependency on some `other` cell.
@@ -85,6 +79,13 @@ trait Cell[K <: Key[V], V] {
 
   def waitUntilNoDeps(): Unit
   def waitUntilNoNextDeps(): Unit
+
+  private[cell] def numTotalDependencies: Int
+  private[cell] def numNextDependencies: Int
+  private[cell] def numCompleteDependencies: Int
+
+  private[cell] def numNextCallbacks: Int
+  private[cell] def numCompleteCallbacks: Int
 
   private[cell] def addCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit
   private[cell] def addNextCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit
@@ -233,7 +234,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
     case raw: State[K, V] => raw.res
   }
 
-  override def isComplete(): Boolean = state.get match {
+  override def isComplete: Boolean = state.get match {
     case _: Try[_] => true
     case _ => false
   }
@@ -749,7 +750,7 @@ private class NextDepRunnable[K <: Key[V], V](val pool: HandlerPool,
         }
       case Failure(e) => /* do nothing */
     }
-    if(cell.isComplete()) completer.removeNextDep(cell)
+    if (cell.isComplete) completer.removeNextDep(cell)
   }
 
   override def run(): Unit = {
