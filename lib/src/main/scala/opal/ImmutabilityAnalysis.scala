@@ -85,11 +85,11 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
       classFile <- project.allProjectClassFiles.par
     } {
       pool.execute(() => {
-        if(!classFileToObjectTypeCellCompleter(classFile)._1.cell.isComplete())
+        if (!classFileToObjectTypeCellCompleter(classFile)._1.cell.isComplete)
           objectImmutabilityAnalysis(project, classFileToObjectTypeCellCompleter, manager, classFile)
       })
       pool.execute(() => {
-        if(!classFileToObjectTypeCellCompleter(classFile)._2.cell.isComplete())
+        if (!classFileToObjectTypeCellCompleter(classFile)._2.cell.isComplete)
           typeImmutabilityAnalysis(project, classFileToObjectTypeCellCompleter, manager, classFile)
       })
     }
@@ -187,11 +187,11 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
       classFile <- project.allProjectClassFiles.par
     } {
       pool.execute(() => {
-        if (!classFileToObjectTypeCellCompleter(classFile)._1.cell.isComplete())
+        if (!classFileToObjectTypeCellCompleter(classFile)._1.cell.isComplete)
           objectImmutabilityAnalysis(project, classFileToObjectTypeCellCompleter, manager, classFile)
       })
       pool.execute(() => {
-        if (!classFileToObjectTypeCellCompleter(classFile)._2.cell.isComplete())
+        if (!classFileToObjectTypeCellCompleter(classFile)._2.cell.isComplete)
           typeImmutabilityAnalysis(project, classFileToObjectTypeCellCompleter, manager, classFile)
       })
     }
@@ -237,7 +237,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
 
     // If the cell hasn't already been completed with an ObjectImmutability, then it is
     // dependent on FieldMutability and its superclasses
-    if (!cellCompleter.cell.isComplete()) {
+    if (!cellCompleter.cell.isComplete) {
       if (cf.fields.exists(f => !f.isStatic && f.fieldType.isArrayType))
         cellCompleter.putNext(ConditionallyImmutable)
       else {
@@ -310,7 +310,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
     val classHierarchy = project.classHierarchy
     val directSubtypes = classHierarchy.directSubtypesOf(cf.thisType)
 
-    if (!cellCompleter.cell.isComplete()) {
+    if (!cellCompleter.cell.isComplete) {
       // If this class file doesn't have subtypes, then the TypeImmutability is the same as
       // the ObjectImmutability
       if (cf.isFinal || directSubtypes.isEmpty) {
@@ -328,7 +328,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
         if (unavailableSubtype.isDefined)
           cellCompleter.putFinal(Mutable)
 
-        if (!cellCompleter.cell.isComplete()) {
+        if (!cellCompleter.cell.isComplete) {
           // Check subclasses to determine TypeImmutability
           val directSubclasses = directSubtypes map { subtype ⇒ project.classFile(subtype).get }
           directSubclasses foreach { subclass =>

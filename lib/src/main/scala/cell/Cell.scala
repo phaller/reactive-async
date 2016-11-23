@@ -24,7 +24,7 @@ trait Cell[K <: Key[V], V] {
 
   def getResult(): V
 
-  def isComplete(): Boolean
+  def isComplete: Boolean
 
   /**
    * Adds a dependency on some `other` cell.
@@ -229,7 +229,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
     case raw: State[K, V] => raw.res
   }
 
-  override def isComplete(): Boolean = state.get match {
+  override def isComplete: Boolean = state.get match {
     case _: Try[_] => true
     case _ => false
   }
@@ -745,7 +745,7 @@ private class NextDepRunnable[K <: Key[V], V](val pool: HandlerPool,
         }
       case Failure(e) => /* do nothing */
     }
-    if(cell.isComplete()) completer.removeNextDep(cell)
+    if (cell.isComplete) completer.removeNextDep(cell)
   }
 
   override def run(): Unit = {
