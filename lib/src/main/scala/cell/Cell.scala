@@ -22,6 +22,11 @@ trait Cell[K <: Key[V], V] {
 
   def key: K
 
+  /** Returns the current value of `this` `Cell`.
+    *
+    * Note that this method may return non-deterministic values. To ensure
+    * deterministic executions use the quiescence API of class `HandlerPool`.
+    */
   def getResult(): V
 
   def isComplete: Boolean
