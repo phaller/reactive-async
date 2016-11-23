@@ -17,11 +17,7 @@ case object WhenNext extends WhenNextPredicate
 case object WhenNextComplete extends WhenNextPredicate
 case object FalsePred extends WhenNextPredicate
 
-/**
- * Example:
- *
- *   val barRetTypeCell: Cell[(Entity, PropertyKind), ObjectType]
- */
+
 trait Cell[K <: Key[V], V] {
 
   def key: K
