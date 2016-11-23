@@ -16,8 +16,8 @@ instead of `compile`.
 
 ## Testing
 
-The test suite is based on [ScalaTest](http://www.scalatest.org); it
-can be run from the sbt prompt:
+The test suite (based on [ScalaTest](http://www.scalatest.org)) is run
+as follows:
 
 ```
 $ sbt
@@ -25,6 +25,18 @@ $ sbt
 > test
 ```
 
-Note that currently this will also run benchmarks, which consumes a
-fair amount of memory. Thus, it might be necessary to increase the
-JVM's maximum heap size before starting sbt.
+## Benchmarking
+
+### Microbenchmarks
+
+The microbenchmarks (based on
+[ScalaMeter](https://scalameter.github.io)) are run as follows:
+
+```
+$ sbt
+> project bench
+> test
+```
+
+Note that this consumes a fair amount of memory. Thus, it might be
+necessary to increase the JVM's maximum heap size before starting sbt.
