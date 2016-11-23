@@ -1,3 +1,5 @@
+package cell
+
 import org.scalatest.FunSuite
 
 import java.util.concurrent.CountDownLatch
@@ -5,8 +7,6 @@ import java.util.concurrent.CountDownLatch
 import scala.util.{Success, Failure}
 import scala.concurrent.{Promise, Await}
 import scala.concurrent.duration._
-
-import cell.{WhenNext, WhenNextComplete, FalsePred, CellCompleter, HandlerPool}
 
 import lattice.{Lattice, StringIntLattice, LatticeViolationException, StringIntKey}
 
