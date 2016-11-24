@@ -616,7 +616,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("purity analysis with Demo.java: pure methods") {
-    val file = new File("lib")
+    val file = new File("core")
     val lib = Project(file)
 
     val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
@@ -646,7 +646,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("purity analysis with Demo.java: impure methods") {
-    val file = new File("lib")
+    val file = new File("core")
     val lib = Project(file)
 
     val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")

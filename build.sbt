@@ -16,10 +16,10 @@ def noPublish = Seq(
   publishLocal := {}
 )
 
-lazy val lib: Project = (project in file("lib")).
+lazy val core: Project = (project in file("core")).
   settings(commonSettings: _*).
   settings(
-    name := "reactive-async-lib",
+    name := "reactive-async",
     libraryDependencies += scalaTest,
     libraryDependencies += opal,
     libraryDependencies += opalFixpoint,
@@ -42,4 +42,4 @@ lazy val bench: Project = (project in file("bench")).
   ).settings(
     inConfig(Benchmark)(Defaults.testSettings): _*
   ).
-  dependsOn(lib)
+  dependsOn(core)
