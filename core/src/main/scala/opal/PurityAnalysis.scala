@@ -134,8 +134,8 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       (instruction.opcode: @scala.annotation.switch) match {
         case GETSTATIC.opcode ⇒
           val GETSTATIC(declaringClass, fieldName, fieldType) = instruction
-          import project.classHierarchy.resolveFieldReference
-          resolveFieldReference(declaringClass, fieldName, fieldType, project) match {
+          import project.resolveFieldReference
+          resolveFieldReference(declaringClass, fieldName, fieldType) match {
 
             case Some(field) if field.isFinal ⇒
             /* Nothing to do; constants do not impede purity! */
@@ -150,20 +150,19 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
         case INVOKESPECIAL.opcode | INVOKESTATIC.opcode ⇒ instruction match {
 
-          case MethodInvocationInstruction(`declaringClassType`, `methodName`, `methodDescriptor`) ⇒
+          case MethodInvocationInstruction(`declaringClassType`, _ , `methodName`, `methodDescriptor`) ⇒
           // We have a self-recursive call; such calls do not influence
           // the computation of the method's purity and are ignored.
           // Let's continue with the evaluation of the next instruction.
 
-          case MethodInvocationInstruction(declaringClassType, methodName, methodDescriptor) ⇒
-            import project.classHierarchy.lookupMethodDefinition
+          case MethodInvocationInstruction(declaringClassType, _, methodName, methodDescriptor) ⇒
+            import project.lookupMethodDefinition
             val calleeOpt =
               try {
                 lookupMethodDefinition(
                   declaringClassType.asObjectType /* this is safe...*/ ,
                   methodName,
-                  methodDescriptor,
-                  project
+                  methodDescriptor
                 )
               } catch {
                 case t: Throwable => None

@@ -12,9 +12,11 @@ import scala.concurrent.duration._
 import cell._
 import org.opalj.br.{Field, ClassFile, ObjectType}
 import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project, SourceElementsPropertyStoreKey}
-import org.opalj.fpcf.analysis.{FPCFAnalysesManager, FPCFAnalysis, FPCFAnalysesManagerKey}
-import org.opalj.fpcf.analysis.fields.{FieldMutability, FieldMutabilityAnalysis}
-import org.opalj.fpcf.analysis.extensibility.{IsExtensible, ClassExtensibilityAnalysis}
+
+import org.opalj.fpcf.analysis.FieldMutabilityAnalysis
+import org.opalj.fpcf.properties.FieldMutability
+import org.opalj.fpcf.properties.IsExtensible
+import org.opalj.fpcf.analysis.ClassExtensibilityAnalysis
 
 
 object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
@@ -73,7 +75,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
     // All classes that do not have complete superclass information are mutable
     // due to the lack of knowledge.
     val typesForWhichItMayBePossibleToComputeTheMutability = allSubtypes(ObjectType.Object, reflexive = true)
-    val unexpectedRootTypes = rootTypes.filter(rt ⇒ (rt ne ObjectType.Object) && !isInterface(rt))
+    val unexpectedRootTypes = rootTypes.filter(rt ⇒ (rt ne ObjectType.Object) && !isInterface(rt).isNo)
     unexpectedRootTypes.map(rt ⇒ allSubtypes(rt, reflexive = true)).flatten.view.
       filter(ot ⇒ !typesForWhichItMayBePossibleToComputeTheMutability.contains(ot)).
       foreach(ot ⇒ project.classFile(ot) foreach { cf ⇒
@@ -175,7 +177,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
     // All classes that do not have complete superclass information are mutable
     // due to the lack of knowledge.
     val typesForWhichItMayBePossibleToComputeTheMutability = allSubtypes(ObjectType.Object, reflexive = true)
-    val unexpectedRootTypes = rootTypes.filter(rt ⇒ (rt ne ObjectType.Object) && !isInterface(rt))
+    val unexpectedRootTypes = rootTypes.filter(rt ⇒ (rt ne ObjectType.Object) && !isInterface(rt).isNo)
     unexpectedRootTypes.map(rt ⇒ allSubtypes(rt, reflexive = true)).flatten.view.
       filter(ot ⇒ !typesForWhichItMayBePossibleToComputeTheMutability.contains(ot)).
       foreach(ot ⇒ project.classFile(ot) foreach { cf ⇒

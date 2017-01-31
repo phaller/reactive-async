@@ -1,7 +1,7 @@
 import Dependencies._ // see project/Dependencies.scala
 import Util._         // see project/Util.scala
 
-val buildVersion = "0.1.0"
+val buildVersion = "0.2.0-Snapshot"
 
 def commonSettings = Seq(
   version in ThisBuild := buildVersion,
@@ -22,7 +22,6 @@ lazy val core: Project = (project in file("core")).
     name := "reactive-async",
     libraryDependencies += scalaTest,
     libraryDependencies += opal,
-    libraryDependencies += opalFixpoint,
     scalacOptions += "-feature"
   )
 
@@ -34,7 +33,6 @@ lazy val bench: Project = (project in file("bench")).
     name := "reactive-async-bench",
     libraryDependencies += scalaTest,
     libraryDependencies += opal,
-    libraryDependencies += opalFixpoint,
     libraryDependencies += scalaMeter,
     testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework")
   ).configs(
