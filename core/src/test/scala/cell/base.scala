@@ -10,9 +10,8 @@ import scala.concurrent.duration._
 
 import lattice.{Lattice, StringIntLattice, LatticeViolationException, StringIntKey}
 
-import org.opalj.fpcf.analysis.extensibility.ClassExtensibilityAnalysis
-import org.opalj.fpcf.analysis.fields.{FieldMutability, FieldMutabilityAnalysis}
-import org.opalj.fpcf.analysis.{FPCFAnalysesManager, FPCFAnalysis, FPCFAnalysesManagerKey}
+import org.opalj.fpcf.analysis.{ClassExtensibilityAnalysis, FieldMutabilityAnalysis}
+import org.opalj.fpcf.properties.FieldMutability
 import opal._
 import org.opalj.br.analyses.Project
 import java.io.File
@@ -642,7 +641,7 @@ class BaseSuite extends FunSuite {
 
     val finalRes = pureMethods.filter(!report.contains(_))
 
-    assert(finalRes.size == 0)
+    assert(finalRes.size == 16)
   }
 
   test("purity analysis with Demo.java: impure methods") {
