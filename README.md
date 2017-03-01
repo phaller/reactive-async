@@ -19,6 +19,10 @@ Talk at Scala Days 2016: [video](https://www.youtube.com/watch?v=S9xxhyDYoZk),
 Talk at ACM SIGPLAN Scala Symposium 2016:
 [slides](https://speakerdeck.com/phaller/reactive-async-expressive-deterministic-concurrency)
 
+Paper: Philipp Haller, Simon Geries, Michael Eichberg, and Guido Salvaneschi.
+       [Reactive Async: Expressive Deterministic Concurrency](http://www.csc.kth.se/~phaller/doc/haller16-scala.pdf).
+       Proc. ACM SIGPLAN Scala Symposium. ACM, 2016. [[ACM DL](http://dl.acm.org/citation.cfm?id=2998396)]
+
 ## Building
 
 Building Reactive Async requires
