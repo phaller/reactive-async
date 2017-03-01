@@ -7,7 +7,7 @@ Building Reactive Async requires
 
 ```
 $ sbt
-> project lib
+> project core
 > compile
 ```
 
@@ -21,7 +21,7 @@ as follows:
 
 ```
 $ sbt
-> project lib
+> project core
 > test
 ```
 
