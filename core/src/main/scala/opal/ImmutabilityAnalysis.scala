@@ -11,12 +11,12 @@ import scala.concurrent.duration._
 
 import cell._
 import org.opalj.br.{Field, ClassFile, ObjectType}
-import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project, SourceElementsPropertyStoreKey}
+import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project, PropertyStoreKey}
 
 import org.opalj.fpcf.analysis.FieldMutabilityAnalysis
 import org.opalj.fpcf.properties.FieldMutability
-import org.opalj.fpcf.properties.IsExtensible
-import org.opalj.fpcf.analysis.ClassExtensibilityAnalysis
+import org.opalj.fpcf.properties.ExtensibleType
+import org.opalj.fpcf.properties.TypeExtensibility
 
 
 object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
@@ -27,9 +27,8 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
                           isInterrupted: () ⇒ Boolean
                         ): BasicReport = {
     // Run ClassExtensibilityAnalysis
-    val projectStore = project.get(SourceElementsPropertyStoreKey)
+    val projectStore = project.get(PropertyStoreKey)
     val manager = project.get(FPCFAnalysesManagerKey)
-    manager.run(ClassExtensibilityAnalysis)
     //manager.runAll(
       //FieldMutabilityAnalysis
       // REPLACED                ObjectImmutabilityAnalysis
@@ -305,8 +304,8 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
                                manager: FPCFAnalysesManager,
                                cf: ClassFile): Unit = {
     val cellCompleter = classFileToObjectTypeCellCompleter(cf)._2
-
-    if (manager.propertyStore(IsExtensible, cf).isYes)
+    val isExtensible = manager.propertyStore(cf,TypeExtensibility.key)
+    if (!isExtensible.hasProperty || isExtensible.p == ExtensibleType)
       cellCompleter.putFinal(Mutable)
 
     val classHierarchy = project.classHierarchy
