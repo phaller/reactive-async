@@ -10,8 +10,16 @@ import scala.concurrent.duration._
 
 import lattice.{Lattice, StringIntLattice, LatticeViolationException, StringIntKey}
 
+<<<<<<< HEAD
+import org.opalj.fpcf.analysis.FieldMutabilityAnalysis
+import org.opalj.fpcf.properties.FieldMutability
+import org.opalj.fpcf.FPCFAnalysesManager
+import org.opalj.fpcf.FPCFAnalysis
+import org.opalj.fpcf.FPCFAnalysesManagerKey
+=======
 import org.opalj.fpcf.analysis.{ClassExtensibilityAnalysis, FieldMutabilityAnalysis}
 import org.opalj.fpcf.properties.FieldMutability
+>>>>>>> phaller/master
 import opal._
 import org.opalj.br.analyses.Project
 import java.io.File
@@ -621,27 +629,27 @@ class BaseSuite extends FunSuite {
     val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
 
     val pureMethods = List(
-      "pureness.Demo{ public int pureThoughItUsesField(int,int) }",
-      "pureness.Demo{ public int pureThoughItUsesField2(int,int) }",
-      "pureness.Demo{ public int simplyPure(int,int) }",
-      "pureness.Demo{ int foo(int) }",
-      "pureness.Demo{ int bar(int) }",
-      "pureness.Demo{ int fooBar(int) }",
-      "pureness.Demo{ int barFoo(int) }",
-      "pureness.Demo{ int m1(int) }",
-      "pureness.Demo{ int m2(int) }",
-      "pureness.Demo{ int m3(int) }",
-      "pureness.Demo{ int cm1(int) }",
-      "pureness.Demo{ int cm2(int) }",
-      "pureness.Demo{ int scc0(int) }",
-      "pureness.Demo{ int scc1(int) }",
-      "pureness.Demo{ int scc2(int) }",
-      "pureness.Demo{ int scc3(int) }"
+      "pureness.Demo{ public static int pureThoughItUsesField(int,int) }",
+      "pureness.Demo{ public static int pureThoughItUsesField2(int,int) }",
+      "pureness.Demo{ public static int simplyPure(int,int) }",
+      "pureness.Demo{ static int foo(int) }",
+      "pureness.Demo{ static int bar(int) }",
+      "pureness.Demo{ static int fooBar(int) }",
+      "pureness.Demo{ static int barFoo(int) }",
+      "pureness.Demo{ static int m1(int) }",
+      "pureness.Demo{ static int m2(int) }",
+      "pureness.Demo{ static int m3(int) }",
+      "pureness.Demo{ static int cm1(int) }",
+      "pureness.Demo{ static int cm2(int) }",
+      "pureness.Demo{ static int scc0(int) }",
+      "pureness.Demo{ static int scc1(int) }",
+      "pureness.Demo{ static int scc2(int) }",
+      "pureness.Demo{ static int scc3(int) }"
     )
 
     val finalRes = pureMethods.filter(!report.contains(_))
 
-    assert(finalRes.size == 16)
+    assert(finalRes.size == 0,report.mkString("\n"))
   }
 
   test("purity analysis with Demo.java: impure methods") {
