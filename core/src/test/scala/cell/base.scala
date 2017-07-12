@@ -10,11 +10,16 @@ import scala.concurrent.duration._
 
 import lattice.{Lattice, StringIntLattice, LatticeViolationException, StringIntKey}
 
+<<<<<<< HEAD
 import org.opalj.fpcf.analysis.FieldMutabilityAnalysis
 import org.opalj.fpcf.properties.FieldMutability
 import org.opalj.fpcf.FPCFAnalysesManager
 import org.opalj.fpcf.FPCFAnalysis
 import org.opalj.fpcf.FPCFAnalysesManagerKey
+=======
+import org.opalj.fpcf.analysis.{ClassExtensibilityAnalysis, FieldMutabilityAnalysis}
+import org.opalj.fpcf.properties.FieldMutability
+>>>>>>> phaller/master
 import opal._
 import org.opalj.br.analyses.Project
 import java.io.File
