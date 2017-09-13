@@ -23,6 +23,11 @@ Paper: Philipp Haller, Simon Geries, Michael Eichberg, and Guido Salvaneschi.
        [Reactive Async: Expressive Deterministic Concurrency](http://www.csc.kth.se/~phaller/doc/haller16-scala.pdf).
        Proc. ACM SIGPLAN Scala Symposium. ACM, 2016. [[ACM DL](http://dl.acm.org/citation.cfm?id=2998396)]
 
+Master's thesis: Simon Geries. [Reactive Async: Safety and efficiency
+of new abstractions for reactive, asynchronous
+programming](http://urn.kb.se/resolve?urn=urn%3Anbn%3Ase%3Akth%3Adiva-191330). KTH,
+School of Computer Science and Communication (CSC). 2016.
+
 ## Building
 
 Building Reactive Async requires
