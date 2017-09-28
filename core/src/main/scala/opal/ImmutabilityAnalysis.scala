@@ -265,7 +265,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
                 case Some(classFile) =>
                   val fieldTypeCell = classFileToObjectTypeCellCompleter(classFile)._2.cell
                   cellCompleter.cell.whenNext(fieldTypeCell,
-                    _ match {
+                    (fieldImm: Immutability) => fieldImm match {
                       case Mutable | ConditionallyImmutable => WhenNext
                       case Immutable => FalsePred
                     },
@@ -285,7 +285,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
       directSuperClasses foreach { superClass =>
         cellCompleter.cell.whenNext(
           classFileToObjectTypeCellCompleter(superClass)._1.cell,
-          _ match {
+          (imm: Immutability) => imm match {
             case Immutable => FalsePred
             case Mutable => WhenNextComplete
             case ConditionallyImmutable => WhenNext
@@ -317,7 +317,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
       if (cf.isFinal || directSubtypes.isEmpty) {
         cellCompleter.cell.whenNext(
           classFileToObjectTypeCellCompleter(cf)._1.cell,
-          _ match {
+          (imm: Immutability) => imm match {
             case Immutable => FalsePred
             case Mutable => WhenNextComplete
             case ConditionallyImmutable => WhenNext
@@ -335,7 +335,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
           directSubclasses foreach { subclass =>
             cellCompleter.cell.whenNext(
               classFileToObjectTypeCellCompleter(subclass)._2.cell,
-              _ match {
+              (imm: Immutability) => imm match {
                 case Immutable => FalsePred
                 case Mutable => WhenNextComplete
                 case ConditionallyImmutable => WhenNext

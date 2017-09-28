@@ -179,7 +179,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
                 val targetCellCompleter = methodToCellCompleter(callee)
                 hasDependencies = true
-                cellCompleter.cell.whenComplete(targetCellCompleter.cell,_ == Impure, Some(Impure))
+                cellCompleter.cell.whenComplete(targetCellCompleter.cell, (p: Purity) => p == Impure, Some(Impure))
             }
         }
 
