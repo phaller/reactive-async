@@ -174,7 +174,7 @@ class BaseSuite extends FunSuite {
     val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
     val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
 
-    completer1.cell.whenComplete(completer2.cell, _  == Mutable, Some(Mutable))
+    completer1.cell.whenComplete(completer2.cell, (imm: Immutability) => imm == Mutable, Some(Mutable))
 
     completer1.putFinal(Immutable)
     assert(completer2.cell.numCompleteCallbacks == 0)
@@ -368,7 +368,7 @@ class BaseSuite extends FunSuite {
     val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
     val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
 
-    completer1.cell.whenNext(completer2.cell, _ match {
+    completer1.cell.whenNext(completer2.cell, (imm: Immutability) => imm match {
       case Mutable => WhenNext
       case _ => FalsePred
     }, Some(Mutable))
@@ -391,7 +391,7 @@ class BaseSuite extends FunSuite {
 
     for (i <- 1 to 10000) {
       pool.execute( () => {
-        completer1.cell.whenNext(completer2.cell, x => {
+        completer1.cell.whenNext(completer2.cell, (x: Immutability) => {
           if (x == Mutable) WhenNext else FalsePred
         }, Some(Mutable))
         latch.countDown()
@@ -411,7 +411,7 @@ class BaseSuite extends FunSuite {
     for (i <- 1 to 1000) {
       val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
       val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
-      completer1.cell.whenNext(completer2.cell, _ match {
+      completer1.cell.whenNext(completer2.cell, (imm: Immutability) => imm match {
         case Immutable | ConditionallyImmutable => FalsePred
         case Mutable => WhenNext
       }, Some(Mutable))
@@ -561,8 +561,8 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, x => x == 1, Some(1))
-    cell2.whenComplete(cell1, x => x == 1, Some(1))
+    cell1.whenComplete(cell2, (x: Int) => x == 1, Some(1))
+    cell2.whenComplete(cell1, (x: Int) => x == 1, Some(1))
     val incompleteFut = pool.quiescentIncompleteCells
     val cells = Await.result(incompleteFut, 2.seconds)
     assert(cells.map(_.key).toString == "List(key1, key2)")
@@ -574,8 +574,8 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, x => x == 0, Some(0))
-    cell2.whenComplete(cell1, x => x == 0, Some(0))
+    cell1.whenComplete(cell2, (x: Int) => x == 0, Some(0))
+    cell2.whenComplete(cell1, (x: Int) => x == 0, Some(0))
     val qfut = pool.quiescentResolveCell
     Await.ready(qfut, 2.seconds)
     val incompleteFut = pool.quiescentIncompleteCells

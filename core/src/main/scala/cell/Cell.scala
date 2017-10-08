@@ -44,6 +44,7 @@ trait Cell[K <: Key[V], V] {
    * @param value  Early result value.
    */
   def whenComplete(other: Cell[K, V], pred: V => Boolean, value: Option[V]): Unit
+  def whenComplete(other: Cell[K, V], pred: V => Boolean, valueCallback: V => Option[V]): Unit
 
   /**
    * Adds a dependency on some `other` cell.
@@ -60,6 +61,7 @@ trait Cell[K <: Key[V], V] {
    * @param value  Early result value.
    */
   def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: Option[V]): Unit
+  def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, valueCallback: V => Option[V]): Unit
 
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)]
 
@@ -351,6 +353,22 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
    *  is completed (either prior or after an invocation of `whenNext`).
    */
   override def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: Option[V]): Unit = {
+    whenNext(other, pred, (v:V) => value)
+  }
+  
+   /** Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
+   *  `putNext`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
+   *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `v`
+   *  respectively. To calculate `v`, the `valueCallback` function is called with the result of `other`.
+   *
+   *  If `v` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
+   *  then the shortcut value is the same value as the value `other` receives when the
+   *  whenNext dependency is triggered.
+   *
+   *  The thereby introduced dependency is removed when `this` cell
+   *  is completed (either prior or after an invocation of `whenNext`).
+   */
+  override def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, valueCallback: V => Option[V]): Unit = {
     var success = false
     while (!success) {
       state.get() match {
@@ -360,7 +378,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
           success = true
 
         case raw: State[_, _] => // not completed
-          val newDep = new NextDepRunnable(pool, other, pred, value, this)
+          val newDep = new NextDepRunnable(pool, other, pred, valueCallback, this)
           // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
 
           val current = raw.asInstanceOf[State[K, V]]
@@ -375,22 +393,35 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
       }
     }
   }
-
+  
   /** Adds dependency on `other` cell: when `other` cell is completed, evaluate `pred`
    *  with the result of `other`. If this evaluation yields true, complete `this` cell
    *  with `value`.
    *
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenComplete`).
+   */   
+  override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: Option[V]): Unit = { 
+    whenComplete(other, pred, (v:V) => value)
+  }
+  
+
+
+  /** Adds dependency on `other` cell: when `other` cell is completed, evaluate `pred`
+   *  with the result of `other`. If this evaluation yields true, complete `this` cell
+   *  with what the function `valueCallback` returns.
+   *
+   *  The thereby introduced dependency is removed when `this` cell
+   *  is completed (either prior or after an invocation of `whenComplete`).
    */
-  override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: Option[V]): Unit = {
+  override def whenComplete(other: Cell[K, V], pred: V => Boolean, valueCallback: V => Option[V]): Unit = {
     state.get() match {
       case finalRes: Try[_]  => // completed with final result
         // do not add dependency
         // in fact, do nothing
 
       case raw: State[_, _] => // not completed
-        val newDep = new CompleteDepRunnable(pool, other, pred, value, this)
+        val newDep = new CompleteDepRunnable(pool, other, pred, valueCallback, this)
         // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
         other.addCallback(newDep, this)
 
@@ -665,7 +696,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
 private class CompleteDepRunnable[K <: Key[V], V](val pool: HandlerPool,
                                                   val cell: Cell[K, V],
                                                   val pred: V => Boolean,
-                                                  val shortCutValue: Option[V],
+                                                  val shortCutValueCallback: V => Option[V],
                                                   val completer: CellCompleter[K, V])
     extends Runnable with OnCompleteRunnable with (Try[V] => Unit) {
   // must be filled in before running it
@@ -674,7 +705,7 @@ private class CompleteDepRunnable[K <: Key[V], V](val pool: HandlerPool,
   override def apply(x: Try[V]): Unit = x match {
     case Success(v) =>
       if (pred(v)) {
-        shortCutValue match {
+        shortCutValueCallback.apply(v) match {
           case Some(scv) => completer.putFinal(scv)
           case None => completer.putFinal(v)
         }
@@ -725,24 +756,24 @@ private class CompleteCallbackRunnable[K <: Key[V], V](val executor: HandlerPool
 /* Depend on `cell`. `pred` to decide whether short-cutting is possible. `shortCutValue` is short-cut result.
  */
 private class NextDepRunnable[K <: Key[V], V](val pool: HandlerPool,
-                                              val cell: Cell[K, V],
+                                              val cell: Cell[K, V], // otherCell
                                               val pred: V => WhenNextPredicate,
-                                              val shortCutValue: Option[V],
-                                              val completer: CellCompleter[K, V])
+                                              val shortCutValueCallback: V => Option[V],
+                                              val completer: CellCompleter[K, V]) // this
     extends Runnable with OnCompleteRunnable with (Try[V] => Unit) {
   var value: Try[V] = null
 
   override def apply(x: Try[V]): Unit = {
     x match {
-      case Success(v) =>
+      case Success(v) => 
         pred(v) match {
           case WhenNext =>
-            shortCutValue match {
+            shortCutValueCallback(v) match {
               case Some(scv) => completer.putNext(scv)
               case None => completer.putNext(v)
             }
           case WhenNextComplete =>
-            shortCutValue match {
+            shortCutValueCallback(v) match {
               case Some(scv) => completer.putFinal(scv)
               case None => completer.putFinal(v)
             }
