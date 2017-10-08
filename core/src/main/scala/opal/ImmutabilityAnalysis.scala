@@ -269,7 +269,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
                       case Mutable | ConditionallyImmutable => WhenNext
                       case Immutable => FalsePred
                     },
-                    Some(ConditionallyImmutable)
+                    ConditionallyImmutable
                   )
                 case None => /* Do nothing */
               }
@@ -290,7 +290,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
             case Mutable => WhenNextComplete
             case ConditionallyImmutable => WhenNext
           },
-          None
+          Some(_)
         )
       }
     }
@@ -322,7 +322,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
             case Mutable => WhenNextComplete
             case ConditionallyImmutable => WhenNext
           },
-          None
+          Some(_)
         )
       } else {
         val unavailableSubtype = directSubtypes.find(t ⇒ project.classFile(t).isEmpty)
@@ -340,7 +340,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
                 case Mutable => WhenNextComplete
                 case ConditionallyImmutable => WhenNext
               },
-              None
+              Some(_)
             )
           }
         }

@@ -43,7 +43,7 @@ trait Cell[K <: Key[V], V] {
    *               `pred` is applied to value of `other` cell.
    * @param value  Early result value.
    */
-  def whenComplete(other: Cell[K, V], pred: V => Boolean, value: Option[V]): Unit
+  def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit
   def whenComplete(other: Cell[K, V], pred: V => Boolean, valueCallback: V => Option[V]): Unit
 
   /**
@@ -60,7 +60,7 @@ trait Cell[K <: Key[V], V] {
    *               `pred` is applied to value of `other` cell.
    * @param value  Early result value.
    */
-  def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: Option[V]): Unit
+  def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: V): Unit
   def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, valueCallback: V => Option[V]): Unit
 
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)]
@@ -345,14 +345,13 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
    *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `value`
    *  respectively.
    *
-   *  If `value` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
-    *  the cell is not updated.
+   *  `value` is the shortcut value is `v`.
    *
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenNext`).
    */
-  override def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: Option[V]): Unit = {
-    whenNext(other, pred, (v:V) => value)
+  override def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: V): Unit = {
+    whenNext(other, pred, (v:V) => Some(value))
   }
   
    /** Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
@@ -399,8 +398,8 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenComplete`).
    */   
-  override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: Option[V]): Unit = { 
-    whenComplete(other, pred, (v:V) => value)
+  override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit = {
+    whenComplete(other, pred, (v:V) => Some(value))
   }
   
 
