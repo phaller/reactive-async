@@ -361,7 +361,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
    *  respectively. To calculate `v`, the `valueCallback` function is called with the result of `other`.
    *
    *  If `v` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
-    *  the cell is not updated.
+   *  the cell is not updated.
    *
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenNext`).
