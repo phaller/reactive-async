@@ -164,29 +164,31 @@ class HandlerPool(parallelism: Int = 8) {
     // Run the task
     pool.execute(new Runnable {
       def run(): Unit = {
-        task.run()
-
-        var success = false
-        var handlersToRun: Option[List[() => Unit]] = None
-        while (!success) {
-          val state = poolState.get()
-          if (state.submittedTasks > 1) {
-            handlersToRun = None
-            val newState = new PoolState(state.handlers, state.submittedTasks - 1)
-            success = poolState.compareAndSet(state, newState)
-          } else if (state.submittedTasks == 1) {
-            handlersToRun = Some(state.handlers)
-            val newState = new PoolState()
-            success = poolState.compareAndSet(state, newState)
-          } else {
-            throw new Exception("BOOM")
+        try {
+          task.run()
+        } finally {
+          var success = false
+          var handlersToRun: Option[List[() => Unit]] = None
+          while (!success) {
+            val state = poolState.get()
+            if (state.submittedTasks > 1) {
+              handlersToRun = None
+              val newState = new PoolState(state.handlers, state.submittedTasks - 1)
+              success = poolState.compareAndSet(state, newState)
+            } else if (state.submittedTasks == 1) {
+              handlersToRun = Some(state.handlers)
+              val newState = new PoolState()
+              success = poolState.compareAndSet(state, newState)
+            } else {
+              throw new Exception("BOOM")
+            }
           }
-        }
-        if (handlersToRun.nonEmpty) {
-          handlersToRun.get.foreach { handler =>
-            execute(new Runnable {
-              def run(): Unit = handler()
-            })
+          if (handlersToRun.nonEmpty) {
+            handlersToRun.get.foreach { handler =>
+              execute(new Runnable {
+                def run(): Unit = handler()
+              })
+            }
           }
         }
       }
