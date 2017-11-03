@@ -918,6 +918,30 @@ class BaseSuite extends FunSuite {
     assert(mutability6 == Mutable)
   }
 
+  test("if exception-throwing tasks should still run quiescent handlers") {
+    val intMaxLattice = new Lattice[Int] {
+      def join(current: Int, next: Int) = math.max(current, next)
+      def empty = 0
+    }
+    val key = new lattice.DefaultKey[Int]
+
+    val pool = new HandlerPool
+    val completer = CellCompleter[key.type, Int](pool, key)(intMaxLattice)
+
+    pool.execute{() =>
+      throw new Exception(
+        "Even if this happens, quiescent handlers should still run.")
+    }
+
+    try {
+      Await.result(pool.quiescentIncompleteCells, 1.seconds)
+    } catch {
+      case _: java.util.concurrent.TimeoutException => assert(false)
+    }
+
+    pool.shutdown()
+  }
+
   /*test("ImmutabilityAnalysis: Concurrency") {
     val file = new File("lib")
     val lib = Project(file)
