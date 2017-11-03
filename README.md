@@ -28,6 +28,15 @@ of new abstractions for reactive, asynchronous
 programming](http://urn.kb.se/resolve?urn=urn%3Anbn%3Ase%3Akth%3Adiva-191330). KTH,
 School of Computer Science and Communication (CSC). 2016.
 
+## Contributing
+
+Reactive Async is published under the [BSD 2-Clause
+License](https://opensource.org/licenses/BSD-2-Clause) (see file
+`LICENSE` in the project's root directory). Contributions submitted
+using the normal means to contribute to the project--such as pull
+requests and patches--indicate the contributors' assent for inclusion
+of that software in the canonical version under the project's license.
+
 ## Building
 
 Building Reactive Async requires
