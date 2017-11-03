@@ -20,7 +20,7 @@ class PoolState(val handlers: List[() => Unit] = List(), val submittedTasks: Int
     submittedTasks == 0
 }
 
-class HandlerPool(parallelism: Int = 8) {
+class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => Unit = _.printStackTrace()) {
 
   private val pool: ForkJoinPool = new ForkJoinPool(parallelism)
 
@@ -167,6 +167,9 @@ class HandlerPool(parallelism: Int = 8) {
       def run(): Unit = {
         try {
           task.run()
+        } catch {
+          case t: Throwable =>
+            unhandledExceptionHandler(t)
         } finally {
           var success = false
           var handlersToRun: Option[List[() => Unit]] = None

@@ -921,7 +921,7 @@ class BaseSuite extends FunSuite {
     }
     val key = new lattice.DefaultKey[Int]
 
-    val pool = new HandlerPool
+    val pool = new HandlerPool(unhandledExceptionHandler = { t => /* do nothing */ })
     val completer = CellCompleter[key.type, Int](pool, key)(intMaxLattice)
 
     pool.execute { () =>
