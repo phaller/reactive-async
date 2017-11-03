@@ -481,8 +481,9 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
             tryNewState(value)
           }
           else {
+            // CAS was successful, so there was a point in time where `newVal` was in the cell
             current.nextCallbacks.values.foreach { callbacks =>
-              callbacks.foreach(callback => callback.executeWithValue(Success(value)))
+              callbacks.foreach(callback => callback.executeWithValue(Success(newVal)))
             }
             true
           }
@@ -501,7 +502,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
         val currentState = current.asInstanceOf[State[K, V]]
         val newVal = Success(tryJoin(currentState.res, v.get))
         if (state.compareAndSet(current, newVal))
-          currentState
+          (currentState, newVal)
         else
           tryCompleteAndGetState(v)
 
@@ -512,31 +513,29 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
   override def tryComplete(value: Try[V]): Boolean = {
     val resolved: Try[V] = resolveTry(value)
 
+    // the only call to `tryCompleteAndGetState`
     val res = tryCompleteAndGetState(resolved) match {
       case finalRes: Try[_]                          => // was already complete
-        val res = finalRes == value
-        if (!res) {
-          println(s"problem with $this; existing value: $finalRes, new value: $value")
-        }
+        val res = finalRes == value // FIXME: should compare to joined value
         res
 
-      case pre: State[K, V] =>
+      case (pre: State[K, V], newVal: Try[V]) =>
         val depsCells = pre.deps.keys
         val nextDepsCells = pre.nextDeps.keys
         if (pre.callbacks.isEmpty) {
           pre.nextCallbacks.values.foreach { callbacks =>
-            callbacks.foreach(callback => callback.executeWithValue(resolved.asInstanceOf[Try[V]]))
+            callbacks.foreach(callback => callback.executeWithValue(newVal))
           }
         } else {
-          // NextCallbacks with these cells should not be triggered, because they have
-          // an onComplete event that are triggered instead.
+          // onNext callbacks with these cells should not be triggered, because they have
+          // onComplete callbacks which are triggered instead.
           pre.callbacks.values.foreach { callbacks =>
-            callbacks.foreach(callback => callback.executeWithValue(resolved.asInstanceOf[Try[V]]))
+            callbacks.foreach(callback => callback.executeWithValue(newVal))
           }
           pre.nextCallbacks.values.foreach { callbacks =>
             callbacks.foreach { callback =>
               if (!pre.callbacks.contains(callback.dependee))
-                callback.executeWithValue(resolved.asInstanceOf[Try[V]])
+                callback.executeWithValue(newVal)
             }
           }
         }

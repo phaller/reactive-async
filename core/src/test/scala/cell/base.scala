@@ -579,6 +579,60 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("putFinal: result passed to callbacks") {
+    val latch = new CountDownLatch(1)
+
+    implicit val setLattice = new Lattice[Set[Int]] {
+      def join(curr: Set[Int], next: Set[Int]) = curr ++ next
+      def empty = Set.empty[Int]
+    }
+    val key = new lattice.DefaultKey[Set[Int]]
+
+    val pool = new HandlerPool
+    val completer = CellCompleter[key.type, Set[Int]](pool, key)
+    val cell = completer.cell
+    cell.onComplete {
+      case Success(v) =>
+        assert(v === Set(3, 4, 5))
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+    completer.putNext(Set(3, 5))
+    completer.putFinal(Set(4))
+
+    latch.await()
+    pool.shutdown()
+  }
+
+  test("putNext: result passed to callbacks") {
+    val latch = new CountDownLatch(1)
+
+    implicit val setLattice = new Lattice[Set[Int]] {
+      def join(curr: Set[Int], next: Set[Int]) = curr ++ next
+      def empty = Set.empty[Int]
+    }
+    val key = new lattice.DefaultKey[Set[Int]]
+
+    val pool = new HandlerPool
+    val completer = CellCompleter[key.type, Set[Int]](pool, key)
+    val cell = completer.cell
+    completer.putNext(Set(3, 5))
+    cell.onNext {
+      case Success(v) =>
+        assert(v === Set(3, 4, 5))
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+    completer.putNext(Set(4))
+
+    latch.await()
+    pool.shutdown()
+  }
+
   test("handler pool") {
     val pool = new HandlerPool
     val latch = new CountDownLatch(1)
