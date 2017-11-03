@@ -43,7 +43,7 @@ trait Cell[K <: Key[V], V] {
    *               `pred` is applied to value of `other` cell.
    * @param value  Early result value.
    */
-  def whenComplete(other: Cell[K, V], pred: V => Boolean, value: Option[V]): Unit
+  def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit
   def whenComplete(other: Cell[K, V], pred: V => Boolean, valueCallback: V => Option[V]): Unit
 
   /**
@@ -60,7 +60,7 @@ trait Cell[K <: Key[V], V] {
    *               `pred` is applied to value of `other` cell.
    * @param value  Early result value.
    */
-  def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: Option[V]): Unit
+  def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: V): Unit
   def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, valueCallback: V => Option[V]): Unit
 
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)]
@@ -351,25 +351,20 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
    *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `value`
    *  respectively.
    *
-   *  If `value` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
-   *  then the shortcut value is the same value as the value `other` receives when the
-   *  whenNext dependency is triggered.
-   *
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenNext`).
    */
-  override def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: Option[V]): Unit = {
-    whenNext(other, pred, (v:V) => value)
+  override def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: V): Unit = {
+    whenNext(other, pred, (v:V) => Some(value))
   }
-  
-   /** Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
+
+  /** Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
    *  `putNext`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
    *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `v`
    *  respectively. To calculate `v`, the `valueCallback` function is called with the result of `other`.
    *
    *  If `v` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
-   *  then the shortcut value is the same value as the value `other` receives when the
-   *  whenNext dependency is triggered.
+   *  the cell is not updated.
    *
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenNext`).
@@ -407,8 +402,8 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenComplete`).
    */   
-  override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: Option[V]): Unit = { 
-    whenComplete(other, pred, (v:V) => value)
+  override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit = {
+    whenComplete(other, pred, (v:V) => Some(value))
   }
   
 
@@ -713,7 +708,7 @@ private class CompleteDepRunnable[K <: Key[V], V](val pool: HandlerPool,
       if (pred(v)) {
         shortCutValueCallback.apply(v) match {
           case Some(scv) => completer.putFinal(scv)
-          case None => completer.putFinal(v)
+          case None => /* do nothing */
         }
       }
       else {
@@ -776,12 +771,12 @@ private class NextDepRunnable[K <: Key[V], V](val pool: HandlerPool,
           case WhenNext =>
             shortCutValueCallback(v) match {
               case Some(scv) => completer.putNext(scv)
-              case None => completer.putNext(v)
+              case None => /* do nothing */
             }
           case WhenNextComplete =>
             shortCutValueCallback(v) match {
               case Some(scv) => completer.putFinal(scv)
-              case None => completer.putFinal(v)
+              case None => /* do nothing */
             }
           case _ => /* do nothing */
         }
@@ -812,4 +807,3 @@ private class NextCallbackRunnable[K <: Key[V], V](val executor: HandlerPool, va
     try executor.execute(() => onNext(v)) catch { case NonFatal(t) => executor reportFailure t }
   }
 }
-
