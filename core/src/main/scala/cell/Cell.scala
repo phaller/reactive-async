@@ -152,6 +152,7 @@ trait CellCompleter[K <: Key[V], V] {
 
   def putFinal(x: V): Unit
   def putNext(x: V): Unit
+  def put(x: V, isFinal: Boolean): Unit
 
   def tryNewState(value: V): Boolean
   def tryComplete(value: Try[V]): Boolean
@@ -251,6 +252,11 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
     val res = tryNewState(x)
     if (!res)
       throw new IllegalStateException("Cell already completed.")
+  }
+
+  override def put(x: V, isFinal: Boolean): Unit = {
+    if (isFinal) putFinal(x)
+    else putNext(x)
   }
 
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)] = {

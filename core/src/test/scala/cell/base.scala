@@ -541,6 +541,44 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("put: isFinal == true") {
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
+    completer.cell.onComplete {
+      case Success(v) =>
+        assert(v === 6)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+    completer.put(6, true)
+
+    latch.await()
+    pool.shutdown()
+  }
+
+  test("put: isFinal == false") {
+    val latch = new CountDownLatch(1)
+
+    val pool = new HandlerPool
+    val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
+    completer.cell.onNext {
+      case Success(x) =>
+        assert(x === 10)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+    completer.put(10, false)
+
+    latch.await()
+    pool.shutdown()
+  }
+
   test("handler pool") {
     val pool = new HandlerPool
     val latch = new CountDownLatch(1)
