@@ -10,29 +10,25 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 import cell._
-import org.opalj.br.{Field, ClassFile, ObjectType}
-import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project, PropertyStoreKey}
-
-import org.opalj.fpcf.analysis.FieldMutabilityAnalysis
+import org.opalj.br.{ Field, ClassFile, ObjectType }
+import org.opalj.br.analyses.{ BasicReport, DefaultOneStepAnalysis, Project, PropertyStoreKey }
+import org.opalj.br.analyses.TypeExtensibilityKey
+import org.opalj.fpcf.analyses.FieldMutabilityAnalysis
 import org.opalj.fpcf.properties.FieldMutability
-import org.opalj.fpcf.properties.ExtensibleType
-import org.opalj.fpcf.properties.TypeExtensibility
-
 
 object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
 
   override def doAnalyze(
-                          project: Project[URL],
-                          parameters: Seq[String] = List.empty,
-                          isInterrupted: () ⇒ Boolean
-                        ): BasicReport = {
+    project: Project[URL],
+    parameters: Seq[String] = List.empty,
+    isInterrupted: () ⇒ Boolean): BasicReport = {
     // Run ClassExtensibilityAnalysis
     val projectStore = project.get(PropertyStoreKey)
     val manager = project.get(FPCFAnalysesManagerKey)
     //manager.runAll(
-      //FieldMutabilityAnalysis
-      // REPLACED                ObjectImmutabilityAnalysis
-      // REPLACED                TypeImmutabilityAnalysis
+    //FieldMutabilityAnalysis
+    // REPLACED                ObjectImmutabilityAnalysis
+    // REPLACED                TypeImmutabilityAnalysis
     //)
 
     val startTime = System.currentTimeMillis // Used for measuring execution time
@@ -65,7 +61,6 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
     // All interfaces are by definition immutable
     val allInterfaces = project.allProjectClassFiles.par.filter(cf => cf.isInterfaceDeclaration).toList
     allInterfaces.foreach(cf => classFileToObjectTypeCellCompleter(cf)._1.putFinal(Immutable))
-
 
     val classHierarchy = project.classHierarchy
     import classHierarchy.allSubtypes
@@ -125,23 +120,22 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
 
     val sortedClassFilesInfo = (immutableClassFilesInfo.toList.sorted ++
       conditionallyImmutableClassFilesInfo.toList.sorted ++ mutableClassFilesInfo.toList.sorted)
-    BasicReport(sortedClassFilesInfo.mkString("\n")+
-                s"\nSETUP TIME: $setupTime"+
-                s"\nANALYIS TIME: $analysisTime"+
-                s"\nCOMBINED TIME: $combinedTime")
+    BasicReport(sortedClassFilesInfo.mkString("\n") +
+      s"\nSETUP TIME: $setupTime" +
+      s"\nANALYIS TIME: $analysisTime" +
+      s"\nCOMBINED TIME: $combinedTime")
   }
 
   /**
-    * This function is used for the tests, to not run the external analyses several times.
-    *
-    * @param project
-    * @param manager
-    * @return
-    */
+   * This function is used for the tests, to not run the external analyses several times.
+   *
+   * @param project
+   * @param manager
+   * @return
+   */
   def analyzeWithoutClassExtensibilityAndFieldMutabilityAnalysis(
-                                                          project: Project[URL],
-                                                          manager: FPCFAnalysesManager
-                                                        ): BasicReport = {
+    project: Project[URL],
+    manager: FPCFAnalysesManager): BasicReport = {
     // 1. Initialization of key data structures (two cell(completer) per class file)
     // One for Object Immutability and one for Type Immutability.
     val pool = new HandlerPool()
@@ -205,13 +199,12 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
     } yield (cf.thisType.toJava + " => " + objImmutability.cell.getResult() + "Object => " + typeImmutability.cell.getResult() + "Type")
 
     val immutableClassFilesInfo = for {
-      (cf, (objImmutability, typeImmutability)) <- classFileToObjectTypeCellCompleter if(objImmutability.cell.getResult() == Immutable)
+      (cf, (objImmutability, typeImmutability)) <- classFileToObjectTypeCellCompleter if (objImmutability.cell.getResult() == Immutable)
     } yield (cf.thisType.toJava + " => " + objImmutability.cell.getResult() + "Object => " + typeImmutability.cell.getResult() + "Type")
 
     val conditionallyImmutableClassFilesInfo = for {
-      (cf, (objImmutability, typeImmutability)) <- classFileToObjectTypeCellCompleter if(objImmutability.cell.getResult() == ConditionallyImmutable)
+      (cf, (objImmutability, typeImmutability)) <- classFileToObjectTypeCellCompleter if (objImmutability.cell.getResult() == ConditionallyImmutable)
     } yield (cf.thisType.toJava + " => " + objImmutability.cell.getResult() + "Object => " + typeImmutability.cell.getResult() + "Type")
-
 
     val sortedClassFilesInfo = (immutableClassFilesInfo.toList.sorted ++
       conditionallyImmutableClassFilesInfo.toList.sorted ++ mutableClassFilesInfo.toList.sorted)
@@ -219,12 +212,13 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
   }
 
   /**
-    *  Determines a class files' ObjectImmutability.
-    */
-  def objectImmutabilityAnalysis(project: Project[URL],
-                                 classFileToObjectTypeCellCompleter: Map[ClassFile, (CellCompleter[ImmutabilityKey.type, Immutability], CellCompleter[ImmutabilityKey.type, Immutability])],
-                                 manager: FPCFAnalysesManager,
-                                 cf: ClassFile): Unit = {
+   *  Determines a class files' ObjectImmutability.
+   */
+  def objectImmutabilityAnalysis(
+    project: Project[URL],
+    classFileToObjectTypeCellCompleter: Map[ClassFile, (CellCompleter[ImmutabilityKey.type, Immutability], CellCompleter[ImmutabilityKey.type, Immutability])],
+    manager: FPCFAnalysesManager,
+    cf: ClassFile): Unit = {
     val cellCompleter = classFileToObjectTypeCellCompleter(cf)._1
 
     val classHierarchy = project.classHierarchy
@@ -264,13 +258,13 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
               project.classFile(f.fieldType.asObjectType) match {
                 case Some(classFile) =>
                   val fieldTypeCell = classFileToObjectTypeCellCompleter(classFile)._2.cell
-                  cellCompleter.cell.whenNext(fieldTypeCell,
+                  cellCompleter.cell.whenNext(
+                    fieldTypeCell,
                     (fieldImm: Immutability) => fieldImm match {
                       case Mutable | ConditionallyImmutable => WhenNext
                       case Immutable => FalsePred
                     },
-                    ConditionallyImmutable
-                  )
+                    ConditionallyImmutable)
                 case None => /* Do nothing */
               }
             }
@@ -290,8 +284,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
             case Mutable => WhenNextComplete
             case ConditionallyImmutable => WhenNext
           },
-          Some(_)
-        )
+          Some(_))
       }
     }
   }
@@ -299,13 +292,15 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
   /**
    *  Determines a class files' TypeImmutability.
    */
-  def typeImmutabilityAnalysis(project: Project[URL],
-                               classFileToObjectTypeCellCompleter: Map[ClassFile, (CellCompleter[ImmutabilityKey.type, Immutability], CellCompleter[ImmutabilityKey.type, Immutability])],
-                               manager: FPCFAnalysesManager,
-                               cf: ClassFile): Unit = {
+  def typeImmutabilityAnalysis(
+    project: Project[URL],
+    classFileToObjectTypeCellCompleter: Map[ClassFile, (CellCompleter[ImmutabilityKey.type, Immutability], CellCompleter[ImmutabilityKey.type, Immutability])],
+    manager: FPCFAnalysesManager,
+    cf: ClassFile): Unit = {
+    val typeExtensibility = project.get(TypeExtensibilityKey)
     val cellCompleter = classFileToObjectTypeCellCompleter(cf)._2
-    val isExtensible = manager.propertyStore(cf,TypeExtensibility.key)
-    if (!isExtensible.hasProperty || isExtensible.p == ExtensibleType)
+    val isExtensible = typeExtensibility(cf.thisType)
+    if (isExtensible.isYesOrUnknown)
       cellCompleter.putFinal(Mutable)
 
     val classHierarchy = project.classHierarchy
@@ -322,8 +317,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
             case Mutable => WhenNextComplete
             case ConditionallyImmutable => WhenNext
           },
-          Some(_)
-        )
+          Some(_))
       } else {
         val unavailableSubtype = directSubtypes.find(t ⇒ project.classFile(t).isEmpty)
         if (unavailableSubtype.isDefined)
@@ -340,8 +334,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
                 case Mutable => WhenNextComplete
                 case ConditionallyImmutable => WhenNext
               },
-              Some(_)
-            )
+              Some(_))
           }
         }
       }

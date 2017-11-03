@@ -2,12 +2,12 @@ package lattice
 
 import scala.annotation.implicitNotFound
 
-
 @implicitNotFound("type ${V} does not have a Lattice instance")
 trait Lattice[V] {
-  /** Return Some(v) if a new value v was computed (v != current), else None.
-    * If it fails, throw exception.
-    */
+  /**
+   * Return Some(v) if a new value v was computed (v != current), else None.
+   * If it fails, throw exception.
+   */
   def join(current: V, next: V): V
   def empty: V
 }
@@ -36,5 +36,4 @@ object Lattice {
 }
 
 final case class LatticeViolationException[D](current: D, next: D) extends IllegalStateException(
-  s"Violation of lattice with current $current and next $next!"
-)
+  s"Violation of lattice with current $current and next $next!")

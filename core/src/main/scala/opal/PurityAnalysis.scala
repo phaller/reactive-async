@@ -7,9 +7,10 @@ import scala.collection.JavaConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-import cell.{HandlerPool, CellCompleter, Cell}
-import org.opalj.br.{ClassFile, PC, Method, MethodWithBody}
-import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project}
+import cell.{ HandlerPool, CellCompleter, Cell }
+import org.opalj.Success
+import org.opalj.br.{ ClassFile, PC, Method, MethodWithBody }
+import org.opalj.br.analyses.{ BasicReport, DefaultOneStepAnalysis, Project }
 import org.opalj.br.instructions.GETFIELD
 import org.opalj.br.instructions.GETSTATIC
 import org.opalj.br.instructions.PUTFIELD
@@ -43,15 +44,14 @@ import org.opalj.br.instructions.INVOKESPECIAL
 import org.opalj.br.instructions.INVOKEVIRTUAL
 import org.opalj.br.instructions.INVOKEINTERFACE
 import org.opalj.br.instructions.MethodInvocationInstruction
-
+import org.opalj.br.instructions.NonVirtualMethodInvocationInstruction
 
 object PurityAnalysis extends DefaultOneStepAnalysis {
 
   override def doAnalyze(
-                          project: Project[URL],
-                          parameters: Seq[String] = List.empty,
-                          isInterrupted: () ⇒ Boolean
-                        ): BasicReport = {
+    project: Project[URL],
+    parameters: Seq[String] = List.empty,
+    isInterrupted: () ⇒ Boolean): BasicReport = {
 
     val startTime = System.currentTimeMillis // Used for measuring execution time
     // 1. Initialization of key data structures (one cell(completer) per method)
@@ -72,7 +72,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       classFile <- project.allProjectClassFiles.par
       method <- classFile.methods
     } {
-      pool.execute(() => analyze(project,methodToCellCompleter,classFile, method))
+      pool.execute(() => analyze(project, methodToCellCompleter, classFile, method))
     }
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 30.minutes)
@@ -85,38 +85,38 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     val combinedTime = endTime - startTime
 
     val pureMethods = methodToCellCompleter.filter(_._2.cell.getResult match {
-                                                     case Pure => true
-                                                     case _ => false
-                                                   }).map(_._1)
+      case Pure => true
+      case _ => false
+    }).map(_._1)
 
-    val pureMethodsInfo = pureMethods.map(m => m.toJava(project.classFile(m))).toList.sorted
+    val pureMethodsInfo = pureMethods.map(m => m.toJava).toList.sorted
 
-    BasicReport("pure methods analysis:\n"+pureMethodsInfo.mkString("\n")+
-      s"\nSETUP TIME: $setupTime"+
-      s"\nANALYIS TIME: $analysisTime"+
+    BasicReport("pure methods analysis:\n" + pureMethodsInfo.mkString("\n") +
+      s"\nSETUP TIME: $setupTime" +
+      s"\nANALYIS TIME: $analysisTime" +
       s"\nCOMBINED TIME: $combinedTime")
   }
 
   /**
-    * Determines the purity of the given method.
-    */
+   * Determines the purity of the given method.
+   */
   def analyze(
-               project: Project[URL],
-               methodToCellCompleter: Map[Method, CellCompleter[PurityKey.type, Purity]],
-               classFile : ClassFile,
-               method: Method
-             ): Unit = {
+    project: Project[URL],
+    methodToCellCompleter: Map[Method, CellCompleter[PurityKey.type, Purity]],
+    classFile: ClassFile,
+    method: Method): Unit = {
+
+    import project.nonVirtualCall
+
     val cellCompleter = methodToCellCompleter(method)
 
-    if (
-    // Due to a lack of knowledge, we classify all native methods or methods that
+    if ( // Due to a lack of knowledge, we classify all native methods or methods that
     // belong to a library (and hence lack the body) as impure...
-      method.body.isEmpty /*HERE: method.isNative || "isLibraryMethod(method)"*/ ||
-        // for simplicity we are just focusing on methods that do not take objects as parameters
-        method.parameterTypes.exists(!_.isBaseType)
-    ) {
+    method.body.isEmpty /*HERE: method.isNative || "isLibraryMethod(method)"*/ ||
+      // for simplicity we are just focusing on methods that do not take objects as parameters
+      method.parameterTypes.exists(!_.isBaseType)) {
       cellCompleter.putFinal(Impure)
-      return;
+      return ;
     }
 
     var hasDependencies = false
@@ -140,8 +140,8 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
             case Some(field) if field.isFinal ⇒
             /* Nothing to do; constants do not impede purity! */
 
-           // case Some(field) if field.isPrivate /*&& field.isNonFinal*/ ⇒
-           // check if the field is effectively final
+            // case Some(field) if field.isPrivate /*&& field.isNonFinal*/ ⇒
+            // check if the field is effectively final
 
             case _ ⇒
               cellCompleter.putFinal(Impure)
@@ -150,54 +150,47 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
         case INVOKESPECIAL.opcode | INVOKESTATIC.opcode ⇒ instruction match {
 
-          case MethodInvocationInstruction(`declaringClassType`, _ , `methodName`, `methodDescriptor`) ⇒
+          case MethodInvocationInstruction(`declaringClassType`, _, `methodName`, `methodDescriptor`) ⇒
           // We have a self-recursive call; such calls do not influence
           // the computation of the method's purity and are ignored.
           // Let's continue with the evaluation of the next instruction.
 
-          case MethodInvocationInstruction(declaringClassType, _, methodName, methodDescriptor) ⇒
-            import project.lookupMethodDefinition
-            val calleeOpt =
-              try {
-                lookupMethodDefinition(
-                  declaringClassType.asObjectType /* this is safe...*/ ,
-                  methodName,
-                  methodDescriptor
-                )
-              } catch {
-                case t: Throwable => None
-              }
-            calleeOpt match {
-              case None ⇒
-                // We know nothing about the target method (it is not
-                // found in the scope of the current project).
-                cellCompleter.putFinal(Impure)
-                return ;
+          case mii: NonVirtualMethodInvocationInstruction ⇒
 
-              case Some(callee) ⇒
+            nonVirtualCall(mii) match {
+
+              case Success(callee) ⇒
                 /* Recall that self-recursive calls are handled earlier! */
 
                 val targetCellCompleter = methodToCellCompleter(callee)
                 hasDependencies = true
                 cellCompleter.cell.whenComplete(targetCellCompleter.cell, (p: Purity) => p == Impure, Impure)
+
+              case _ /* Empty or Failure */ ⇒
+
+                // We know nothing about the target method (it is not
+                // found in the scope of the current project).
+                cellCompleter.putFinal(Impure)
+                return ;
             }
+
         }
 
         case NEW.opcode |
-             GETFIELD.opcode |
-             PUTFIELD.opcode | PUTSTATIC.opcode |
-             NEWARRAY.opcode | MULTIANEWARRAY.opcode | ANEWARRAY.opcode |
-             AALOAD.opcode | AASTORE.opcode |
-             BALOAD.opcode | BASTORE.opcode |
-             CALOAD.opcode | CASTORE.opcode |
-             SALOAD.opcode | SASTORE.opcode |
-             IALOAD.opcode | IASTORE.opcode |
-             LALOAD.opcode | LASTORE.opcode |
-             DALOAD.opcode | DASTORE.opcode |
-             FALOAD.opcode | FASTORE.opcode |
-             ARRAYLENGTH.opcode |
-             MONITORENTER.opcode | MONITOREXIT.opcode |
-             INVOKEDYNAMIC.opcode | INVOKEVIRTUAL.opcode | INVOKEINTERFACE.opcode ⇒
+          GETFIELD.opcode |
+          PUTFIELD.opcode | PUTSTATIC.opcode |
+          NEWARRAY.opcode | MULTIANEWARRAY.opcode | ANEWARRAY.opcode |
+          AALOAD.opcode | AASTORE.opcode |
+          BALOAD.opcode | BASTORE.opcode |
+          CALOAD.opcode | CASTORE.opcode |
+          SALOAD.opcode | SASTORE.opcode |
+          IALOAD.opcode | IASTORE.opcode |
+          LALOAD.opcode | LASTORE.opcode |
+          DALOAD.opcode | DASTORE.opcode |
+          FALOAD.opcode | FASTORE.opcode |
+          ARRAYLENGTH.opcode |
+          MONITORENTER.opcode | MONITOREXIT.opcode |
+          INVOKEDYNAMIC.opcode | INVOKEVIRTUAL.opcode | INVOKEINTERFACE.opcode ⇒
           cellCompleter.putFinal(Impure)
           return ;
 
@@ -214,4 +207,3 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     }
   }
 }
-
