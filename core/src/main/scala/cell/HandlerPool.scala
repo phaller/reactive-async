@@ -4,6 +4,7 @@ import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
+import scala.util.control.NonFatal
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -168,8 +169,8 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
         try {
           task.run()
         } catch {
-          case t: Throwable =>
-            unhandledExceptionHandler(t)
+          case NonFatal(e) =>
+            unhandledExceptionHandler(e)
         } finally {
           var success = false
           var handlersToRun: Option[List[() => Unit]] = None
