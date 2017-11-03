@@ -804,6 +804,6 @@ private class NextCallbackRunnable[K <: Key[V], V](val executor: HandlerPool, va
   def executeWithValue(v: Try[V]): Unit = {
     // Note that we cannot prepare the ExecutionContext at this point, since we might
     // already be running on a different thread!
-    try executor.execute(() => onNext(v)) catch { case NonFatal(t) => executor reportFailure t }
+    try executor.execute(() => { onNext(v); ()}) catch { case NonFatal(t) => executor reportFailure t }
   }
 }
