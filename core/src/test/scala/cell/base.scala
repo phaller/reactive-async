@@ -929,6 +929,7 @@ class BaseSuite extends FunSuite {
     val completer = CellCompleter[key.type, Int](pool, key)(intMaxLattice)
 
     pool.execute{() =>
+      // NOTE: This will print a stacktrace, but that is fine (not a bug).
       throw new Exception(
         "Even if this happens, quiescent handlers should still run.")
     }
