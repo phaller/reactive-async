@@ -5,7 +5,7 @@ import org.scalatest.FunSuite
 import java.io.File
 import java.util.concurrent.CountDownLatch
 
-import scala.util.{Success, Failure}
+import scala.util.{ Success, Failure }
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -13,7 +13,6 @@ import lattice._
 
 import opal.PurityAnalysis
 import org.opalj.br.analyses.Project
-
 
 class InternalBaseSuite extends FunSuite {
 

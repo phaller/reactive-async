@@ -1,10 +1,9 @@
 import org.scalatest.FunSuite
 
-import scala.concurrent.{Promise, Await}
+import scala.concurrent.{ Promise, Await }
 import scala.concurrent.duration._
 
 import cell.HandlerPool
-
 
 class PoolSuite extends FunSuite {
   test("onQuiescent") {
@@ -14,7 +13,7 @@ class PoolSuite extends FunSuite {
     while (i < 10000) {
       val p1 = Promise[Boolean]()
       val p2 = Promise[Boolean]()
-      pool.execute { () => p1.success(true) }
+      pool.execute { () => { p1.success(true) }: Unit }
       pool.onQuiescent { () => p2.success(true) }
       try {
         Await.result(p2.future, 1.seconds)

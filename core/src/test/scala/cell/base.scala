@@ -4,13 +4,13 @@ import org.scalatest.FunSuite
 
 import java.util.concurrent.CountDownLatch
 
-import scala.util.{Success, Failure}
-import scala.concurrent.{Promise, Await}
+import scala.util.{ Success, Failure }
+import scala.concurrent.{ Promise, Await }
 import scala.concurrent.duration._
 
-import lattice.{Lattice, StringIntLattice, LatticeViolationException, StringIntKey}
+import lattice.{ Lattice, StringIntLattice, LatticeViolationException, StringIntKey }
 
-import org.opalj.fpcf.analysis.FieldMutabilityAnalysis
+import org.opalj.fpcf.analyses.FieldMutabilityAnalysis
 import org.opalj.fpcf.properties.FieldMutability
 import org.opalj.fpcf.FPCFAnalysesManager
 import org.opalj.fpcf.FPCFAnalysis
@@ -219,9 +219,9 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int) => {
-                     if(x == 10) WhenNext
-                     else FalsePred
-                   }, 20)
+      if (x == 10) WhenNext
+      else FalsePred
+    }, 20)
 
     cell1.onNext {
       case Success(x) =>
@@ -249,9 +249,9 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int) => {
-                     if(x == 10) WhenNext
-                     else FalsePred
-                   }, 20)
+      if (x == 10) WhenNext
+      else FalsePred
+    }, 20)
 
     cell1.onNext {
       case Success(x) =>
@@ -279,9 +279,9 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int) => {
-                     if(x == 10) WhenNext
-                     else FalsePred
-                   }, 30)
+      if (x == 10) WhenNext
+      else FalsePred
+    }, 30)
     cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
 
     assert(cell1.numNextDependencies == 1)
@@ -318,9 +318,9 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int) => {
-                     if(x == 10) WhenNext
-                     else FalsePred
-                   }, 20)
+      if (x == 10) WhenNext
+      else FalsePred
+    }, 20)
 
     assert(cell1.numNextDependencies == 1)
 
@@ -347,9 +347,9 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int) => {
-                     if(x == 10) WhenNext
-                     else FalsePred
-                   }, 20)
+      if (x == 10) WhenNext
+      else FalsePred
+    }, 20)
 
     completer2.putFinal(10)
 
@@ -359,8 +359,6 @@ class BaseSuite extends FunSuite {
 
     pool.shutdown()
   }
-
-
 
   test("whenNext: callback removal") {
     val pool = new HandlerPool
@@ -390,7 +388,7 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
 
     for (i <- 1 to 10000) {
-      pool.execute( () => {
+      pool.execute(() => {
         completer1.cell.whenNext(completer2.cell, (x: Immutability) => {
           if (x == Mutable) WhenNext else FalsePred
         }, Mutable)
@@ -440,9 +438,9 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int) => {
-                     if(x == 10) WhenNextComplete
-                     else FalsePred
-                   }, 20)
+      if (x == 10) WhenNextComplete
+      else FalsePred
+    }, 20)
 
     cell1.onComplete {
       case Success(v) =>
@@ -479,9 +477,9 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int) => {
-                     if(x == 10) WhenNextComplete
-                     else FalsePred
-                   }, 20)
+      if (x == 10) WhenNextComplete
+      else FalsePred
+    }, 20)
 
     cell1.onComplete {
       case Success(x) =>
@@ -510,9 +508,9 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int) => {
-                     if(x == 10) WhenNextComplete
-                     else FalsePred
-                   }, 20)
+      if (x == 10) WhenNextComplete
+      else FalsePred
+    }, 20)
 
     cell1.onNext {
       case Success(x) =>
@@ -731,12 +729,11 @@ class BaseSuite extends FunSuite {
       "pureness.Demo{ static int scc0(int) }",
       "pureness.Demo{ static int scc1(int) }",
       "pureness.Demo{ static int scc2(int) }",
-      "pureness.Demo{ static int scc3(int) }"
-    )
+      "pureness.Demo{ static int scc3(int) }")
 
     val finalRes = pureMethods.filter(!report.contains(_))
 
-    assert(finalRes.size == 0,report.mkString("\n"))
+    assert(finalRes.size == 0, report.mkString("\n"))
   }
 
   test("purity analysis with Demo.java: impure methods") {
@@ -760,8 +757,7 @@ class BaseSuite extends FunSuite {
       "static int cpureCalleeCallee1(int)",
       "static int cpureCalleeCallee2(int)",
       "static int cpureCalleeCalleeCallee(int)",
-      "static int cpureCalleeCalleeCalleeCallee(int)"
-    )
+      "static int cpureCalleeCalleeCalleeCallee(int)")
 
     val finalRes = impureMethods.filter(report.contains(_))
 
@@ -928,7 +924,7 @@ class BaseSuite extends FunSuite {
     val pool = new HandlerPool
     val completer = CellCompleter[key.type, Int](pool, key)(intMaxLattice)
 
-    pool.execute{() =>
+    pool.execute { () =>
       // NOTE: This will print a stacktrace, but that is fine (not a bug).
       throw new Exception(
         "Even if this happens, quiescent handlers should still run.")

@@ -2,8 +2,7 @@ package cell
 
 import scala.util.Try
 
-import lattice.{Lattice, Key, DefaultKey}
-
+import lattice.{ Lattice, Key, DefaultKey }
 
 /**
  * Interface trait for programmatically completing a cell. Analogous to `Promise[V]`.

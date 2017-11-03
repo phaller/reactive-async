@@ -3,8 +3,7 @@ package latticetest
 import org.scalatest.FunSuite
 
 import cell._
-import lattice.{Lattice, LatticeViolationException, Key}
-
+import lattice.{ Lattice, LatticeViolationException, Key }
 
 object Util {
 
@@ -40,7 +39,6 @@ object PowerSetLattice {
 
 }
 
-
 class PowerSetLatticeSuite extends FunSuite {
 
   test("join using lattice") {
@@ -60,22 +58,22 @@ class PowerSetLatticeSuite extends FunSuite {
   }
 
   test("join using implicit lattice 2") {
-    import PowerSetLattice._  // imported: implicit def mkLattice[T]: PowerSetLattice[T]
+    import PowerSetLattice._ // imported: implicit def mkLattice[T]: PowerSetLattice[T]
     // type checker knows: PowerSetLattice[T] <: Lattice[Set[T]]
     // type checker knows: calling mkLattice[Int] returns PowerSetLattice[Int] <: Lattice[Set[Int]]
     val elem1 = Set(1, 2)
     val elem2 = Set(4, 6)
-    val result = Util.joinOfTwoElements2(elem1, elem2)/* (mkLattice[Int]) */
+    val result = Util.joinOfTwoElements2(elem1, elem2) /* (mkLattice[Int]) */
     assert(result == Set(1, 2, 4, 6))
   }
 
   test("join using implicit lattice 3") {
-    import PowerSetLattice._  // imported: implicit def mkLattice[T]: PowerSetLattice[T]
+    import PowerSetLattice._ // imported: implicit def mkLattice[T]: PowerSetLattice[T]
     // type checker knows: PowerSetLattice[T] <: Lattice[Set[T]]
     // type checker knows: calling mkLattice[Int] returns PowerSetLattice[Int] <: Lattice[Set[Int]]
     val elem1 = Set(1, 2)
     val elem2 = Set(4, 6)
-    val result = Util.joinOfTwoElements3(elem1, elem2)/* (mkLattice[Int]) */
+    val result = Util.joinOfTwoElements3(elem1, elem2) /* (mkLattice[Int]) */
     assert(result == Set(1, 2, 4, 6))
   }
 

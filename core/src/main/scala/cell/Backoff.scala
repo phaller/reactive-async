@@ -30,7 +30,7 @@ final class Backoff {
   }
 
   def once() {
-    if (count == 0) 
+    if (count == 0)
       count = 1
     else {
       seed = Random.nextSeed(seed)
@@ -46,7 +46,7 @@ private final class Random(var seed: Long = 1) {
     seed = Random.nextSeed(seed)
   }
 
-  def next(max: Int): Int = {    
+  def next(max: Int): Int = {
     nextSeed
     Random.scale(seed, max)
   }

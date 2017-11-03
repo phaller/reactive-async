@@ -1,6 +1,5 @@
 package lattice
 
-
 object NaturalNumberKey extends DefaultKey[Int]
 
 class NaturalNumberLattice extends Lattice[Int] {

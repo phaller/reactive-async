@@ -1,7 +1,7 @@
 package opal
 
 import cell._
-import lattice.{Lattice, Key}
+import lattice.{ Lattice, Key }
 
 object ImmutabilityKey extends Key[Immutability] {
 
@@ -14,7 +14,7 @@ object ImmutabilityKey extends Key[Immutability] {
   }
   def fallback[K <: Key[Immutability]](cells: Seq[Cell[K, Immutability]]): Seq[(Cell[K, Immutability], Immutability)] = {
     val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
-    if(conditionallyImmutableCells.nonEmpty)
+    if (conditionallyImmutableCells.nonEmpty)
       conditionallyImmutableCells.map(cell => (cell, cell.getResult()))
     else
       cells.map(cell => (cell, Immutable))
@@ -38,7 +38,7 @@ object Immutability {
 
     def <=(lhs: Immutability, rhs: Immutability): Boolean = {
       lhs == rhs || lhs == Immutable ||
-      (lhs == ConditionallyImmutable && rhs != Immutable)
+        (lhs == ConditionallyImmutable && rhs != Immutable)
     }
 
     override def empty: Immutability = Immutable
