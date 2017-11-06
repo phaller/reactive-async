@@ -10,14 +10,14 @@ import scala.concurrent.duration._
 
 import lattice.{ Lattice, StringIntLattice, LatticeViolationException, StringIntKey }
 
-import org.opalj.fpcf.analyses.FieldMutabilityAnalysis
-import org.opalj.fpcf.properties.FieldMutability
-import org.opalj.fpcf.FPCFAnalysesManager
-import org.opalj.fpcf.FPCFAnalysis
-import org.opalj.fpcf.FPCFAnalysesManagerKey
+//import org.opalj.fpcf.analyses.FieldMutabilityAnalysis
+//import org.opalj.fpcf.properties.FieldMutability
+//import org.opalj.fpcf.FPCFAnalysesManager
+//import org.opalj.fpcf.FPCFAnalysis
+//import org.opalj.fpcf.FPCFAnalysesManagerKey
 import opal._
-import org.opalj.br.analyses.Project
-import java.io.File
+//import org.opalj.br.analyses.Project
+//import java.io.File
 
 class BaseSuite extends FunSuite {
 
@@ -97,7 +97,7 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
-  test("whenComplete") {
+  test("whenNext") {
     val latch = new CountDownLatch(1)
 
     val pool = new HandlerPool
@@ -105,7 +105,7 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
+    cell1.whenNext(completer2.cell, (x: Int, isFinal: Boolean) => if ((x == 10) && (isFinal)) FinalOutcome(20) else NoOutcome)
 
     cell1.onComplete {
       case Success(v) =>
@@ -131,7 +131,7 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
+    cell1.whenNext(completer2.cell, (x: Int, isFinal: Boolean) => if ((x == 10) && (isFinal)) FinalOutcome(20) else NoOutcome)
 
     cell1.onComplete {
       case Success(v) =>
@@ -146,7 +146,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    assert(cell1.numCompleteDependencies == 0)
+    assert(cell1.numDependencies == 0)
 
     pool.shutdown()
   }
@@ -157,13 +157,13 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
+    cell1.whenNext(completer2.cell, (x: Int, isFinal: Boolean) => if ((x == 10) && (isFinal)) FinalOutcome(20) else NoOutcome)
 
     completer2.putFinal(9)
 
     cell1.waitUntilNoDeps()
 
-    assert(cell1.numCompleteDependencies == 0)
+    assert(cell1.numDependencies == 0)
 
     pool.shutdown()
   }
@@ -174,7 +174,7 @@ class BaseSuite extends FunSuite {
     val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
     val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
 
-    completer1.cell.whenComplete(completer2.cell, (imm: Immutability) => imm == Mutable, Mutable)
+    completer1.cell.whenNext(completer2.cell, (imm: Immutability, isFinal: Boolean) => if (imm == Mutable) FinalOutcome(Mutable) else NoOutcome)
 
     completer1.putFinal(Immutable)
     assert(completer2.cell.numCompleteCallbacks == 0)
@@ -194,14 +194,14 @@ class BaseSuite extends FunSuite {
 
     val cell = completer.cell
 
-    cell.onNext {
+    cell.onNext((v, _) => v match {
       case Success(x) =>
         assert(x === 9)
         latch.countDown()
       case Failure(e) =>
         assert(false)
         latch.countDown()
-    }
+    })
 
     completer.putNext(9)
 
@@ -210,7 +210,7 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
-  test("whenNext") {
+  test("whenNext 2") {
     val latch = new CountDownLatch(1)
 
     val pool = new HandlerPool
@@ -218,16 +218,16 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenNext(completer2.cell, (x: Int) => {
-      if (x == 10) WhenNext
-      else FalsePred
-    }, 20)
+    cell1.whenNext(completer2.cell, (x: Int, isFinal: Boolean) => {
+      if (x == 10) NextOutcome(20)
+      else NoOutcome
+    })
 
     cell1.onNext {
-      case Success(x) =>
+      case (Success(x), _) =>
         assert(x === 20)
         latch.countDown()
-      case Failure(e) =>
+      case (Failure(e), _) =>
         assert(false)
         latch.countDown()
     }
@@ -235,7 +235,7 @@ class BaseSuite extends FunSuite {
     completer2.putNext(10)
     latch.await()
 
-    assert(cell1.numNextDependencies == 1)
+    assert(cell1.numDependencies == 1)
 
     pool.shutdown()
   }
@@ -248,16 +248,16 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenNext(completer2.cell, (x: Int) => {
-      if (x == 10) WhenNext
-      else FalsePred
-    }, 20)
+    cell1.whenNext(completer2.cell, (x: Int, isFinal: Boolean) => {
+      if (x == 10) NextOutcome(20)
+      else NoOutcome
+    })
 
     cell1.onNext {
-      case Success(x) =>
+      case (Success(x), _) =>
         assert(x === 8)
         latch.countDown()
-      case Failure(e) =>
+      case (Failure(e), _) =>
         assert(false)
         latch.countDown()
     }
@@ -278,13 +278,13 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenNext(completer2.cell, (x: Int) => {
-      if (x == 10) WhenNext
-      else FalsePred
-    }, 30)
-    cell1.whenComplete(completer2.cell, (x: Int) => x == 10, 20)
+    cell1.whenNext(completer2.cell, (x: Int, _) => {
+      if (x == 10) NextOutcome(30)
+      else NoOutcome
+    })
+    cell1.whenNext(completer2.cell, (x: Int, isFinal: Boolean) => if (isFinal && x == 10) FinalOutcome(20) else NoOutcome)
 
-    assert(cell1.numNextDependencies == 1)
+    assert(cell1.numDependencies == 1)
 
     cell1.onComplete {
       case Success(x) =>
@@ -295,16 +295,16 @@ class BaseSuite extends FunSuite {
         latch.countDown()
     }
     cell1.onNext {
-      case Success(x) =>
+      case (Success(x), _) =>
         assert(false)
-      case Failure(e) =>
+      case (Failure(e), _) =>
         assert(false)
     }
 
     completer2.putFinal(10)
     latch.await()
 
-    assert(cell1.numNextDependencies == 0)
+    assert(cell1.numDependencies == 0)
 
     pool.shutdown()
   }
@@ -317,18 +317,18 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenNext(completer2.cell, (x: Int) => {
-      if (x == 10) WhenNext
-      else FalsePred
-    }, 20)
+    cell1.whenNext(completer2.cell, (x: Int, _) => {
+      if (x == 10) NextOutcome(20)
+      else NoOutcome
+    })
 
-    assert(cell1.numNextDependencies == 1)
+    assert(cell1.numDependencies == 1)
 
     cell1.onNext {
-      case Success(x) =>
+      case (Success(x), _) =>
         assert(x === 20)
         latch.countDown()
-      case Failure(e) =>
+      case (Failure(e), _) =>
         assert(false)
         latch.countDown()
     }
@@ -346,16 +346,16 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenNext(completer2.cell, (x: Int) => {
-      if (x == 10) WhenNext
-      else FalsePred
-    }, 20)
+    cell1.whenNext(completer2.cell, (x: Int, _) => {
+      if (x == 10) NextOutcome(20)
+      else NoOutcome
+    })
 
     completer2.putFinal(10)
 
     cell1.waitUntilNoNextDeps()
 
-    assert(cell1.numNextDependencies == 0)
+    assert(cell1.numDependencies == 0)
 
     pool.shutdown()
   }
@@ -366,10 +366,10 @@ class BaseSuite extends FunSuite {
     val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
     val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
 
-    completer1.cell.whenNext(completer2.cell, (imm: Immutability) => imm match {
-      case Mutable => WhenNext
-      case _ => FalsePred
-    }, Mutable)
+    completer1.cell.whenNext(completer2.cell, (imm: Immutability, _) => imm match {
+      case Mutable => NextOutcome(Mutable)
+      case _ => NoOutcome
+    })
 
     completer1.putFinal(Immutable)
     assert(completer2.cell.numNextCallbacks == 0)
@@ -389,16 +389,16 @@ class BaseSuite extends FunSuite {
 
     for (i <- 1 to 10000) {
       pool.execute(() => {
-        completer1.cell.whenNext(completer2.cell, (x: Immutability) => {
-          if (x == Mutable) WhenNext else FalsePred
-        }, Mutable)
+        completer1.cell.whenNext(completer2.cell, (x: Immutability, _) => {
+          if (x == Mutable) NextOutcome(Mutable) else NoOutcome
+        })
         latch.countDown()
       })
     }
 
     latch.await()
 
-    assert(completer1.cell.numNextDependencies == 10000)
+    assert(completer1.cell.numDependencies == 10000)
 
     pool.shutdown()
   }
@@ -409,12 +409,12 @@ class BaseSuite extends FunSuite {
     for (i <- 1 to 1000) {
       val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
       val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
-      completer1.cell.whenNext(completer2.cell, (imm: Immutability) => imm match {
-        case Immutable | ConditionallyImmutable => FalsePred
-        case Mutable => WhenNext
-      }, Mutable)
+      completer1.cell.whenNext(completer2.cell, (imm: Immutability, _) => imm match {
+        case Immutable | ConditionallyImmutable => NoOutcome
+        case Mutable => NextOutcome(Mutable)
+      })
 
-      assert(completer1.cell.numTotalDependencies == 1)
+      assert(completer1.cell.numDependencies == 1)
 
       pool.execute(() => completer2.putNext(ConditionallyImmutable))
       pool.execute(() => completer2.putFinal(Mutable))
@@ -437,10 +437,10 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenNext(completer2.cell, (x: Int) => {
-      if (x == 10) WhenNextComplete
-      else FalsePred
-    }, 20)
+    cell1.whenNext(completer2.cell, (x: Int, _) => {
+      if (x == 10) FinalOutcome(20)
+      else NoOutcome
+    })
 
     cell1.onComplete {
       case Success(v) =>
@@ -476,10 +476,10 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenNext(completer2.cell, (x: Int) => {
-      if (x == 10) WhenNextComplete
-      else FalsePred
-    }, 20)
+    cell1.whenNext(completer2.cell, (x: Int, _) => {
+      if (x == 10) FinalOutcome(20)
+      else NoOutcome
+    })
 
     cell1.onComplete {
       case Success(x) =>
@@ -507,16 +507,16 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenNext(completer2.cell, (x: Int) => {
-      if (x == 10) WhenNextComplete
-      else FalsePred
-    }, 20)
+    cell1.whenNext(completer2.cell, (x: Int, _) => {
+      if (x == 10) NextOutcome(20)
+      else NoOutcome
+    })
 
     cell1.onNext {
-      case Success(x) =>
+      case (Success(x), _) =>
         assert(x === 8)
         latch1.countDown()
-      case Failure(e) =>
+      case (Failure(e), _) =>
         assert(false)
         latch1.countDown()
     }
@@ -564,10 +564,10 @@ class BaseSuite extends FunSuite {
     val pool = new HandlerPool
     val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
     completer.cell.onNext {
-      case Success(x) =>
+      case (Success(x), _) =>
         assert(x === 10)
         latch.countDown()
-      case Failure(e) =>
+      case (Failure(e), _) =>
         assert(false)
         latch.countDown()
     }
@@ -618,10 +618,10 @@ class BaseSuite extends FunSuite {
     val cell = completer.cell
     completer.putNext(Set(3, 5))
     cell.onNext {
-      case Success(v) =>
+      case (Success(v), _) =>
         assert(v === Set(3, 4, 5))
         latch.countDown()
-      case Failure(e) =>
+      case (Failure(e), _) =>
         assert(false)
         latch.countDown()
     }
@@ -651,8 +651,8 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, (x: Int) => x == 1, 1)
-    cell2.whenComplete(cell1, (x: Int) => x == 1, 1)
+    cell1.whenNext(cell2, (x: Int, isFinal: Boolean) => if (isFinal && x == 1) FinalOutcome(1) else NoOutcome)
+    cell2.whenNext(cell1, (x: Int, isFinal: Boolean) => if (isFinal && x == 1) FinalOutcome(1) else NoOutcome)
     val incompleteFut = pool.quiescentIncompleteCells
     val cells = Await.result(incompleteFut, 2.seconds)
     assert(cells.map(_.key).toString == "List(key1, key2)")
@@ -664,8 +664,8 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, (x: Int) => x == 0, 0)
-    cell2.whenComplete(cell1, (x: Int) => x == 0, 0)
+    cell1.whenNext(cell2, (x, isFinal) => if (isFinal && x == 0) FinalOutcome(0) else NoOutcome)
+    cell2.whenNext(cell1, (x, isFinal) => if (isFinal && x == 0) FinalOutcome(0) else NoOutcome)
     val qfut = pool.quiescentResolveCell
     Await.ready(qfut, 2.seconds)
     val incompleteFut = pool.quiescentIncompleteCells
@@ -707,62 +707,62 @@ class BaseSuite extends FunSuite {
     assert(res == ConditionallyImmutable)
   }
 
-  test("purity analysis with Demo.java: pure methods") {
-    val file = new File("core")
-    val lib = Project(file)
-
-    val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
-
-    val pureMethods = List(
-      "pureness.Demo{ public static int pureThoughItUsesField(int,int) }",
-      "pureness.Demo{ public static int pureThoughItUsesField2(int,int) }",
-      "pureness.Demo{ public static int simplyPure(int,int) }",
-      "pureness.Demo{ static int foo(int) }",
-      "pureness.Demo{ static int bar(int) }",
-      "pureness.Demo{ static int fooBar(int) }",
-      "pureness.Demo{ static int barFoo(int) }",
-      "pureness.Demo{ static int m1(int) }",
-      "pureness.Demo{ static int m2(int) }",
-      "pureness.Demo{ static int m3(int) }",
-      "pureness.Demo{ static int cm1(int) }",
-      "pureness.Demo{ static int cm2(int) }",
-      "pureness.Demo{ static int scc0(int) }",
-      "pureness.Demo{ static int scc1(int) }",
-      "pureness.Demo{ static int scc2(int) }",
-      "pureness.Demo{ static int scc3(int) }")
-
-    val finalRes = pureMethods.filter(!report.contains(_))
-
-    assert(finalRes.size == 0, report.mkString("\n"))
-  }
-
-  test("purity analysis with Demo.java: impure methods") {
-    val file = new File("core")
-    val lib = Project(file)
-
-    val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
-
-    val impureMethods = List(
-      "public static int impure(int)",
-      "static int npfoo(int)",
-      "static int npbar(int)",
-      "static int mm1(int)",
-      "static int mm2(int)",
-      "static int mm3(int)",
-      "static int m1np(int)",
-      "static int m2np(int)",
-      "static int m3np(int)",
-      "static int cpure(int)",
-      "static int cpureCallee(int)",
-      "static int cpureCalleeCallee1(int)",
-      "static int cpureCalleeCallee2(int)",
-      "static int cpureCalleeCalleeCallee(int)",
-      "static int cpureCalleeCalleeCalleeCallee(int)")
-
-    val finalRes = impureMethods.filter(report.contains(_))
-
-    assert(finalRes.size == 0)
-  }
+  //  test("purity analysis with Demo.java: pure methods") {
+  //    val file = new File("core")
+  //    val lib = Project(file)
+  //
+  //    val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
+  //
+  //    val pureMethods = List(
+  //      "pureness.Demo{ public static int pureThoughItUsesField(int,int) }",
+  //      "pureness.Demo{ public static int pureThoughItUsesField2(int,int) }",
+  //      "pureness.Demo{ public static int simplyPure(int,int) }",
+  //      "pureness.Demo{ static int foo(int) }",
+  //      "pureness.Demo{ static int bar(int) }",
+  //      "pureness.Demo{ static int fooBar(int) }",
+  //      "pureness.Demo{ static int barFoo(int) }",
+  //      "pureness.Demo{ static int m1(int) }",
+  //      "pureness.Demo{ static int m2(int) }",
+  //      "pureness.Demo{ static int m3(int) }",
+  //      "pureness.Demo{ static int cm1(int) }",
+  //      "pureness.Demo{ static int cm2(int) }",
+  //      "pureness.Demo{ static int scc0(int) }",
+  //      "pureness.Demo{ static int scc1(int) }",
+  //      "pureness.Demo{ static int scc2(int) }",
+  //      "pureness.Demo{ static int scc3(int) }")
+  //
+  //    val finalRes = pureMethods.filter(!report.contains(_))
+  //
+  //    assert(finalRes.size == 0, report.mkString("\n"))
+  //  }
+  //
+  //  test("purity analysis with Demo.java: impure methods") {
+  //    val file = new File("core")
+  //    val lib = Project(file)
+  //
+  //    val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
+  //
+  //    val impureMethods = List(
+  //      "public static int impure(int)",
+  //      "static int npfoo(int)",
+  //      "static int npbar(int)",
+  //      "static int mm1(int)",
+  //      "static int mm2(int)",
+  //      "static int mm3(int)",
+  //      "static int m1np(int)",
+  //      "static int m2np(int)",
+  //      "static int m3np(int)",
+  //      "static int cpure(int)",
+  //      "static int cpureCallee(int)",
+  //      "static int cpureCalleeCallee1(int)",
+  //      "static int cpureCalleeCallee2(int)",
+  //      "static int cpureCalleeCalleeCallee(int)",
+  //      "static int cpureCalleeCalleeCalleeCallee(int)")
+  //
+  //    val finalRes = impureMethods.filter(report.contains(_))
+  //
+  //    assert(finalRes.size == 0)
+  //  }
 
   test("PurityLattice: successful joins") {
     val lattice = Purity.PurityLattice

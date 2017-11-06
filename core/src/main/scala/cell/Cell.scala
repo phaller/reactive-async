@@ -16,14 +16,12 @@ import lattice.{ Lattice, LatticeViolationException, Key, DefaultKey }
 //case object WhenNextComplete extends WhenNextPredicate
 //case object FalsePred extends WhenNextPredicate
 
-sealed class WhenNextOutcome[V]
-case class NextOutcome[V](x: V) extends WhenNextOutcome[V]
-case class FinalOutcome[V](x: V) extends WhenNextOutcome[V]
-case class NoOutcome() extends WhenNextOutcome[Nothing]
-
+sealed class WhenNextOutcome[+V]
+case class NextOutcome[+V](x: V) extends WhenNextOutcome[V]
+case class FinalOutcome[+V](x: V) extends WhenNextOutcome[V]
+case object NoOutcome extends WhenNextOutcome[Nothing]
 
 trait Cell[K <: Key[V], V] {
-  Option
   def key: K
 
   /**
@@ -71,7 +69,7 @@ trait Cell[K <: Key[V], V] {
   def waitUntilNoDeps(): Unit
   def waitUntilNoNextDeps(): Unit
 
-  private[cell] def numNextDependencies: Int
+  private[cell] def numDependencies: Int
 
   private[cell] def numNextCallbacks: Int
   private[cell] def numCompleteCallbacks: Int
@@ -217,7 +215,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
         pre.asInstanceOf[State[K, V]]
     }
 
-  override def numNextDependencies: Int = {
+  override def numDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     else current.nextDeps.values.flatten.size
