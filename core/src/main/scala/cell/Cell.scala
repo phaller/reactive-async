@@ -558,11 +558,11 @@ private class NextDepRunnable[K <: Key[V], V](
   val pred: V => WhenNextPredicate,
   val shortCutValueCallback: (V, Boolean) => Option[V],
   val completer: CellCompleter[K, V]) // this
-  extends Runnable with OnCompleteRunnable with (Try[V] => Unit) {
+  extends Runnable with OnCompleteRunnable with ((Try[V], Boolean) => Unit) {
   var value: Try[V] = null
   var isFinal = false
 
-  override def apply(x: Try[V]): Unit = {
+  override def apply(x: Try[V], isFinal: Boolean): Unit = {
     x match {
       case Success(v) =>
         pred(v) match {
@@ -584,7 +584,7 @@ private class NextDepRunnable[K <: Key[V], V](
   }
 
   override def run(): Unit = {
-    try apply(value) catch { case NonFatal(e) => pool reportFailure e }
+    try apply(value, isFinal) catch { case NonFatal(e) => pool reportFailure e }
   }
 
   def executeWithValue(v: Try[V], vIsFinal: Boolean): Unit = {
