@@ -15,6 +15,11 @@ import lattice.{ Lattice, StringIntLattice, LatticeViolationException, StringInt
 //import org.opalj.fpcf.FPCFAnalysesManager
 //import org.opalj.fpcf.FPCFAnalysis
 //import org.opalj.fpcf.FPCFAnalysesManagerKey
+//import org.opalj.fpcf.analyses.FieldMutabilityAnalysis
+import org.opalj.fpcf.properties.FieldMutability
+import org.opalj.fpcf.FPCFAnalysesManager
+import org.opalj.fpcf.FPCFAnalysis
+import org.opalj.fpcf.FPCFAnalysesManagerKey
 import opal._
 //import org.opalj.br.analyses.Project
 //import java.io.File
