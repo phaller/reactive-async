@@ -292,7 +292,7 @@ class BaseSuite extends FunSuite {
       else NoOutcome
     )
 
-    assert(cell1.numDependencies == 1)
+    assert(cell1.numDependencies == 2)
 
     cell1.onComplete {
       case Success(x) =>
@@ -303,8 +303,10 @@ class BaseSuite extends FunSuite {
         latch.countDown()
     }
     cell1.onNext {
-      case (Success(x), _) =>
-        assert(false)
+      case (Success(x), true) =>
+        assert(x === 20)
+      case (Success(x), false) =>
+        assert(x === 30)
       case (Failure(e), _) =>
         assert(false)
     }

@@ -388,7 +388,6 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
 
         if (depsCells.nonEmpty)
           depsCells.foreach(_.removeNextCallbacks(this))
-          // XXX Why are only nextCallbacks but not completeCallbacks? I guess this is OK, because c.whenNext(other, …) adds a nextCallback to `other`.
 
         true
     }
