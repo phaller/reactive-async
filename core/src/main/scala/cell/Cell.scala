@@ -67,7 +67,6 @@ trait Cell[K <: Key[V], V] {
   def onComplete[U](callback: Try[V] => U): Unit
 
   def waitUntilNoDeps(): Unit
-  def waitUntilNoNextDeps(): Unit
 
   private[cell] def numDependencies: Int
 
@@ -145,7 +144,6 @@ private object State {
 class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V]) extends Cell[K, V] with CellCompleter[K, V] {
 
   private val nodepslatch = new CountDownLatch(1)
-  private val nonextdepslatch = new CountDownLatch(1)
 
   /* Contains a value either of type
    * (a) `Try[V]`      for the final result, or
@@ -411,7 +409,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
         if (!state.compareAndSet(current, newState))
           removeNextDep(cell)
         else if (newNextDeps.isEmpty)
-          nonextdepslatch.countDown()
+          nodepslatch.countDown()
 
       case _ => /* do nothing */
     }
@@ -447,10 +445,6 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
 
   def waitUntilNoDeps(): Unit = {
     nodepslatch.await()
-  }
-
-  def waitUntilNoNextDeps(): Unit = {
-    nonextdepslatch.await()
   }
 
   // Schedules execution of `callback` when next intermediate result is available.
