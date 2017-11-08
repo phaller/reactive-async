@@ -1,15 +1,12 @@
 package cell
 
 import org.scalatest.FunSuite
-
 import java.util.concurrent.CountDownLatch
 
-import scala.util.{ Success, Failure }
-import scala.concurrent.{ Promise, Await }
+import scala.util.{ Failure, Success, Try }
+import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
-
-import lattice.{ Lattice, StringIntLattice, LatticeViolationException, StringIntKey }
-
+import lattice.{ Lattice, LatticeViolationException, StringIntKey, StringIntLattice }
 import org.opalj.fpcf.analyses.FieldMutabilityAnalysis
 import org.opalj.fpcf.properties.FieldMutability
 import org.opalj.fpcf.FPCFAnalysesManager
@@ -107,8 +104,7 @@ class BaseSuite extends FunSuite {
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int, isFinal: Boolean) =>
       if ((x == 10) && (isFinal)) FinalOutcome(20)
-      else NoOutcome
-    )
+      else NoOutcome)
 
     cell1.onComplete {
       case Success(v) =>
@@ -135,9 +131,8 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x, isFinal) =>
-      if(isFinal && x == 10) FinalOutcome(20)
-      else NoOutcome
-    )
+      if (isFinal && x == 10) FinalOutcome(20)
+      else NoOutcome)
 
     cell1.onComplete {
       case Success(v) =>
@@ -164,9 +159,8 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x, isFinal) =>
-      if(isFinal && x == 10) FinalOutcome(20)
-      else NoOutcome
-    )
+      if (isFinal && x == 10) FinalOutcome(20)
+      else NoOutcome)
 
     completer2.putFinal(9)
 
@@ -185,8 +179,7 @@ class BaseSuite extends FunSuite {
 
     completer1.cell.whenNext(completer2.cell, (imm: Immutability, isFinal: Boolean) =>
       if (imm == Mutable) FinalOutcome(Mutable)
-      else NoOutcome
-    )
+      else NoOutcome)
 
     completer1.putFinal(Immutable)
     assert(completer2.cell.numCompleteCallbacks == 0)
@@ -294,7 +287,7 @@ class BaseSuite extends FunSuite {
       if (x == 10) NextOutcome(30)
       else NoOutcome
     })
-    cell1.whenNext(completer2.cell, (x: Int, isFinal: Boolean) =>
+    cell1.whenNext(completer2.cell, (x, isFinal) =>
       if (isFinal && x == 10) FinalOutcome(20)
       else NoOutcome
     )
@@ -368,7 +361,7 @@ class BaseSuite extends FunSuite {
 
     completer2.putFinal(10)
 
-    cell1.waitUntilNoNextDeps()
+    cell1.waitUntilNoDeps()
 
     assert(cell1.numDependencies == 0)
 
@@ -524,18 +517,23 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int, _) => {
-      if (x == 10) NextOutcome(20)
+      if (x == 10) FinalOutcome(20)
       else NoOutcome
     })
 
-    cell1.onNext {
-      case (Success(x), _) =>
-        assert(x === 8)
-        latch1.countDown()
-      case (Failure(e), _) =>
-        assert(false)
-        latch1.countDown()
-    }
+    cell1.onNext(
+      (v: Try[Int], isFinal: Boolean) =>
+        (v, isFinal) match {
+          case (Success(x), false) =>
+            assert(x === 8)
+            latch1.countDown()
+          case (Success(x), true) =>
+            assert(x === 20)
+          /* also handled by `onComplete` */
+          case (Failure(e), _) =>
+            assert(false)
+            latch1.countDown()
+        })
 
     cell1.onComplete {
       case Success(x) =>
@@ -553,6 +551,9 @@ class BaseSuite extends FunSuite {
     latch2.await()
 
     pool.shutdown()
+
+    assert(cell1.getResult() == 20)
+    assert(completer2.cell.getResult() == 10)
   }
 
   test("put: isFinal == true") {
@@ -669,12 +670,10 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     cell1.whenNext(cell2, (x: Int, isFinal: Boolean) =>
       if (isFinal && x == 1) FinalOutcome(1)
-      else NoOutcome
-    )
+      else NoOutcome)
     cell2.whenNext(cell1, (x: Int, isFinal: Boolean) =>
       if (isFinal && x == 1) FinalOutcome(1)
-      else NoOutcome
-    )
+      else NoOutcome)
     val incompleteFut = pool.quiescentIncompleteCells
     val cells = Await.result(incompleteFut, 2.seconds)
     assert(cells.map(_.key).toString == "List(key1, key2)")
@@ -688,12 +687,10 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     cell1.whenNext(cell2, (x, isFinal) =>
       if (isFinal && x == 0) FinalOutcome(0)
-        else NoOutcome
-    )
+      else NoOutcome)
     cell2.whenNext(cell1, (x, isFinal) =>
       if (isFinal && x == 0) FinalOutcome(0)
-      else NoOutcome
-    )
+      else NoOutcome)
     val qfut = pool.quiescentResolveCell
     Await.ready(qfut, 2.seconds)
     val incompleteFut = pool.quiescentIncompleteCells
