@@ -87,7 +87,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
       val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
       println(registered.size)
       if (registered.nonEmpty) {
-        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
+        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.cellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
       }
       p.success(true)
@@ -114,7 +114,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
       // Find one closed strongly connected component (cell)
       val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (registered.nonEmpty) {
-        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
+        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.cellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
       }
       // Finds the rest of the unresolved cells
