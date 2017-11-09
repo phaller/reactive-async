@@ -89,7 +89,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
           typeImmutabilityAnalysis(project, classFileToObjectTypeCellCompleter, manager, classFile)
       })
     }
-    pool.whileQuiescentResolveDefault
+    pool.whileQuiescentResolveDefault()
     pool.shutdown()
 
     val endTime = System.currentTimeMillis
@@ -190,7 +190,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
           typeImmutabilityAnalysis(project, classFileToObjectTypeCellCompleter, manager, classFile)
       })
     }
-    pool.whileQuiescentResolveCell
+    pool.whileQuiescentResolveCell()
     pool.shutdown()
 
     /* Fixes the results so the output looks good */

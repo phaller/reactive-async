@@ -66,17 +66,17 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     p.future
   }
 
-  def whileQuiescentResolveCell[K <: Key[V], V]: Unit = {
+  def whileQuiescentResolveCell[K <: Key[V], V](atMost: Duration = Duration.Inf): Unit = {
     while (!cellsNotDone.get().isEmpty) {
       val fut = this.quiescentResolveCell
-      Await.ready(fut, 15.minutes)
+      Await.ready(fut, atMost)
     }
   }
 
-  def whileQuiescentResolveDefault[K <: Key[V], V]: Unit = {
+  def whileQuiescentResolveDefault[K <: Key[V], V](atMost: Duration = Duration.Inf): Unit = {
     while (!cellsNotDone.get().isEmpty) {
       val fut = this.quiescentResolveDefaults
-      Await.ready(fut, 15.minutes)
+      Await.ready(fut, atMost)
     }
   }
 
