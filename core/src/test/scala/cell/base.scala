@@ -1,20 +1,12 @@
 package cell
 
 import org.scalatest.FunSuite
-
 import java.util.concurrent.CountDownLatch
 
-import scala.util.{ Success, Failure }
-import scala.concurrent.{ Promise, Await }
+import scala.util.{Failure, Success}
+import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration._
-
-import lattice.{ Lattice, StringIntLattice, LatticeViolationException, StringIntKey }
-
-import org.opalj.fpcf.analyses.FieldMutabilityAnalysis
-import org.opalj.fpcf.properties.FieldMutability
-import org.opalj.fpcf.FPCFAnalysesManager
-import org.opalj.fpcf.FPCFAnalysis
-import org.opalj.fpcf.FPCFAnalysesManagerKey
+import lattice.{Lattice, StringIntLattice, StringIntKey, LatticeViolationException, DefaultKey, Key}
 import opal._
 import org.opalj.br.analyses.Project
 import java.io.File
@@ -937,6 +929,272 @@ class BaseSuite extends FunSuite {
     }
 
     pool.shutdown()
+  }
+
+  test("whenNext: cSCC with constant resolution") {
+    val latch = new CountDownLatch(4)
+
+    val pool = new HandlerPool
+
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey1")
+    val cell1 = completer1.cell
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "somekey2")
+    val cell2 = completer2.cell
+    val completer3 = CellCompleter[StringIntKey, Int](pool, "somekey3")
+    val cell3 = completer3.cell
+    val completer4 = CellCompleter[StringIntKey, Int](pool, "somekey4")
+    val cell4 = completer4.cell
+
+    // set unwanted values:
+    completer1.putNext(-1)
+    completer2.putNext(-1)
+    completer3.putNext(-1)
+    completer4.putNext(-1)
+
+    // create a cSCC, assert that none of the callbacks get called.
+    cell1.whenNext(cell2, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell1.whenNext(cell3, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell2.whenNext(cell4, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell3.whenNext(cell4, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell4.whenNext(cell1, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+
+    for(c <- List(cell1, cell2, cell3, cell4))
+      c.onComplete {
+        case Success(v) =>
+          assert(v === 0)
+          assert(c.numNextDependencies === 0)
+          latch.countDown()
+        case Failure(e) =>
+          assert(false)
+          latch.countDown()
+      }
+
+    // resolve cells
+    pool.whileQuiescentResolveCell
+    val fut = pool.quiescentResolveCell
+    Await.result(fut, 2.second)
+    latch.await()
+
+    pool.shutdown()
+  }
+
+  test("whenNext: cSCC with default resolution") {
+    val latch = new CountDownLatch(4)
+
+    val pool = new HandlerPool
+
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey1")
+    val cell1 = completer1.cell
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "somekey2")
+    val cell2 = completer2.cell
+    val completer3 = CellCompleter[StringIntKey, Int](pool, "somekey3")
+    val cell3 = completer3.cell
+    val completer4 = CellCompleter[StringIntKey, Int](pool, "somekey4")
+    val cell4 = completer4.cell
+
+    // set unwanted values:
+    completer1.putNext(-1)
+    completer2.putNext(-1)
+    completer3.putNext(-1)
+    completer4.putNext(-1)
+
+    // create a cSCC, assert that none of the callbacks get called.
+    cell1.whenNext(cell2, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell1.whenNext(cell3, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell2.whenNext(cell4, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell3.whenNext(cell4, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell4.whenNext(cell1, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+
+    for(c <- List(cell1, cell2, cell3, cell4))
+      c.onComplete {
+        case Success(v) =>
+          assert(v === 1)
+          assert(c.numNextDependencies === 0)
+          latch.countDown()
+        case Failure(e) =>
+          assert(false)
+          latch.countDown()
+      }
+
+    // resolve cells
+    pool.whileQuiescentResolveDefault
+    val fut = pool.quiescentResolveDefaults
+    Await.result(fut, 2.second)
+    latch.await()
+
+    pool.shutdown()
+  }
+
+  test("whenNext: Cycle with default resolution") {
+    sealed trait Value
+    case object Bottom extends Value
+    case object ShouldNotHappen extends Value
+
+    object Value {
+
+      implicit object ValueLattice extends Lattice[Value] {
+        override def join(current: Value, next: Value): Value = next
+        override val empty: Value = Bottom
+      }
+    }
+
+    for (i <- 1 to 100) {
+      val pool = new HandlerPool
+      val completer1 = CellCompleter[DefaultKey[Value], Value](pool, new DefaultKey[Value])
+      val completer2 = CellCompleter[DefaultKey[Value], Value](pool, new DefaultKey[Value])
+      val cell1 = completer1.cell
+      val cell2 = completer2.cell
+
+      cell1.whenNext(cell2, (_: Value) => WhenNext, ShouldNotHappen)
+      cell2.whenNext(cell1, (_: Value) => WhenNext, ShouldNotHappen)
+
+      pool.whileQuiescentResolveCell
+      val fut = pool.quiescentResolveCell
+      Await.ready(fut, 1.minutes)
+
+      pool.shutdown()
+      assert(cell1.getResult() != ShouldNotHappen)
+      assert(cell2.getResult() != ShouldNotHappen)
+    }
+  }
+
+  test("whenNext: Cycle with constant resolution") {
+    sealed trait Value
+    case object Bottom extends Value
+    case object OK extends Value
+    case object ShouldNotHappen extends Value
+
+    object Value {
+      implicit object ValueLattice extends Lattice[Value] {
+        override def join(current: Value, next: Value): Value = {
+          if (current == Bottom) next
+          else throw LatticeViolationException(current, next)
+        }
+        override val empty: Value = Bottom
+      }
+    }
+
+    object TheKey extends DefaultKey[Value] {
+      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+        cells.map(cell => (cell, OK))
+      }
+    }
+
+
+    for (i <- 1 to 100) {
+      val pool = new HandlerPool
+      val completer1 = CellCompleter[TheKey.type, Value](pool, TheKey)
+      val completer2 = CellCompleter[TheKey.type, Value](pool, TheKey)
+      val cell1 = completer1.cell
+      val cell2 = completer2.cell
+
+      cell1.whenNext(cell2, (_: Value) => WhenNext, ShouldNotHappen)
+      cell2.whenNext(cell1, (_: Value) => WhenNext, ShouldNotHappen)
+
+      pool.whileQuiescentResolveCell
+      val fut = pool.quiescentResolveCell
+      Await.ready(fut, 1.minutes)
+
+      pool.shutdown()
+      assert(cell1.getResult() == OK)
+      assert(cell2.getResult() == OK)
+    }
+  }
+
+  test("whenNext: Cycle with additional ingoing dep") {
+    sealed trait Value
+    case object Bottom extends Value
+    case object Resolved extends Value
+    case object Fallback extends Value
+    case object OK extends Value
+    case object ShouldNotHappen extends Value
+
+    object Value {
+
+      implicit object ValueLattice extends Lattice[Value] {
+        override def join(current: Value, next: Value): Value = next
+        override val empty: Value = Bottom
+      }
+    }
+
+    object TheKey extends DefaultKey[Value] {
+      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+        println("resolving with resolve: " + cells)
+        cells.map(cell => (cell, Resolved))
+      }
+      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+        cells.map(cell => (cell, Fallback))
+      }
+    }
+
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[TheKey.type, Value](pool, TheKey)
+    val completer2 = CellCompleter[TheKey.type, Value](pool, TheKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+    val in = CellCompleter[TheKey.type, Value](pool, TheKey)
+    cell1.whenNext(cell2, (_: Value) => WhenNext, ShouldNotHappen)
+    cell2.whenNext(cell1, (_: Value) => WhenNext, ShouldNotHappen)
+    cell2.whenNext(in.cell, (_: Value) => WhenNext, _ => { assert(false); Some(ShouldNotHappen) })
+
+    pool.whileQuiescentResolveCell
+    val fut = pool.quiescentResolveCycles
+    Await.ready(fut, 1.minutes)
+
+    pool.shutdown()
+
+    assert(cell1.getResult() != ShouldNotHappen)
+    assert(cell2.getResult() != ShouldNotHappen)
+    assert(in.cell.getResult() == Fallback)
+  }
+
+  test("whenNext: Cycle with additional outgoing dep") {
+    sealed trait Value
+    case object Bottom extends Value
+    case object Dummy extends Value
+    case object Resolved extends Value
+    case object OK extends Value
+    case object ShouldNotHappen extends Value
+
+    object Value {
+
+      implicit object ValueLattice extends Lattice[Value] {
+        override def join(current: Value, next: Value): Value = next
+        override val empty: Value = Bottom
+      }
+
+    }
+
+    object TheKey extends DefaultKey[Value] {
+      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+        cells.map(cell => (cell, Resolved))
+      }
+      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+        Seq()
+      }
+    }
+
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[TheKey.type, Value](pool, TheKey)
+    val completer2 = CellCompleter[TheKey.type, Value](pool, TheKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+    val out = CellCompleter[TheKey.type, Value](pool, TheKey)
+    out.putNext(Dummy)
+    cell1.whenNext(cell2, (_: Value) => WhenNext, ShouldNotHappen)
+    cell2.whenNext(cell1, (_: Value) => WhenNext, ShouldNotHappen)
+    out.putNext(ShouldNotHappen)
+    out.cell.whenComplete(cell1, (v: Value) => true, OK)
+
+    pool.whileQuiescentResolveCell
+    val fut = pool.quiescentResolveCycles
+    Await.ready(fut, 1.minutes)
+
+    pool.shutdown()
+
+    assert(cell1.getResult() != ShouldNotHappen)
+    assert(cell2.getResult() != ShouldNotHappen)
+    assert(out.cell.getResult() == OK)
   }
 
   /*test("ImmutabilityAnalysis: Concurrency") {

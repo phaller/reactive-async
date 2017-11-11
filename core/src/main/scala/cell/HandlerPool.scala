@@ -85,7 +85,6 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     this.onQuiescent { () =>
       // Find one closed strongly connected component (cell)
       val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().values.asInstanceOf[Iterable[Cell[K, V]]].toSeq
-      println(registered.size)
       if (registered.nonEmpty) {
         val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
@@ -134,7 +133,10 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     val key = cells.head.key
     val result = key.resolve(cells)
 
-    for ((c, v) <- result) c.resolveWithValue(v)
+    for ((c, v) <- result) {
+      cells.foreach(c.removeNextCallbacks(_))
+      c.resolveWithValue(v)
+    }
   }
 
   /**
@@ -144,7 +146,10 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     val key = cells.head.key
     val result = key.fallback(cells)
 
-    for ((c, v) <- result) c.resolveWithValue(v)
+    for ((c, v) <- result) {
+      cells.foreach(c.removeNextCallbacks(_))
+      c.resolveWithValue(v)
+    }
   }
 
   // Shouldn't we use:
