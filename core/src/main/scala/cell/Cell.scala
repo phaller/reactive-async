@@ -11,11 +11,6 @@ import scala.util.{ Failure, Success, Try }
 
 import lattice.{ Lattice, LatticeViolationException, Key, DefaultKey }
 
-sealed trait WhenNextPredicate
-case object WhenNext extends WhenNextPredicate
-case object WhenNextComplete extends WhenNextPredicate
-case object FalsePred extends WhenNextPredicate
-
 trait Cell[K <: Key[V], V] {
 
   def key: K
@@ -34,33 +29,29 @@ trait Cell[K <: Key[V], V] {
    * Adds a dependency on some `other` cell.
    *
    * Example:
-   *   whenComplete(cell, x => !x, Impure) // if `cell` is completed and the predicate is true (meaning
-   *                                       // `cell` is impure), `this` cell can be completed with constant `Impure`
+   *   whenComplete(cell,                     // if `cell` is completed
+   *     case Impure => FinalOutcome(Impure)  // if `cell` is impure `this` cell can be completed with constant `Impure`
+   *     case _ => NoOutome)
    *
    * @param other  Cell that `this` Cell depends on.
-   * @param pred   Predicate used to decide whether a final result of `this` Cell can be computed early.
-   *               `pred` is applied to value of `other` cell.
-   * @param value  Early result value.
+   * @param valueCallback  Callback that retrieves the final value of `other` and returns an Outcome for `this` cell.
    */
-  def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit
-  def whenComplete(other: Cell[K, V], pred: V => Boolean, valueCallback: V => Option[V]): Unit
+  def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
 
   /**
    * Adds a dependency on some `other` cell.
    *
    * Example:
-   *   whenNext(cell, x => !x, Impure) // if a preliminary result is put in `cell` using
-   *                                   // `putNext`and the predicate is true (meaning `cell`
-   *                                   // is impure), `this`cell can receive next intermediate
-   *                                   // result with constant `Impure`
+   *   whenNext(cell,                     // if `cell` is completed
+   *     case Impure => FinalOutcome(Impure)  // if `cell` is impure `this` cell can be completed with constant `Impure`
+   *     case _ => NoOutome)
+   *
+   * Us `other.isComplete` to check, if the new value of `other` is final.
    *
    * @param other  Cell that `this` Cell depends on.
-   * @param pred   Predicate used to decide whether an intermediate or final result of `this` Cell can be computed early, depending on what the predicate returns.
-   *               `pred` is applied to value of `other` cell.
-   * @param value  Early result value.
+   * @param valueCallback  Callback that retrieves the new value of `other` and returns an Outcome for `this` cell.
    */
-  def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: V): Unit
-  def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, valueCallback: V => Option[V]): Unit
+  def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
 
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)]
 
@@ -295,19 +286,6 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
   /**
    * Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
    *  `putNext`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
-   *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `value`
-   *  respectively.
-   *
-   *  The thereby introduced dependency is removed when `this` cell
-   *  is completed (either prior or after an invocation of `whenNext`).
-   */
-  override def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, value: V): Unit = {
-    whenNext(other, pred, (v: V) => Some(value))
-  }
-
-  /**
-   * Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
-   *  `putNext`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
    *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `v`
    *  respectively. To calculate `v`, the `valueCallback` function is called with the result of `other`.
    *
@@ -317,7 +295,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenNext`).
    */
-  override def whenNext(other: Cell[K, V], pred: V => WhenNextPredicate, valueCallback: V => Option[V]): Unit = {
+  override def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
     var success = false
     while (!success) {
       state.get() match {
@@ -327,7 +305,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
           success = true
 
         case raw: State[_, _] => // not completed
-          val newDep = new NextDepRunnable(pool, other, pred, valueCallback, this)
+          val newDep = new NextDepRunnable(pool, other, valueCallback, this)
           // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
 
           val current = raw.asInstanceOf[State[K, V]]
@@ -342,19 +320,6 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
       }
     }
   }
-
-  /**
-   * Adds dependency on `other` cell: when `other` cell is completed, evaluate `pred`
-   *  with the result of `other`. If this evaluation yields true, complete `this` cell
-   *  with `value`.
-   *
-   *  The thereby introduced dependency is removed when `this` cell
-   *  is completed (either prior or after an invocation of `whenComplete`).
-   */
-  override def whenComplete(other: Cell[K, V], pred: V => Boolean, value: V): Unit = {
-    whenComplete(other, pred, (v: V) => Some(value))
-  }
-
   /**
    * Adds dependency on `other` cell: when `other` cell is completed, evaluate `pred`
    *  with the result of `other`. If this evaluation yields true, complete `this` cell
@@ -363,14 +328,14 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
    *  The thereby introduced dependency is removed when `this` cell
    *  is completed (either prior or after an invocation of `whenComplete`).
    */
-  override def whenComplete(other: Cell[K, V], pred: V => Boolean, valueCallback: V => Option[V]): Unit = {
+  override def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result
       // do not add dependency
       // in fact, do nothing
 
       case raw: State[_, _] => // not completed
-        val newDep = new CompleteDepRunnable(pool, other, pred, valueCallback, this)
+        val newDep = new CompleteDepRunnable(pool, other, valueCallback, this)
         // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
         other.addCallback(newDep, this)
 
@@ -648,8 +613,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
 private class CompleteDepRunnable[K <: Key[V], V](
   val pool: HandlerPool,
   val cell: Cell[K, V],
-  val pred: V => Boolean,
-  val shortCutValueCallback: V => Option[V],
+  val shortCutValueCallback: V => Outcome[V],
   val completer: CellCompleter[K, V])
   extends Runnable with OnCompleteRunnable with (Try[V] => Unit) {
   // must be filled in before running it
@@ -657,14 +621,12 @@ private class CompleteDepRunnable[K <: Key[V], V](
 
   override def apply(x: Try[V]): Unit = x match {
     case Success(v) =>
-      if (pred(v)) {
-        shortCutValueCallback.apply(v) match {
-          case Some(scv) => completer.putFinal(scv)
-          case None => /* do nothing */
-        }
-      } else {
-        completer.removeDep(cell)
-        completer.removeNextDep(cell)
+      shortCutValueCallback(v) match {
+        case FinalOutcome(v) => completer.putFinal(v)
+        case NextOutcome(v) => completer.putNext(v)
+        case NoOutcome =>
+          completer.removeDep(cell)
+          completer.removeNextDep(cell)
       }
     case Failure(e) =>
       completer.removeDep(cell)
@@ -710,8 +672,7 @@ private class CompleteCallbackRunnable[K <: Key[V], V](val executor: HandlerPool
 private class NextDepRunnable[K <: Key[V], V](
   val pool: HandlerPool,
   val cell: Cell[K, V], // otherCell
-  val pred: V => WhenNextPredicate,
-  val shortCutValueCallback: V => Option[V],
+  val shortCutValueCallback: V => Outcome[V],
   val completer: CellCompleter[K, V]) // this
   extends Runnable with OnCompleteRunnable with (Try[V] => Unit) {
   var value: Try[V] = null
@@ -719,21 +680,16 @@ private class NextDepRunnable[K <: Key[V], V](
   override def apply(x: Try[V]): Unit = {
     x match {
       case Success(v) =>
-        pred(v) match {
-          case WhenNext =>
-            shortCutValueCallback(v) match {
-              case Some(scv) => completer.putNext(scv)
-              case None => /* do nothing */
-            }
-          case WhenNextComplete =>
-            shortCutValueCallback(v) match {
-              case Some(scv) => completer.putFinal(scv)
-              case None => /* do nothing */
-            }
+        shortCutValueCallback(v) match {
+          case NextOutcome(v) =>
+            completer.putNext(v)
+          case FinalOutcome(v) =>
+            completer.putFinal(v)
           case _ => /* do nothing */
         }
       case Failure(e) => /* do nothing */
     }
+
     if (cell.isComplete) completer.removeNextDep(cell)
   }
 

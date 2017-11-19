@@ -3,14 +3,12 @@ package opal
 import java.net.URL
 
 import scala.collection.JavaConverters._
-
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
-import cell.{ HandlerPool, CellCompleter, Cell }
+import cell._
 import org.opalj.Success
-import org.opalj.br.{ ClassFile, PC, Method, MethodWithBody }
-import org.opalj.br.analyses.{ BasicReport, DefaultOneStepAnalysis, Project }
+import org.opalj.br.{ClassFile, Method, MethodWithBody, PC}
+import org.opalj.br.analyses.{BasicReport, DefaultOneStepAnalysis, Project}
 import org.opalj.br.instructions.GETFIELD
 import org.opalj.br.instructions.GETSTATIC
 import org.opalj.br.instructions.PUTFIELD
@@ -164,7 +162,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
                 val targetCellCompleter = methodToCellCompleter(callee)
                 hasDependencies = true
-                cellCompleter.cell.whenComplete(targetCellCompleter.cell, (p: Purity) => p == Impure, Impure)
+                cellCompleter.cell.whenComplete(targetCellCompleter.cell, p => if (p == Impure) FinalOutcome(Impure) else NoOutcome)
 
               case _ /* Empty or Failure */ ⇒
 
