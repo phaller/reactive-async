@@ -57,8 +57,6 @@ trait Cell[K <: Key[V], V] {
    */
   def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
 
-  def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)]
-
   // internal API
 
   // Schedules execution of `callback` when next intermediate result is available.
@@ -195,24 +193,6 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
   override def put(x: V, isFinal: Boolean): Unit = {
     if (isFinal) putFinal(x)
     else putNext(x)
-  }
-
-  def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)] = {
-    implicit val theLattice: Lattice[V] = lattice
-    val completer =
-      CellCompleter[DefaultKey[(V, V)], (V, V)](pool, new DefaultKey[(V, V)])
-    this.onComplete {
-      case Success(x) =>
-        that.onComplete {
-          case Success(y) =>
-            completer.putFinal((x, y))
-          case f @ Failure(_) =>
-            completer.tryComplete(f.asInstanceOf[Try[(V, V)]])
-        }
-      case f @ Failure(_) =>
-        completer.tryComplete(f.asInstanceOf[Try[(V, V)]])
-    }
-    completer.cell
   }
 
   private[this] def currentState(): State[K, V] =
