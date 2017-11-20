@@ -73,13 +73,13 @@ trait Cell[K <: Key[V], V] {
   // internal API
 
   // Schedules execution of `callback` when next intermediate result is available.
-  def onNext[U](callback: Try[V] => U): Unit //(implicit context: ExecutionContext): Unit
+  private[cell] def onNext[U](callback: Try[V] => U): Unit //(implicit context: ExecutionContext): Unit
 
   // Schedules execution of `callback` when completed with final result.
-  def onComplete[U](callback: Try[V] => U): Unit
+  private[cell] def onComplete[U](callback: Try[V] => U): Unit
 
-  def waitUntilNoDeps(): Unit
-  def waitUntilNoNextDeps(): Unit
+  private[cell] def waitUntilNoDeps(): Unit
+  private[cell] def waitUntilNoNextDeps(): Unit
 
   private[cell] def numTotalDependencies: Int
   private[cell] def numNextDependencies: Int
@@ -231,19 +231,19 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
         pre.asInstanceOf[State[K, V]]
     }
 
-  override def numCompleteDependencies: Int = {
+  override private[cell] def numCompleteDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     else current.deps.values.flatten.size
   }
 
-  override def numNextDependencies: Int = {
+  override private[cell] def numNextDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     else current.nextDeps.values.flatten.size
   }
 
-  override def numTotalDependencies: Int = {
+  override private[cell] def numTotalDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     (current.deps.values.flatten ++ current.nextDeps.values.flatten).size
@@ -565,16 +565,16 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
     }
   }
 
-  def waitUntilNoDeps(): Unit = {
+  override private[cell] def waitUntilNoDeps(): Unit = {
     nodepslatch.await()
   }
 
-  def waitUntilNoNextDeps(): Unit = {
+  override private[cell] def waitUntilNoNextDeps(): Unit = {
     nonextdepslatch.await()
   }
 
   // Schedules execution of `callback` when next intermediate result is available.
-  override def onNext[U](callback: Try[V] => U): Unit = {
+  override private[cell] def onNext[U](callback: Try[V] => U): Unit = {
     val runnable = new NextCallbackRunnable[K, V](pool, callback, this)
     dispatchOrAddNextCallback(runnable)
   }
