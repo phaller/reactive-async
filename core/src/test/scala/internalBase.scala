@@ -24,8 +24,8 @@ class InternalBaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, (x: Int) => x == 0, 0)
-    cell1.whenComplete(cell2, (x: Int) => x == 0, 0)
+    cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)
+    cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)
 
     assert(cell1.numCompleteDependencies == 2)
     assert(cell2.numCompleteDependencies == 0)
@@ -37,8 +37,8 @@ class InternalBaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, (x: Int) => x == 0, 0)
-    cell1.whenComplete(cell2, (x: Int) => x == 0, 0)
+    cell1.whenComplete(cell2,  x => if (x == 0) FinalOutcome(0) else NoOutcome)
+    cell1.whenComplete(cell2,  x => if (x == 0) FinalOutcome(0) else NoOutcome)
 
     completer1.putFinal(0)
 
