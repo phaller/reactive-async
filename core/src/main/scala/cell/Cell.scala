@@ -31,7 +31,7 @@ trait Cell[K <: Key[V], V] {
    * Example:
    *   whenComplete(cell,                     // if `cell` is completed
    *     case Impure => FinalOutcome(Impure)  // if `cell` is impure `this` cell can be completed with constant `Impure`
-   *     case _ => NoOutome)
+   *     case _ => NoOutcome)
    *
    * @param other  Cell that `this` Cell depends on.
    * @param valueCallback  Callback that retrieves the final value of `other` and returns an Outcome for `this` cell.
@@ -44,9 +44,9 @@ trait Cell[K <: Key[V], V] {
    * Example:
    *   whenNext(cell,                     // if `cell` is completed
    *     case Impure => FinalOutcome(Impure)  // if `cell` is impure `this` cell can be completed with constant `Impure`
-   *     case _ => NoOutome)
+   *     case _ => NoOutcome)
    *
-   * Us `other.isComplete` to check, if the new value of `other` is final.
+   * Use `other.isComplete` to check if the new value of `other` is final.
    *
    * @param other  Cell that `this` Cell depends on.
    * @param valueCallback  Callback that retrieves the new value of `other` and returns an Outcome for `this` cell.
