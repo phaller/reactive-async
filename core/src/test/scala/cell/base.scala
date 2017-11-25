@@ -3,10 +3,10 @@ package cell
 import org.scalatest.FunSuite
 import java.util.concurrent.CountDownLatch
 
-import scala.util.{Failure, Success}
-import scala.concurrent.{Await, Promise}
+import scala.util.{ Failure, Success }
+import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
-import lattice.{Lattice, StringIntLattice, StringIntKey, LatticeViolationException, DefaultKey, Key}
+import lattice.{ Lattice, StringIntLattice, StringIntKey, LatticeViolationException, DefaultKey, Key }
 import opal._
 import org.opalj.br.analyses.Project
 import java.io.File
@@ -953,13 +953,13 @@ class BaseSuite extends FunSuite {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called.
-    cell1.whenNext(cell2, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
-    cell1.whenNext(cell3, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
-    cell2.whenNext(cell4, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
-    cell3.whenNext(cell4, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
-    cell4.whenNext(cell1, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell1.whenNext(cell2, v => { assert(false); NextOutcome(-2) })
+    cell1.whenNext(cell3, v => { assert(false); NextOutcome(-2) })
+    cell2.whenNext(cell4, v => { assert(false); NextOutcome(-2) })
+    cell3.whenNext(cell4, v => { assert(false); NextOutcome(-2) })
+    cell4.whenNext(cell1, v => { assert(false); NextOutcome(-2) })
 
-    for(c <- List(cell1, cell2, cell3, cell4))
+    for (c <- List(cell1, cell2, cell3, cell4))
       c.onComplete {
         case Success(v) =>
           assert(v === 0)
@@ -1000,13 +1000,13 @@ class BaseSuite extends FunSuite {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called.
-    cell1.whenNext(cell2, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
-    cell1.whenNext(cell3, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
-    cell2.whenNext(cell4, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
-    cell3.whenNext(cell4, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
-    cell4.whenNext(cell1, (_: Int) => WhenNext, v => {assert(false); Some(-2)})
+    cell1.whenNext(cell2, v => { assert(false); NextOutcome(-2) })
+    cell1.whenNext(cell3, v => { assert(false); NextOutcome(-2) })
+    cell2.whenNext(cell4, v => { assert(false); NextOutcome(-2) })
+    cell3.whenNext(cell4, v => { assert(false); NextOutcome(-2) })
+    cell4.whenNext(cell1, v => { assert(false); NextOutcome(-2) })
 
-    for(c <- List(cell1, cell2, cell3, cell4))
+    for (c <- List(cell1, cell2, cell3, cell4))
       c.onComplete {
         case Success(v) =>
           assert(v === 1)
@@ -1046,8 +1046,8 @@ class BaseSuite extends FunSuite {
       val cell1 = completer1.cell
       val cell2 = completer2.cell
 
-      cell1.whenNext(cell2, (_: Value) => WhenNext, ShouldNotHappen)
-      cell2.whenNext(cell1, (_: Value) => WhenNext, ShouldNotHappen)
+      cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
+      cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
 
       pool.whileQuiescentResolveCell
       val fut = pool.quiescentResolveCell
@@ -1081,7 +1081,6 @@ class BaseSuite extends FunSuite {
       }
     }
 
-
     for (i <- 1 to 100) {
       val pool = new HandlerPool
       val completer1 = CellCompleter[TheKey.type, Value](pool, TheKey)
@@ -1089,8 +1088,8 @@ class BaseSuite extends FunSuite {
       val cell1 = completer1.cell
       val cell2 = completer2.cell
 
-      cell1.whenNext(cell2, (_: Value) => WhenNext, ShouldNotHappen)
-      cell2.whenNext(cell1, (_: Value) => WhenNext, ShouldNotHappen)
+      cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
+      cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
 
       pool.whileQuiescentResolveCell
       val fut = pool.quiescentResolveCell
@@ -1134,9 +1133,9 @@ class BaseSuite extends FunSuite {
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](pool, TheKey)
-    cell1.whenNext(cell2, (_: Value) => WhenNext, ShouldNotHappen)
-    cell2.whenNext(cell1, (_: Value) => WhenNext, ShouldNotHappen)
-    cell2.whenNext(in.cell, (_: Value) => WhenNext, _ => { assert(false); Some(ShouldNotHappen) })
+    cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
+    cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
+    cell2.whenNext(in.cell, v => { assert(false); NextOutcome(ShouldNotHappen) })
 
     pool.whileQuiescentResolveCell
     val fut = pool.quiescentResolveCycles
@@ -1182,10 +1181,10 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val out = CellCompleter[TheKey.type, Value](pool, TheKey)
     out.putNext(Dummy)
-    cell1.whenNext(cell2, (_: Value) => WhenNext, ShouldNotHappen)
-    cell2.whenNext(cell1, (_: Value) => WhenNext, ShouldNotHappen)
+    cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
+    cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
     out.putNext(ShouldNotHappen)
-    out.cell.whenComplete(cell1, (v: Value) => true, OK)
+    out.cell.whenComplete(cell1, v => FinalOutcome(OK))
 
     pool.whileQuiescentResolveCell
     val fut = pool.quiescentResolveCycles
