@@ -29,12 +29,15 @@ trait Cell[K <: Key[V], V] {
    * Adds a dependency on some `other` cell.
    *
    * Example:
-   *   whenComplete(cell,                     // if `cell` is completed
-   *     case Impure => FinalOutcome(Impure)  // if `cell` is impure `this` cell can be completed with constant `Impure`
-   *     case _ => NoOutcome)
+   * {{{
+   *   whenComplete(cell, {                   // when `cell` is completed
+   *     case Impure => FinalOutcome(Impure)  // if the final value of `cell` is `Impure`, `this` cell is completed with value `Impure`
+   *     case _ => NoOutcome
+   *   })
+   * }}}
    *
    * @param other  Cell that `this` Cell depends on.
-   * @param valueCallback  Callback that retrieves the final value of `other` and returns an Outcome for `this` cell.
+   * @param valueCallback  Callback that receives the final value of `other` and returns an `Outcome` for `this` cell.
    */
   def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
 
@@ -42,24 +45,19 @@ trait Cell[K <: Key[V], V] {
    * Adds a dependency on some `other` cell.
    *
    * Example:
-   *   whenNext(cell,                     // if `cell` is completed
-   *     case Impure => FinalOutcome(Impure)  // if `cell` is impure `this` cell can be completed with constant `Impure`
-   *     case _ => NoOutcome)
-   *
-   * Use `other.isComplete` to check if the new value of `other` is final.
+   * {{{
+   *   whenNext(cell, {                       // when the next value is put into `cell`
+   *     case Impure => FinalOutcome(Impure)  // if the next value of `cell` is `Impure`, `this` cell is completed with value `Impure`
+   *     case _ => NoOutcome
+   *   })
+   * }}}
    *
    * @param other  Cell that `this` Cell depends on.
-   * @param valueCallback  Callback that retrieves the new value of `other` and returns an Outcome for `this` cell.
+   * @param valueCallback  Callback that receives the new value of `other` and returns an `Outcome` for `this` cell.
    */
   def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
 
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)]
-
-  /**
-   * Registers a call-back function to be invoked when quiescence is reached, but `this` cell has not been
-   * completed, yet. The call-back function is passed a sequence of the cells that `this` cell depends on.
-   */
-  // def onCycle(callback: Seq[Cell[K, V]] => V)
 
   // internal API
 
@@ -69,7 +67,10 @@ trait Cell[K <: Key[V], V] {
   // Schedules execution of `callback` when completed with final result.
   private[cell] def onComplete[U](callback: Try[V] => U): Unit
 
+  // Only used in tests.
   private[cell] def waitUntilNoDeps(): Unit
+
+  // Only used in tests.
   private[cell] def waitUntilNoNextDeps(): Unit
 
   private[cell] def numTotalDependencies: Int
