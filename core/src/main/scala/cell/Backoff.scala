@@ -3,12 +3,12 @@ package cell
 // Exponential backoff
 // Taken, and adapted from ChemistrySet, see: https://github.com/aturon/ChemistrySet
 
-object Backoff {
+private object Backoff {
   val maxCount: Int = 14
   var procs = Runtime.getRuntime.availableProcessors
   def apply() = new Backoff
 }
-final class Backoff {
+private final class Backoff {
   import Backoff._
 
   var seed: Long = Thread.currentThread.getId

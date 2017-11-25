@@ -16,7 +16,7 @@ import org.opalj.graphs._
 
 /* Need to have reference equality for CAS.
  */
-class PoolState(val handlers: List[() => Unit] = List(), val submittedTasks: Int = 0) {
+private class PoolState(val handlers: List[() => Unit] = List(), val submittedTasks: Int = 0) {
   def isQuiescent(): Boolean =
     submittedTasks == 0
 }
