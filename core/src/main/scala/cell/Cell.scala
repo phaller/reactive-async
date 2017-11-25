@@ -150,7 +150,7 @@ private object State {
     new State[K, V](lattice.empty, Map(), Map(), Map(), Map())
 }
 
-class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V]) extends Cell[K, V] with CellCompleter[K, V] {
+private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V]) extends Cell[K, V] with CellCompleter[K, V] {
 
   private val nodepslatch = new CountDownLatch(1)
   private val nonextdepslatch = new CountDownLatch(1)
@@ -378,7 +378,7 @@ class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V
    * if it fails.
    */
   @tailrec
-  final def tryNewState(value: V): Boolean = {
+  private[cell] final def tryNewState(value: V): Boolean = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result already
         val finalResult = finalRes.asInstanceOf[Try[V]].get

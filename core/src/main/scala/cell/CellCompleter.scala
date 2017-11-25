@@ -18,7 +18,7 @@ trait CellCompleter[K <: Key[V], V] {
   def putNext(x: V): Unit
   def put(x: V, isFinal: Boolean): Unit
 
-  def tryNewState(value: V): Boolean
+  private[cell] def tryNewState(value: V): Boolean
   def tryComplete(value: Try[V]): Boolean
 
   private[cell] def removeDep(cell: Cell[K, V]): Unit
