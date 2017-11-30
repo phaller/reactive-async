@@ -53,7 +53,6 @@ class PsSuite extends FunSuite {
 
     completer20.putNext(1)
     cell20.whenNextSequential(cell10, x => {
-      println("other0")
       if (x == 10) {
         completer20.putFinal(43)
       }
@@ -63,7 +62,6 @@ class PsSuite extends FunSuite {
     completer1.putNext(10)
 
     cell1.whenNext(cell1, _ => {
-      println("itself")
       NoOutcome
     })
 
@@ -82,7 +80,6 @@ class PsSuite extends FunSuite {
     }
 
     override def fallback[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
-      println("fallback")
       cells.map(cell ⇒ (cell, cell.getResult()))
     }
 

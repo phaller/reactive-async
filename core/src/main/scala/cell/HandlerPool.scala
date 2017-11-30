@@ -228,9 +228,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
 
     for ((c, v) <- result) {
       cells.foreach(cell => {
-        // Note that there is a better solution for this in https://github.com/phaller/reactive-async/pull/58
-        c.removeNextCallbacks(cell)
-        c.removeCompleteCallbacks(cell)
+        c.removeAllCallbacks(cell)
       })
       c.resolveWithValue(v)
     }
@@ -245,9 +243,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
 
     for ((c, v) <- result) {
       cells.foreach(cell => {
-        // Note that there is a better solution for this in https://github.com/phaller/reactive-async/pull/58
-        c.removeNextCallbacks(cell)
-        c.removeCompleteCallbacks(cell)
+        c.removeAllCallbacks(cell)
       })
       c.resolveWithValue(v)
     }
