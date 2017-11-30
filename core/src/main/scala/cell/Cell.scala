@@ -108,9 +108,12 @@ trait Cell[K <: Key[V], V] {
   private[cell] def resolveWithValue(value: V): Unit
   def cellDependencies: Seq[Cell[K, V]]
   def totalCellDependencies: Seq[Cell[K, V]]
+  def isIndependent(): Boolean
 
   def removeCompleteCallbacks(cell: Cell[K, V]): Unit
   def removeNextCallbacks(cell: Cell[K, V]): Unit
+  private[cell] def removeAllCallbacks(cell: Cell[K, V]): Unit
+  private[cell] def removeAllCallbacks(cells: Seq[Cell[K, V]]): Unit
 }
 
 object Cell {
@@ -289,6 +292,16 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
       case pre: State[_, _] => // not completed
         val current = pre.asInstanceOf[State[K, V]]
         (current.completeDeps ++ current.nextDeps).toSeq
+    }
+  }
+
+  override def isIndependent(): Boolean = {
+    state.get() match {
+      case finalRes: Try[_] => // completed with final result
+        true
+      case pre: State[_, _] => // not completed
+        val current = pre.asInstanceOf[State[K, V]]
+        current.completeDeps.isEmpty && current.nextDeps.isEmpty
     }
   }
 
@@ -479,12 +492,17 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
         res
 
       case (pre: State[K, V], newVal: Try[V]) =>
-        pre.nextCallbacks.values.foreach { callbacks =>
-          callbacks.foreach(callback => callback.execute())
-        }
-        pre.completeCallbacks.values.foreach { callbacks =>
-          callbacks.foreach(callback => callback.execute())
-        }
+        val nextCallbacks = pre.nextCallbacks
+        val completeCallbacks = pre.completeCallbacks
+
+        if (nextCallbacks.nonEmpty)
+          nextCallbacks.values.foreach { callbacks =>
+            callbacks.foreach(callback => callback.execute())
+          }
+        if (completeCallbacks.nonEmpty)
+          completeCallbacks.values.foreach { callbacks =>
+            callbacks.foreach(callback => callback.execute())
+          }
 
         val depsCells = pre.completeDeps
         val nextDepsCells = pre.nextDeps
@@ -560,6 +578,36 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
         val newState = new State(current.res, current.tasksActive, current.completeDeps, current.completeCallbacks, current.nextDeps, newNextCallbacks)
         if (!state.compareAndSet(current, newState))
           removeNextCallbacks(cell)
+      case _ => /* do nothing */
+    }
+  }
+
+  @tailrec
+  override private[cell] final def removeAllCallbacks(cell: Cell[K, V]): Unit = {
+    state.get() match {
+      case pre: State[_, _] =>
+        val current = pre.asInstanceOf[State[K, V]]
+        val newNextCallbacks = current.nextCallbacks - cell
+        val newCompleteCallbacks = current.completeCallbacks - cell
+
+        val newState = new State(current.res, current.tasksActive, current.completeDeps, newCompleteCallbacks, current.nextDeps, newNextCallbacks)
+        if (!state.compareAndSet(current, newState))
+          removeAllCallbacks(cell)
+      case _ => /* do nothing */
+    }
+  }
+
+  @tailrec
+  override private[cell] final def removeAllCallbacks(cells: Seq[Cell[K, V]]): Unit = {
+    state.get() match {
+      case pre: State[_, _] =>
+        val current = pre.asInstanceOf[State[K, V]]
+        val newNextCallbacks = current.nextCallbacks -- cells
+        val newCompleteCallbacks = current.completeCallbacks -- cells
+
+        val newState = new State(current.res, current.tasksActive, current.completeDeps, newCompleteCallbacks, current.nextDeps, newNextCallbacks)
+        if (!state.compareAndSet(current, newState))
+          removeAllCallbacks(cells)
       case _ => /* do nothing */
     }
   }

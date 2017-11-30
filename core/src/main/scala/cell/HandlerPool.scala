@@ -130,7 +130,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
 
   /**
    * Wait for a quiescent state when no more tasks are being executed. Afterwards, it will resolve
-   * unfinished cells using the keys resolve function and recursively wait for resolution.
+   * unfinished cycles (cSCCs) of cells using the keys resolve function and recursively wait for resolution.
    *
    * @return The future will be set once the resolve is finished and the quiescent state is reached.
    *         The boolean parameter indicates if cycles where resolved or not.
@@ -162,6 +162,9 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    * Wait for a quiescent state when no more tasks are being executed. Afterwards, it will resolve
    * unfinished cells using the keys fallback function and recursively wait for resolution.
    *
+   * Note that this also resolves cells that have dependencies on other cells – in contrast to
+   * quiescentResolveCell()
+   *
    * @return The future will be set once the resolve is finished and the quiescent state is reached.
    *         The boolean parameter indicates if cycles where resolved or not.
    */
@@ -169,7 +172,9 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Finds the rest of the unresolved cells (that have been triggered)
-      val rest = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      val rest = this.cellsNotDone.get().keys
+        .filter(_.tasksActive())
+        .asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (rest.nonEmpty) {
         resolveDefault(rest)
 
@@ -184,9 +189,12 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   }
 
   /**
-   * Wait for a quiescent state when no more tasks are being executed. Afterwards, it will resolve
-   * unfinished cells using the keys resolve function. If more cells are unresolved, use the
-   * fallback function and recursively wait for resolution.
+   * Wait for a quiescent state.
+   * Afterwards, resolve all cells without dependenciese with the respective
+   * `fallback` value calculated by it's `Key`.
+   * Also, resolve cycles without dependencies (cSCCs)  using the respective `Key`'s `resolve`.
+   * Both might lead to computations on other cells beeing triggered.
+   * If more cells are unresolved, recursively wait for resolution.
    *
    * @return The future will be set once the resolve is finished and the quiescent state is reached.
    *         The boolean parameter indicates if cycles where resolved or not.
@@ -194,23 +202,27 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   def quiescentResolveCell[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
-      // Find one closed strongly connected component (cell)
-      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      val activeCells = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
       var resolvedCycles = false
-      if (registered.nonEmpty) {
-        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
-        cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
-        resolvedCycles = cSCCs.nonEmpty
-      }
-      // Finds the rest of the unresolved cells (that have been triggered)
-      val rest = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
-      if (rest.nonEmpty) {
-        resolveDefault(rest)
+
+      val independent = activeCells.filter(_.isIndependent())
+      if (independent.nonEmpty) {
+        // Resolve indepdent cells with fallback values
+        resolveDefault(independent)
+      } else {
+        // Otherwise, find and resolve closed strongly connected components and resolve them.
+
+        // Find closed strongly connected component (cell)
+        if (activeCells.nonEmpty) {
+          val cSCCs = closedSCCs(activeCells, (cell: Cell[K, V]) => cell.totalCellDependencies)
+          cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
+          resolvedCycles = cSCCs.nonEmpty
+        }
       }
 
       // Wait again for quiescent state. It's possible that other tasks where scheduled while
       // resolving the cells.
-      if (resolvedCycles || rest.nonEmpty) {
+      if (resolvedCycles || independent.nonEmpty) {
         p.completeWith(quiescentResolveCell)
       } else {
         p.success(false)
@@ -220,37 +232,29 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   }
 
   /**
-   * Resolves a cycle of unfinished cells.
+   * Resolves a cycle of unfinished cells via the key's `resolve()` method.
    */
-  private def resolveCycle[K <: Key[V], V](cells: Seq[Cell[K, V]]): Unit = {
-    val key = cells.head.key
-    val result = key.resolve(cells)
-
-    for ((c, v) <- result) {
-      cells.foreach(cell => {
-        // Note that there is a better solution for this in https://github.com/phaller/reactive-async/pull/58
-        c.removeNextCallbacks(cell)
-        c.removeCompleteCallbacks(cell)
-      })
-      c.resolveWithValue(v)
-    }
-  }
+  private def resolveCycle[K <: Key[V], V](cells: Seq[Cell[K, V]]): Unit =
+    resolve(cells.head.key.resolve(cells))
 
   /**
-   * Resolves a cell with default value.
+   * Resolves a cell with default value with the key's `fallback()` method.
    */
-  private def resolveDefault[K <: Key[V], V](cells: Seq[Cell[K, V]]): Unit = {
-    val key = cells.head.key
-    val result = key.fallback(cells)
+  private def resolveDefault[K <: Key[V], V](cells: Seq[Cell[K, V]]): Unit =
+    resolve(cells.head.key.fallback(cells))
 
-    for ((c, v) <- result) {
-      cells.foreach(cell => {
-        // Note that there is a better solution for this in https://github.com/phaller/reactive-async/pull/58
-        c.removeNextCallbacks(cell)
-        c.removeCompleteCallbacks(cell)
+  /** Resolve all cells with the associated value. */
+  private def resolve[K <: Key[V], V](results: Seq[(Cell[K, V], V)]): Unit = {
+    for ((c, v) <- results)
+      execute(new Runnable {
+        override def run(): Unit = {
+          // Remove all callbacks that target other cells of this set.
+          // The result of those cells is explicitely given in `results`.
+          c.removeAllCallbacks(results.map(_._1))
+          // we can now safely put a final value
+          c.resolveWithValue(v)
+        }
       })
-      c.resolveWithValue(v)
-    }
   }
 
   /**

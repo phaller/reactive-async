@@ -1790,7 +1790,6 @@ class BaseSuite extends FunSuite {
       cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
       cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
 
-      pool.whileQuiescentResolveCell
       val fut = pool.quiescentResolveCell
       Await.ready(fut, 1.minutes)
 
@@ -1824,7 +1823,6 @@ class BaseSuite extends FunSuite {
       cell1.whenNextSequential(cell2, v => NextOutcome(ShouldNotHappen))
       cell2.whenNextSequential(cell1, v => NextOutcome(ShouldNotHappen))
 
-      pool.whileQuiescentResolveCell
       val fut = pool.quiescentResolveCell
       Await.ready(fut, 1.minutes)
 
@@ -1865,7 +1863,6 @@ class BaseSuite extends FunSuite {
       cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
       cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
 
-      pool.whileQuiescentResolveCell
       val fut = pool.quiescentResolveCell
       Await.ready(fut, 1.minutes)
 
@@ -1906,7 +1903,6 @@ class BaseSuite extends FunSuite {
       cell1.whenNextSequential(cell2, v => NextOutcome(ShouldNotHappen))
       cell2.whenNextSequential(cell1, v => NextOutcome(ShouldNotHappen))
 
-      pool.whileQuiescentResolveCell
       val fut = pool.quiescentResolveCell
       Await.ready(fut, 1.minutes)
 
@@ -1947,12 +1943,16 @@ class BaseSuite extends FunSuite {
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
+
+    // Let cell1 and cell2 form a cycle
     cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
-    cell2.whenNext(in.cell, v => { assert(false); NextOutcome(ShouldNotHappen) })
 
-    pool.whileQuiescentResolveCell
-    val fut = pool.quiescentResolveCycles
+    // the cycle is dependent on incoming information from `in`
+    cell2.whenNext(in.cell, v => { NextOutcome(ShouldNotHappen) })
+
+    // resolve the indepdentent cell `in` and the cycle.
+    val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
     pool.shutdown()
@@ -1992,12 +1992,65 @@ class BaseSuite extends FunSuite {
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
+
+    // Let cell1 and cell2 form a cycle
     cell1.whenNextSequential(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNextSequential(cell1, v => NextOutcome(ShouldNotHappen))
-    cell2.whenNextSequential(in.cell, v => { assert(false); NextOutcome(ShouldNotHappen) })
 
-    pool.whileQuiescentResolveCell
-    val fut = pool.quiescentResolveCycles
+    // the cycle is dependent on incoming information from `in`
+    cell2.whenNextSequential(in.cell, v => { NextOutcome(ShouldNotHappen) })
+
+    // resolve the indepdentent cell `in` and the cycle.
+    val fut = pool.quiescentResolveCell
+    Await.ready(fut, 1.minutes)
+
+    pool.shutdown()
+
+    assert(cell1.getResult() != ShouldNotHappen)
+    assert(cell2.getResult() != ShouldNotHappen)
+    assert(in.cell.getResult() == Fallback)
+  }
+
+  test("whenComplete: Cycle with additional ingoing dep") {
+    sealed trait Value
+    case object Bottom extends Value
+    case object Resolved extends Value
+    case object Fallback extends Value
+    case object OK extends Value
+    case object ShouldNotHappen extends Value
+
+    object Value {
+      implicit object ValueUpdater extends MonotonicUpdater[Value] {
+        override def lteq(v1: Value, v2: Value): Boolean = true
+        override val bottom: Value = Bottom
+      }
+    }
+
+    object TheKey extends DefaultKey[Value] {
+      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+        cells.map(cell => (cell, Resolved))
+      }
+      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+        cells.map(cell => (cell, Fallback))
+      }
+    }
+
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[TheKey.type, Value](TheKey)
+    val completer2 = CellCompleter[TheKey.type, Value](TheKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+    val in = CellCompleter[TheKey.type, Value](TheKey)
+
+    // Let cell1 and cell2 form a cycle
+    cell1.whenComplete(cell2, v => NextOutcome(ShouldNotHappen))
+    cell2.whenComplete(cell1, v => NextOutcome(ShouldNotHappen))
+
+    // the cycle is dependent on incoming information from `in`
+    cell2.whenComplete(in.cell, v => { NextOutcome(ShouldNotHappen) })
+
+    // resolve the indepdentent cell `in` and the cycle.
+    val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
     pool.shutdown()
@@ -2043,7 +2096,6 @@ class BaseSuite extends FunSuite {
     out.putNext(ShouldNotHappen)
     out.cell.whenComplete(cell1, v => FinalOutcome(OK))
 
-    pool.whileQuiescentResolveCell
     val fut = pool.quiescentResolveCycles
     Await.ready(fut, 1.minutes)
 
@@ -2090,7 +2142,6 @@ class BaseSuite extends FunSuite {
     out.putNext(ShouldNotHappen)
     out.cell.whenComplete(cell1, v => FinalOutcome(OK))
 
-    pool.whileQuiescentResolveCell
     val fut = pool.quiescentResolveCycles
     Await.ready(fut, 1.minutes)
 
@@ -2517,6 +2568,7 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
     val cell1 = completer1.cell
     val cell2 = completer2.cell
+    cell2.trigger()
 
     cell1.whenNext(cell1, x => {
       Thread.sleep(200)
