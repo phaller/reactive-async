@@ -391,7 +391,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    assert(completer1.cell.numNextDependencies == 10000)
+    assert(completer1.cell.numNextDependencies == 1)
 
     pool.shutdown()
   }

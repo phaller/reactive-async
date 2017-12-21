@@ -27,7 +27,7 @@ class InternalBaseSuite extends FunSuite {
     cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)
     cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)
 
-    assert(cell1.numCompleteDependencies == 2)
+    assert(cell1.numCompleteDependencies == 1)
     assert(cell2.numCompleteDependencies == 0)
   }
 
