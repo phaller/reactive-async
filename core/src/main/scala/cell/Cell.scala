@@ -80,7 +80,7 @@ trait Cell[K <: Key[V], V] {
   private[cell] def numNextCallbacks: Int
   private[cell] def numCompleteCallbacks: Int
 
-  private[cell] def addCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit
+  private[cell] def addCompleteCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit
   private[cell] def addNextCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit
 
   private[cell] def resolveWithValue(value: V): Unit
@@ -140,9 +140,9 @@ object Cell {
  */
 private class State[K <: Key[V], V](
   val res: V,
-  val deps: Map[Cell[K, V], List[CompleteDepRunnable[K, V]]],
-  val callbacks: Map[Cell[K, V], List[CompleteCallbackRunnable[K, V]]],
-  val nextDeps: Map[Cell[K, V], List[NextDepRunnable[K, V]]],
+  val completeDeps: Map[Cell[K, V], Int],
+  val completeCallbacks: Map[Cell[K, V], List[CompleteCallbackRunnable[K, V]]],
+  val nextDeps: Map[Cell[K, V], Int],
   val nextCallbacks: Map[Cell[K, V], List[NextCallbackRunnable[K, V]]])
 
 private object State {
@@ -226,19 +226,19 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
   override private[cell] def numCompleteDependencies: Int = {
     val current = currentState()
     if (current == null) 0
-    else current.deps.values.flatten.size
+    else current.completeDeps.foldLeft(0)(_ + _._2)
   }
 
   override private[cell] def numNextDependencies: Int = {
     val current = currentState()
     if (current == null) 0
-    else current.nextDeps.values.flatten.size
+    else current.nextDeps.foldLeft(0)(_ + _._2)
   }
 
   override private[cell] def numTotalDependencies: Int = {
     val current = currentState()
     if (current == null) 0
-    (current.deps.values.flatten ++ current.nextDeps.values.flatten).size
+    else numCompleteDependencies + numNextDependencies
   }
 
   override private[cell] def cellDependencies: Seq[Cell[K, V]] = {
@@ -247,7 +247,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         Seq[Cell[K, V]]()
       case pre: State[_, _] => // not completed
         val current = pre.asInstanceOf[State[K, V]]
-        current.deps.keys.toSeq
+        current.completeDeps.keys.toSeq
     }
   }
 
@@ -257,7 +257,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         Seq[Cell[K, V]]()
       case pre: State[_, _] => // not completed
         val current = pre.asInstanceOf[State[K, V]]
-        current.deps.keys.toSeq ++ current.nextDeps.keys.toSeq
+        current.completeDeps.keys.toSeq ++ current.nextDeps.keys.toSeq
     }
   }
 
@@ -276,7 +276,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         0
       case pre: State[_, _] => // not completed
         val current = pre.asInstanceOf[State[K, V]]
-        current.callbacks.values.size
+        current.completeCallbacks.values.size
     }
   }
 
@@ -311,8 +311,8 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
 
           val current = raw.asInstanceOf[State[K, V]]
           val newState = current.nextDeps.contains(other) match {
-            case true => new State(current.res, current.deps, current.callbacks, current.nextDeps + (other -> (newDep :: current.nextDeps(other))), current.nextCallbacks)
-            case false => new State(current.res, current.deps, current.callbacks, current.nextDeps + (other -> List(newDep)), current.nextCallbacks)
+            case true => new State(current.res, current.completeDeps, current.completeCallbacks, current.nextDeps + (other -> (current.nextDeps(other) + 1)), current.nextCallbacks)
+            case false => new State(current.res, current.completeDeps, current.completeCallbacks, current.nextDeps + (other -> 1), current.nextCallbacks)
           }
           if (state.compareAndSet(current, newState)) {
             success = true
@@ -338,18 +338,18 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
       case raw: State[_, _] => // not completed
         val newDep = new CompleteDepRunnable(pool, other, valueCallback, this)
         // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
-        other.addCallback(newDep, this)
+        other.addCompleteCallback(newDep, this)
 
         val current = raw.asInstanceOf[State[K, V]]
-        val newState = current.deps.contains(other) match {
-          case true => new State(current.res, current.deps + (other -> (newDep :: current.deps(other))), current.callbacks, current.nextDeps, current.nextCallbacks)
-          case false => new State(current.res, current.deps + (other -> List(newDep)), current.callbacks, current.nextDeps, current.nextCallbacks)
+        val newState = current.completeDeps.contains(other) match {
+          case true => new State(current.res, current.completeDeps + (other -> (current.completeDeps(other) + 1)), current.completeCallbacks, current.nextDeps, current.nextCallbacks)
+          case false => new State(current.res, current.completeDeps + (other -> 1), current.completeCallbacks, current.nextDeps, current.nextCallbacks)
         }
         state.compareAndSet(current, newState)
     }
   }
 
-  override private[cell] def addCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit = {
+  override private[cell] def addCompleteCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit = {
     val runnable = new CompleteCallbackRunnable[K, V](pool, callback, cell)
     dispatchOrAddCallback(runnable)
   }
@@ -392,7 +392,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         val current = raw.asInstanceOf[State[K, V]]
         val newVal = tryJoin(current.res, value)
         if (current.res != newVal) {
-          val newState = new State(newVal, current.deps, current.callbacks, current.nextDeps, current.nextCallbacks)
+          val newState = new State(newVal, current.completeDeps, current.completeCallbacks, current.nextDeps, current.nextCallbacks)
           if (!state.compareAndSet(current, newState)) {
             tryNewState(value)
           } else {
@@ -436,30 +436,30 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         res
 
       case (pre: State[K, V], newVal: Try[V]) =>
-        val depsCells = pre.deps.keys
-        val nextDepsCells = pre.nextDeps.keys
-        if (pre.callbacks.isEmpty) {
+        val depsCells = pre.completeDeps
+        val nextDepsCells = pre.nextDeps
+        if (pre.completeCallbacks.isEmpty) {
           pre.nextCallbacks.values.foreach { callbacks =>
             callbacks.foreach(callback => callback.executeWithValue(newVal))
           }
         } else {
           // onNext callbacks with these cells should not be triggered, because they have
           // onComplete callbacks which are triggered instead.
-          pre.callbacks.values.foreach { callbacks =>
+          pre.completeCallbacks.values.foreach { callbacks =>
             callbacks.foreach(callback => callback.executeWithValue(newVal))
           }
           pre.nextCallbacks.values.foreach { callbacks =>
             callbacks.foreach { callback =>
-              if (!pre.callbacks.contains(callback.dependee))
+              if (!pre.completeCallbacks.contains(callback.dependee))
                 callback.executeWithValue(newVal)
             }
           }
         }
 
         if (depsCells.nonEmpty)
-          depsCells.foreach(_.removeCompleteCallbacks(this))
+          depsCells.keys.foreach(_.removeCompleteCallbacks(this))
         if (nextDepsCells.nonEmpty)
-          nextDepsCells.foreach(_.removeNextCallbacks(this))
+          nextDepsCells.keys.foreach(_.removeNextCallbacks(this))
 
         true
     }
@@ -474,9 +474,9 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]
-        val newDeps = current.deps - cell
+        val newDeps = current.completeDeps - cell
 
-        val newState = new State(current.res, newDeps, current.callbacks, current.nextDeps, current.nextCallbacks)
+        val newState = new State(current.res, newDeps, current.completeCallbacks, current.nextDeps, current.nextCallbacks)
         if (!state.compareAndSet(current, newState))
           removeDep(cell)
         else if (newDeps.isEmpty)
@@ -493,7 +493,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         val current = pre.asInstanceOf[State[K, V]]
         val newNextDeps = current.nextDeps - cell
 
-        val newState = new State(current.res, current.deps, current.callbacks, newNextDeps, current.nextCallbacks)
+        val newState = new State(current.res, current.completeDeps, current.completeCallbacks, newNextDeps, current.nextCallbacks)
         if (!state.compareAndSet(current, newState))
           removeNextDep(cell)
         else if (newNextDeps.isEmpty)
@@ -508,9 +508,9 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]
-        val newCompleteCallbacks = current.callbacks - cell
+        val newCompleteCallbacks = current.completeCallbacks - cell
 
-        val newState = new State(current.res, current.deps, newCompleteCallbacks, current.nextDeps, current.nextCallbacks)
+        val newState = new State(current.res, current.completeDeps, newCompleteCallbacks, current.nextDeps, current.nextCallbacks)
         if (!state.compareAndSet(current, newState))
           removeCompleteCallbacks(cell)
       case _ => /* do nothing */
@@ -524,7 +524,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         val current = pre.asInstanceOf[State[K, V]]
         val newNextCallbacks = current.nextCallbacks - cell
 
-        val newState = new State(current.res, current.deps, current.callbacks, current.nextDeps, newNextCallbacks)
+        val newState = new State(current.res, current.completeDeps, current.completeCallbacks, current.nextDeps, newNextCallbacks)
         if (!state.compareAndSet(current, newState))
           removeNextCallbacks(cell)
       case _ => /* do nothing */
@@ -564,9 +564,9 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
       case pre: State[_, _] =>
         // assemble new state
         val current = pre.asInstanceOf[State[K, V]]
-        val newState = current.callbacks.contains(runnable.cell) match {
-          case true => new State(current.res, current.deps, current.callbacks + (runnable.cell -> (runnable :: current.callbacks(runnable.cell))), current.nextDeps, current.nextCallbacks)
-          case false => new State(current.res, current.deps, current.callbacks + (runnable.cell -> List(runnable)), current.nextDeps, current.nextCallbacks)
+        val newState = current.completeCallbacks.contains(runnable.cell) match {
+          case true => new State(current.res, current.completeDeps, current.completeCallbacks + (runnable.cell -> (runnable :: current.completeCallbacks(runnable.cell))), current.nextDeps, current.nextCallbacks)
+          case false => new State(current.res, current.completeDeps, current.completeCallbacks + (runnable.cell -> List(runnable)), current.nextDeps, current.nextCallbacks)
         }
         if (!state.compareAndSet(pre, newState)) dispatchOrAddCallback(runnable)
     }
@@ -587,8 +587,8 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         // assemble new state
         val current = pre.asInstanceOf[State[K, V]]
         val newState = current.nextCallbacks.contains(runnable.dependee) match {
-          case true => new State(current.res, current.deps, current.callbacks, current.nextDeps, current.nextCallbacks + (runnable.dependee -> (runnable :: current.nextCallbacks(runnable.dependee))))
-          case false => new State(current.res, current.deps, current.callbacks, current.nextDeps, current.nextCallbacks + (runnable.dependee -> List(runnable)))
+          case true => new State(current.res, current.completeDeps, current.completeCallbacks, current.nextDeps, current.nextCallbacks + (runnable.dependee -> (runnable :: current.nextCallbacks(runnable.dependee))))
+          case false => new State(current.res, current.completeDeps, current.completeCallbacks, current.nextDeps, current.nextCallbacks + (runnable.dependee -> List(runnable)))
         }
         if (!state.compareAndSet(pre, newState)) dispatchOrAddNextCallback(runnable)
     }
