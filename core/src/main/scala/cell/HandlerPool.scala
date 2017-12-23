@@ -7,12 +7,12 @@ import scala.annotation.tailrec
 import scala.util.control.NonFatal
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
-import scala.concurrent.{ Future, Promise }
-
+import scala.concurrent.{Future, Promise}
 import lattice.Key
-
 import org.opalj.graphs._
+
+import scala.collection.immutable.Queue
+import scala.util.Success
 
 /* Need to have reference equality for CAS.
  */
@@ -27,7 +27,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
 
   private val poolState = new AtomicReference[PoolState](new PoolState)
 
-  private val cellsNotDone = new AtomicReference[Map[Cell[_, _], Boolean]](Map()) // use `values` to store, if a sequential call is running
+  private val cellsNotDone = new AtomicReference[Map[Cell[_, _], Queue[NextDepRunnable[_, _]]]](Map()) // use `values` to store all pending sequential triggers
 
   @tailrec
   final def onQuiescent(handler: () => Unit): Unit = {
@@ -44,7 +44,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
 
   def register[K <: Key[V], V](cell: Cell[K, V]): Unit = {
     val registered = cellsNotDone.get()
-    val newRegistered = registered + (cell -> false)
+    val newRegistered = registered + (cell -> Queue())
     cellsNotDone.compareAndSet(registered, newRegistered)
   }
 
@@ -201,6 +201,69 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
             }
           }
         }
+      }
+    })
+  }
+
+  private[cell] def addSequentialCallback[K <: Key[V], V](callback: NextDepRunnable[K, V]): Unit = {
+    val dependentCell = callback.completer.cell
+    var success = false
+    var startCallback = false
+    while (!success) {
+      val registered = cellsNotDone.get()
+      if(registered.contains(dependentCell)) {
+        val oldCallbackQueue = registered(dependentCell)
+        val newCallbackQueue = oldCallbackQueue.enqueue(callback)
+        val newRegistered = registered + (dependentCell -> newCallbackQueue)
+        success = cellsNotDone.compareAndSet(registered, newRegistered)
+        startCallback = oldCallbackQueue.nonEmpty
+      } else {
+        success = true
+      }
+    }
+
+    // If the list has not been empty, then there is a tasks running that will end and then pick a new sequential callback to run.
+    if(startCallback) callSequentialCallback(dependentCell)
+  }
+
+  /**
+    Returns true, the queue is not empty after removing the first element.
+   */
+  private def dequeueSequentialCallback[K <: Key[V], V](cell: Cell[K, V]): Boolean = {
+    var success = false
+    var nonEmpty = false
+    while (!success) {
+      val registered = cellsNotDone.get()
+      if(registered.contains(cell)) {
+        val oldCallbackQueue = registered(cell)
+        val (_, newCallbackQueue) = oldCallbackQueue.dequeue
+        val newRegistered = registered + (cell -> newCallbackQueue)
+        success = cellsNotDone.compareAndSet(registered, newRegistered)
+        nonEmpty = newCallbackQueue.nonEmpty
+      } else {
+        success = true
+      }
+    }
+    nonEmpty
+  }
+
+  private def callSequentialCallback[K <: Key[V], V](dependentCell: Cell[K, V]): Unit = {
+    pool.execute(() => { // TODO Add a priority here, if the yet to be created PR gets accepted
+      val registered = cellsNotDone.get()
+      if (registered.contains(dependentCell)) {
+        val tasks = registered(dependentCell)
+        /*
+          Pop an element from the queue only if it is completely done!
+          That way, one can always run a callback, if the list has been empty.
+         */
+        val task = tasks.head.asInstanceOf[NextDepRunnable[K, V]] // The queue must not be empty! Caller has to assert this.
+        task(Success(task.cell.getResult())) // TODO If #59 is rejected, explicitly pass the value to propagate around and use it here
+
+        // The task has been run. Remove it.
+        // If the new list is not empty, callSequentialCallback(cell)
+        if (dequeueSequentialCallback(dependentCell))
+          callSequentialCallback(dependentCell)
+
       }
     })
   }
