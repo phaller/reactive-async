@@ -7,7 +7,7 @@ import scala.annotation.tailrec
 import scala.util.control.NonFatal
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ Future, Promise }
 import lattice.Key
 import org.opalj.graphs._
 
@@ -134,7 +134,11 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     val result = key.resolve(cells)
 
     for ((c, v) <- result) {
-      cells.foreach(c.removeNextCallbacks(_))
+      cells.foreach(other => {
+        c.removeNextCallbacks(other)
+        c.removeNextSequentialCallbacks(other)
+        // TODO Compare to #66 and ensure, that sequentialCallbacks are included into *all* callbacks.
+      })
       c.resolveWithValue(v)
     }
   }
@@ -147,8 +151,55 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     val result = key.fallback(cells)
 
     for ((c, v) <- result) {
-      cells.foreach(c.removeNextCallbacks(_))
+      cells.foreach(other => {
+        c.removeNextCallbacks(other)
+        c.removeNextSequentialCallbacks(other)
+        // TODO Compare to #66 and ensure, that sequentialCallbacks are included into *all* callbacks.
+      })
       c.resolveWithValue(v)
+    }
+  }
+
+  /**
+   * Increase the number of submitted tasks.
+   * Change the PoolState accordingly.
+   */
+  private def incSubmittedTasks(): Unit = {
+    var submitSuccess = false
+    while (!submitSuccess) {
+      val state = poolState.get()
+      val newState = new PoolState(state.handlers, state.submittedTasks + 1)
+      submitSuccess = poolState.compareAndSet(state, newState)
+    }
+  }
+
+  /**
+   * Decrease the number of submitted tasks and run registered handlers, if quiescent.
+   * Change the PoolState accordingly.
+   */
+  private def decSubmittedTasks(): Unit = {
+    var success = false
+    var handlersToRun: Option[List[() => Unit]] = None
+    while (!success) {
+      val state = poolState.get()
+      if (state.submittedTasks > 1) {
+        handlersToRun = None
+        val newState = new PoolState(state.handlers, state.submittedTasks - 1)
+        success = poolState.compareAndSet(state, newState)
+      } else if (state.submittedTasks == 1) {
+        handlersToRun = Some(state.handlers)
+        val newState = new PoolState()
+        success = poolState.compareAndSet(state, newState)
+      } else {
+        throw new Exception("BOOM")
+      }
+    }
+    if (handlersToRun.nonEmpty) {
+      handlersToRun.get.foreach { handler =>
+        execute(new Runnable {
+          def run(): Unit = handler()
+        })
+      }
     }
   }
 
@@ -161,12 +212,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
 
   def execute(task: Runnable): Unit = {
     // Submit task to the pool
-    var submitSuccess = false
-    while (!submitSuccess) {
-      val state = poolState.get()
-      val newState = new PoolState(state.handlers, state.submittedTasks + 1)
-      submitSuccess = poolState.compareAndSet(state, newState)
-    }
+    incSubmittedTasks()
 
     // Run the task
     pool.execute(new Runnable {
@@ -177,41 +223,27 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
           case NonFatal(e) =>
             unhandledExceptionHandler(e)
         } finally {
-          var success = false
-          var handlersToRun: Option[List[() => Unit]] = None
-          while (!success) {
-            val state = poolState.get()
-            if (state.submittedTasks > 1) {
-              handlersToRun = None
-              val newState = new PoolState(state.handlers, state.submittedTasks - 1)
-              success = poolState.compareAndSet(state, newState)
-            } else if (state.submittedTasks == 1) {
-              handlersToRun = Some(state.handlers)
-              val newState = new PoolState()
-              success = poolState.compareAndSet(state, newState)
-            } else {
-              throw new Exception("BOOM")
-            }
-          }
-          if (handlersToRun.nonEmpty) {
-            handlersToRun.get.foreach { handler =>
-              execute(new Runnable {
-                def run(): Unit = handler()
-              })
-            }
-          }
+          decSubmittedTasks()
         }
       }
     })
   }
 
+  /**
+   * Adds sequential callback.
+   * The dependent cell is read from the NextDepRunnable object.
+   *
+   * @param callback The callback that should be run sequentially to all other sequential callbacks for the dependent cell.
+   */
   private[cell] def scheduleSequentialCallback[K <: Key[V], V](callback: NextDepRunnable[K, V]): Unit = {
+    incSubmittedTasks() // note that decSubmitted Tasks is called in callSequentialCallback
+
     val dependentCell = callback.completer.cell
     var success = false
     var startCallback = false
     while (!success) {
       val registered = cellsNotDone.get()
-      if(registered.contains(dependentCell)) {
+      if (registered.contains(dependentCell)) {
         val oldCallbackQueue = registered(dependentCell)
         val newCallbackQueue = oldCallbackQueue.enqueue(callback)
         val newRegistered = registered + (dependentCell -> newCallbackQueue)
@@ -222,29 +254,33 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
       }
     }
 
-    // If the list has not been empty, then there is a tasks running that will end and then pick a new sequential callback to run.
-    if(startCallback) callSequentialCallback(dependentCell)
+    // If the list has been empty, then start execution the scheduled tasks. (Otherwise, some task is already running
+    // and the newly added task will eventually run.
+    if (startCallback)
+      callSequentialCallback(dependentCell)
   }
 
   /**
-    Returns true, the queue is not empty after removing the first element.
+   * Returns the the queue of yet to be run callbacks.
+   * Called by callSequentialCallback after one callback has been run.
+   * If the returned list is not empty, a next callback must be run.
    */
-  private def dequeueSequentialCallback[K <: Key[V], V](cell: Cell[K, V]): Boolean = {
-    var success = false
-    var nonEmpty = false
-    while (!success) {
-      val registered = cellsNotDone.get()
-      if(registered.contains(cell)) {
-        val oldCallbackQueue = registered(cell)
-        val (_, newCallbackQueue) = oldCallbackQueue.dequeue
-        val newRegistered = registered + (cell -> newCallbackQueue)
-        success = cellsNotDone.compareAndSet(registered, newRegistered)
-        nonEmpty = newCallbackQueue.nonEmpty
-      } else {
-        success = true
-      }
+  @tailrec
+  private def dequeueSequentialCallback[K <: Key[V], V](cell: Cell[K, V]): Queue[NextDepRunnable[_, _]] = {
+    val registered = cellsNotDone.get()
+    if (registered.contains(cell)) {
+      // remove the task that has just been finished
+      val oldCallbackQueue = registered(cell)
+      val (_, newCallbackQueue) = oldCallbackQueue.dequeue
+      val newRegistered = registered + (cell -> newCallbackQueue)
+
+      // store the new list of tasks
+      if (cellsNotDone.compareAndSet(registered, newRegistered)) newCallbackQueue
+      else dequeueSequentialCallback(cell) // try again
+    } else {
+      // cell has already been completed by now. No callbacks need to be run any more
+      Queue.empty
     }
-    nonEmpty
   }
 
   private def callSequentialCallback[K <: Key[V], V](dependentCell: Cell[K, V]): Unit = {
@@ -254,17 +290,26 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
         val tasks = registered(dependentCell)
         /*
           Pop an element from the queue only if it is completely done!
-          That way, one can always run a callback, if the list has been empty.
+          That way, one can always start running sequential callbacks, if the list has been empty.
          */
         val task = tasks.head.asInstanceOf[NextDepRunnable[K, V]] // The queue must not be empty! Caller has to assert this.
-        task(Success(task.cell.getResult())) // TODO If #59 is rejected, explicitly pass the value to propagate around and use it here
 
-        // The task has been run. Remove it.
-        // If the new list is not empty, callSequentialCallback(cell)
-        if (dequeueSequentialCallback(dependentCell))
-          callSequentialCallback(dependentCell)
+        try {
+          task(Success(task.cell.getResult())) // TODO If #59 gets rejected, explicitly pass the value to propagate around.
+        } catch {
+          case NonFatal(e) =>
+            unhandledExceptionHandler(e)
+        } finally {
+          decSubmittedTasks()
 
-      }
+          // The task has been run. Remove it.
+          // If the new list is not empty, callSequentialCallback(cell)
+          if (dequeueSequentialCallback(dependentCell).nonEmpty)
+            callSequentialCallback(dependentCell)
+
+        }
+
+      } else { throw new Exception("dependent cell has already been deleted from `cellsNotDone`.") }
     })
   }
 
