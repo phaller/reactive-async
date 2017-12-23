@@ -74,8 +74,12 @@ trait Cell[K <: Key[V], V] {
   // Only used in tests.
   private[cell] def waitUntilNoNextDeps(): Unit
 
+  // Only used in tests.
+  private[cell] def waitUntilNoNextSequentialDeps(): Unit
+
   private[cell] def numTotalDependencies: Int
   private[cell] def numNextDependencies: Int
+  private[cell] def numNextSequentialDependencies: Int
   private[cell] def numCompleteDependencies: Int
 
   private[cell] def numNextCallbacks: Int
@@ -83,7 +87,7 @@ trait Cell[K <: Key[V], V] {
 
   private[cell] def addCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit
   private[cell] def addNextCallback[U](callback: Try[V] => U, cell: Cell[K, V]): Unit
-  private[cell] def addNextCallbackSequential[U](callback: NextDepRunnable[K, V], cell: Cell[K, V]): Unit
+  private[cell] def addNextCallbackSequential[U](callback: NextDepRunnable[K, V], cell: Cell[K, V]): Unit // TODO Why is this different to the other methods
 
   private[cell] def resolveWithValue(value: V): Unit
   private[cell] def cellDependencies: Seq[Cell[K, V]]
@@ -91,6 +95,7 @@ trait Cell[K <: Key[V], V] {
 
   private[cell] def removeCompleteCallbacks(cell: Cell[K, V]): Unit
   private[cell] def removeNextCallbacks(cell: Cell[K, V]): Unit
+  private[cell] def removeNextCallbacksSequential(cell: Cell[K, V]): Unit
 }
 
 object Cell {
@@ -147,7 +152,7 @@ private class State[K <: Key[V], V](
   val nextDeps: Map[Cell[K, V], List[NextDepRunnable[K, V]]],
   val nextDepsSequential: Map[Cell[K, V], List[NextDepRunnable[K, V]]],
   val nextCallbacks: Map[Cell[K, V], List[NextCallbackRunnable[K, V]]],
-  val nextCallbacksSequential: Map[Cell[K, V], List[NextCallbackRunnable[K, V]]]) // TODO calc numDeps, numCallbacks correctly (i.e. include sequential deps/callbacks)
+  val nextCallbacksSequential: Map[Cell[K, V], List[NextDepRunnable[K, V]]]) // TODO calc numDeps, numCallbacks correctly (i.e. include sequential deps/callbacks) // TODO Why is this a List of NextDepRunnalble
 
 private object State {
   def empty[K <: Key[V], V](lattice: Lattice[V]): State[K, V] =
@@ -158,6 +163,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
 
   private val nodepslatch = new CountDownLatch(1)
   private val nonextdepslatch = new CountDownLatch(1)
+  private val nonextsequentialdepslatch = new CountDownLatch(1)
 
   /* Contains a value either of type
    * (a) `Try[V]`      for the final result, or
@@ -239,10 +245,16 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
     else current.nextDeps.values.flatten.size
   }
 
+  override private[cell] def numNextSequentialDependencies: Int = {
+    val current = currentState()
+    if (current == null) 0
+    else current.nextDepsSequential.values.flatten.size
+  }
+
   override private[cell] def numTotalDependencies: Int = {
     val current = currentState()
     if (current == null) 0
-    (current.deps.values.flatten ++ current.nextDeps.values.flatten).size
+    (current.deps.values.flatten ++ current.nextDeps.values.flatten ++ current.nextCallbacksSequential.values.flatten).size
   }
 
   override private[cell] def cellDependencies: Seq[Cell[K, V]] = {
@@ -341,8 +353,8 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
 
           val current = raw.asInstanceOf[State[K, V]]
           val newState = current.nextDeps.contains(other) match {
-            case true => new State(current.res, current.deps, current.callbacks, current.nextDeps + (other -> (newDep :: current.nextDeps(other))), current.nextDepsSequential, current.nextCallbacks, current.nextCallbacksSequential)
-            case false => new State(current.res, current.deps, current.callbacks, current.nextDeps + (other -> List(newDep)), current.nextDepsSequential, current.nextCallbacks, current.nextCallbacksSequential)
+            case true => new State(current.res, current.deps, current.callbacks, current.nextDeps, current.nextDepsSequential + (other -> (newDep :: current.nextDeps(other))), current.nextCallbacks, current.nextCallbacksSequential)
+            case false => new State(current.res, current.deps, current.callbacks, current.nextDeps, current.nextDepsSequential + (other -> List(newDep)), current.nextCallbacks, current.nextCallbacksSequential)
           }
           if (state.compareAndSet(current, newState)) {
             success = true
@@ -391,9 +403,11 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
   }
 
   override private[cell] def addNextCallbackSequential[U](callback: NextDepRunnable[K, V], cell: Cell[K, V]): Unit = {
-    pool.addSequentialCallback(callback) // FIXME Test, if callbacks are called, if they are added after the cell has been completed!
+    dispatchOrAddNextSequentialCallback(callback) // FIXME Test, if callbacks are called, if they are added after the cell has been completed!
+    pool.scheduleSequentialCallback(callback)
     // TODO THe callback needs to be added to State.nextCallbacksSequential in order to count callbacks properly.
   }
+
 
   /**
    * Called by 'putNext' and 'putFinal'. It will try to join the current state
@@ -437,7 +451,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
               callbacks.foreach(callback => callback.executeWithValue(Success(newVal)))
             }
             current.nextCallbacksSequential.values.foreach { callbacks =>
-              callbacks.foreach(callback => pool.addSequentialCallback(callback.asInstanceOf[NextDepRunnable[K, V]]))
+              callbacks.foreach(callback => pool.scheduleSequentialCallback(callback))
             }
             true
           }
@@ -477,9 +491,15 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
       case (pre: State[K, V], newVal: Try[V]) =>
         val depsCells = pre.deps.keys
         val nextDepsCells = pre.nextDeps.keys
+        val nextSequentialDepsCells = pre.nextDepsSequential.keys
         if (pre.callbacks.isEmpty) {
+          // call (concurrent) callbacks
           pre.nextCallbacks.values.foreach { callbacks =>
             callbacks.foreach(callback => callback.executeWithValue(newVal))
+          }
+          //schedule sequential callbacks
+          pre.nextCallbacksSequential.values.foreach {  callbacks =>
+            callbacks.foreach(callback => pool.scheduleSequentialCallback(callback))
           }
         } else {
           // onNext callbacks with these cells should not be triggered, because they have
@@ -487,10 +507,18 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
           pre.callbacks.values.foreach { callbacks =>
             callbacks.foreach(callback => callback.executeWithValue(newVal))
           }
+          // call (concurrent) callbacks
           pre.nextCallbacks.values.foreach { callbacks =>
             callbacks.foreach { callback =>
               if (!pre.callbacks.contains(callback.dependee))
                 callback.executeWithValue(newVal)
+            }
+          }
+          //schedule sequential callbacks
+          pre.nextCallbacksSequential.values.foreach { callbacks =>
+            callbacks.foreach { callback =>
+                if (!pre.callbacks.contains(callback.completer.cell))
+                  pool.scheduleSequentialCallback(callback)
             }
           }
         }
@@ -499,6 +527,8 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
           depsCells.foreach(_.removeCompleteCallbacks(this))
         if (nextDepsCells.nonEmpty)
           nextDepsCells.foreach(_.removeNextCallbacks(this))
+        if (nextSequentialDepsCells.nonEmpty)
+          nextSequentialDepsCells.foreach(_.removeNextCallbacksSequential(this))
 
         true
     }
@@ -543,6 +573,23 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
   }
 
   @tailrec
+  override private[cell] final def removeNextSequentialDep(cell: Cell[K, V]): Unit = {
+    state.get() match {
+      case pre: State[_, _] =>
+        val current = pre.asInstanceOf[State[K, V]]
+        val newNextSequentialDeps = current.nextDepsSequential - cell
+
+        val newState = new State(current.res, current.deps, current.callbacks, current.nextDeps, newNextSequentialDeps, current.nextCallbacks, current.nextCallbacksSequential)
+        if (!state.compareAndSet(current, newState))
+          removeNextSequentialDep(cell)
+        else if (newNextSequentialDeps.isEmpty)
+          nonextsequentialdepslatch.countDown()
+
+      case _ => /* do nothing */
+    }
+  }
+
+  @tailrec
   override private[cell] final def removeCompleteCallbacks(cell: Cell[K, V]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
@@ -570,12 +617,30 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
     }
   }
 
+  @tailrec
+  override private[cell] final def removeNextCallbacksSequential(cell: Cell[K, V]): Unit = {
+    state.get() match {
+      case pre: State[_, _] =>
+        val current = pre.asInstanceOf[State[K, V]]
+        val newNextCallbacksSequential = current.nextCallbacksSequential - cell
+
+        val newState = new State(current.res, current.deps, current.callbacks, current.nextDeps, current.nextDepsSequential, current.nextCallbacks, newNextCallbacksSequential)
+        if (!state.compareAndSet(current, newState))
+          removeNextCallbacksSequential(cell)
+      case _ => /* do nothing */
+    }
+  }
+
   override private[cell] def waitUntilNoDeps(): Unit = {
     nodepslatch.await()
   }
 
   override private[cell] def waitUntilNoNextDeps(): Unit = {
     nonextdepslatch.await()
+  }
+
+  override private[cell] def waitUntilNoNextSequentialDeps(): Unit = {
+    nonextsequentialdepslatch.await()
   }
 
   // Schedules execution of `callback` when next intermediate result is available.
@@ -633,6 +698,24 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
     }
   }
 
+  @tailrec
+  private def dispatchOrAddNextSequentialCallback(runnable: NextDepRunnable[K, V]): Unit = {
+    state.get() match {
+      case r: Try[V] => pool.scheduleSequentialCallback(runnable)//runnable.executeWithValue(r.asInstanceOf[Try[V]])
+      /* Cell is completed, do nothing emit an onNext callback */
+      // case _: DefaultPromise[_] => compressedRoot().dispatchOrAddCallback(runnable)
+      case pre: State[_, _] =>
+        // assemble new state
+        val current = pre.asInstanceOf[State[K, V]]
+        val cell = runnable.completer.cell
+        val newState = current.nextCallbacksSequential.contains(cell) match {
+          case true => new State(current.res, current.deps, current.callbacks, current.nextDeps, current.nextDepsSequential, current.nextCallbacks, current.nextCallbacksSequential + (cell -> (runnable :: current.nextCallbacksSequential(cell))))
+          case false => new State(current.res, current.deps, current.callbacks, current.nextDeps, current.nextDepsSequential, current.nextCallbacks, current.nextCallbacksSequential + (cell -> List(runnable)))
+        }
+        if (!state.compareAndSet(pre, newState)) dispatchOrAddNextSequentialCallback(runnable)
+    }
+  }
+
   // copied from object `impl.Promise`
   private def resolveTry[T](source: Try[T]): Try[T] = source match {
     case Failure(t) => resolver(t)
@@ -667,10 +750,12 @@ private class CompleteDepRunnable[K <: Key[V], V](
         case NoOutcome =>
           completer.removeDep(cell)
           completer.removeNextDep(cell)
+          completer.removeNextSequentialDep(cell)
       }
     case Failure(e) =>
       completer.removeDep(cell)
       completer.removeNextDep(cell)
+      completer.removeNextSequentialDep(cell)
   }
 
   override def run(): Unit = {
@@ -730,7 +815,10 @@ private class NextDepRunnable[K <: Key[V], V](
       case Failure(e) => /* do nothing */
     }
 
-    if (cell.isComplete) completer.removeNextDep(cell)
+    if (cell.isComplete) {
+      completer.removeNextDep(cell)
+      completer.removeNextSequentialDep(cell)
+    }
   }
 
   override def run(): Unit = {

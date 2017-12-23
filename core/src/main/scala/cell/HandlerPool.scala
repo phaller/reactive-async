@@ -205,7 +205,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     })
   }
 
-  private[cell] def addSequentialCallback[K <: Key[V], V](callback: NextDepRunnable[K, V]): Unit = {
+  private[cell] def scheduleSequentialCallback[K <: Key[V], V](callback: NextDepRunnable[K, V]): Unit = {
     val dependentCell = callback.completer.cell
     var success = false
     var startCallback = false
@@ -216,7 +216,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
         val newCallbackQueue = oldCallbackQueue.enqueue(callback)
         val newRegistered = registered + (dependentCell -> newCallbackQueue)
         success = cellsNotDone.compareAndSet(registered, newRegistered)
-        startCallback = oldCallbackQueue.nonEmpty
+        startCallback = oldCallbackQueue.isEmpty
       } else {
         success = true
       }
