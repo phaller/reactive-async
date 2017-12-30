@@ -1,9 +1,11 @@
+import java.util.concurrent.ConcurrentHashMap
+
 import org.scalatest.FunSuite
 
-import scala.concurrent.{ Promise, Await }
+import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
-
-import cell.HandlerPool
+import cell.{ Cell, CellCompleter, HandlerPool }
+import lattice.{ Lattice, StringIntKey, StringIntLattice }
 
 class PoolSuite extends FunSuite {
   test("onQuiescent") {
@@ -26,4 +28,24 @@ class PoolSuite extends FunSuite {
 
     pool.shutdown()
   }
+
+  test("register cells concurrently") {
+    implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
+
+    val pool = new HandlerPool()
+    var regCells = new ConcurrentHashMap[Cell[StringIntKey, Int], Cell[StringIntKey, Int]]()
+    for (_ <- 1 to 1000) {
+      pool.execute(() => {
+        val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
+        regCells.put(completer.cell, completer.cell)
+        ()
+      })
+    }
+    val fut = pool.quiescentResolveDefaults // set all (registered) cells to 1 via key.fallback
+    Await.ready(fut, 5.seconds)
+
+    regCells.values().removeIf(_.getResult() != 0)
+    assert(regCells.size === 0)
+  }
+
 }
