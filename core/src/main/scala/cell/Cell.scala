@@ -333,19 +333,25 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
    *  is completed (either prior or after an invocation of `whenComplete`).
    */
   override def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
-    state.get() match {
-      case finalRes: Try[_] => // completed with final result
-      // do not add dependency
-      // in fact, do nothing
+    var success = false
+    while (!success) {
+      state.get() match {
+        case finalRes: Try[_] => // completed with final result
+          // do not add dependency
+          // in fact, do nothing
+          success = true
 
-      case raw: State[_, _] => // not completed
-        val newDep = new CompleteDepRunnable(pool, other, valueCallback, this)
-        // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
-        other.addCompleteCallback(newDep, this)
+        case raw: State[_, _] => // not completed
+          val newDep = new CompleteDepRunnable(pool, other, valueCallback, this)
+          // TODO: it looks like `newDep` is wrapped into a CallbackRunnable by `onComplete` -> bad
 
-        val current = raw.asInstanceOf[State[K, V]]
-        val newState = new State(current.res, current.completeDeps + other, current.completeCallbacks, current.nextDeps, current.nextCallbacks)
-        state.compareAndSet(current, newState)
+          val current = raw.asInstanceOf[State[K, V]]
+          val newState = new State(current.res, current.completeDeps + other, current.completeCallbacks, current.nextDeps, current.nextCallbacks)
+          if (state.compareAndSet(current, newState)) {
+            success = true
+            other.addCompleteCallback(newDep, this)
+          }
+      }
     }
   }
 
