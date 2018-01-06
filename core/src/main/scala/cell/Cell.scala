@@ -623,8 +623,13 @@ private class CompleteDepRunnable[K <: Key[V], V](
   override def apply(x: Try[V]): Unit = x match {
     case Success(v) =>
       shortCutValueCallback(v) match {
-        case FinalOutcome(v) => completer.putFinal(v)
-        case NextOutcome(v) => completer.putNext(v)
+        case FinalOutcome(v) =>
+          completer.putFinal(v)
+        // deps will be removed by putFinal()
+        case NextOutcome(v) =>
+          completer.putNext(v)
+          completer.removeDep(cell)
+          completer.removeNextDep(cell)
         case NoOutcome =>
           completer.removeDep(cell)
           completer.removeNextDep(cell)
