@@ -686,7 +686,7 @@ private class NextDepRunnable[K <: Key[V], V](
   override def apply(x: Try[V]): Unit = {
     x match {
       case Success(v) =>
-        shortCutValueCallback(v) match {
+        shortCutValueCallback(cell.getResult()) match {
           case NextOutcome(v) =>
             completer.putNext(v)
           case FinalOutcome(v) =>
