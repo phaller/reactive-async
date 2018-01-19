@@ -23,6 +23,7 @@ trait CellCompleter[K <: Key[V], V] {
 
   private[cell] def removeDep(cell: Cell[K, V]): Unit
   private[cell] def removeNextDep(cell: Cell[K, V]): Unit
+  private[cell] def removeNextSequentialDep(cell: Cell[K, V]): Unit
 }
 
 object CellCompleter {
