@@ -160,6 +160,23 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("whenComplete: dependency 3") {
+    val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int](pool, "somekey")
+    val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenComplete(completer2.cell, x => if (x == 10) NextOutcome(20) else NoOutcome)
+
+    completer2.putFinal(10)
+
+    cell1.waitUntilNoDeps()
+
+    assert(cell1.numCompleteDependencies == 0)
+
+    pool.shutdown()
+  }
+
   test("whenComplete: callback removal") {
     val pool = new HandlerPool
 
