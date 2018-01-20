@@ -57,6 +57,23 @@ trait Cell[K <: Key[V], V] {
    */
   def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
 
+  /**
+   * Adds a dependency on some `other` cell.
+   *
+   * Example:
+   * {{{
+   *   when(cell, (x, isFinal) => x match { // when the next value or final value is put into `cell`
+   *     case (_, Impure) => FinalOutcome(Impure)  // if the next value of `cell` is `Impure`, `this` cell is completed with value `Impure`
+   *     case (true, Pure) => FinalOutcome(Pure)// if the final value of `cell` is `Pure`, `this` cell is completed with `Pure`.
+   *     case _ => NoOutcome
+   *   })
+   * }}}
+   *
+   * @param other  Cell that `this` Cell depends on.
+   * @param valueCallback  Callback that receives the new value of `other` and returns an `Outcome` for `this` cell.
+   */
+  def when(other: Cell[K, V], valueCallback: (V, Boolean) => Outcome[V]): Unit
+
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)]
 
   // internal API
@@ -282,6 +299,23 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
 
   override private[cell] def resolveWithValue(value: V): Unit = {
     this.putFinal(value)
+  }
+
+  /**
+   * Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
+   *  `putNext` or a final result via `putFinal`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
+   *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `v`
+   *  respectively. To calculate `v`, the `valueCallback` function is called with the result of `other` and a flag that is `true` iff `other` is been completed with `v`.
+   *
+   *  If `v` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
+   *  the cell is not updated.
+   *
+   *  The thereby introduced dependency is removed when `this` cell
+   *  is completed (either prior or after an invocation of `whenNext`).
+   */
+  override def when(other: Cell[K, V], valueCallback: (V, Boolean) => Outcome[V]): Unit = {
+    this.whenNext(other, valueCallback(_, false))
+    this.whenComplete(other, valueCallback(_, true))
   }
 
   /**
