@@ -26,7 +26,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
 
   private val poolState = new AtomicReference[PoolState](new PoolState)
 
-  private val cellsNotDone = new AtomicReference[Map[Cell[_, _], Queue[NextDepRunnable[_, _]]]](Map()) // use `values` to store all pending sequential triggers
+  private val cellsNotDone = new AtomicReference[Map[Cell[_, _], Queue[SequentialCallbackRunnable[_, _]]]](Map()) // use `values` to store all pending sequential triggers
 
   @tailrec
   final def onQuiescent(handler: () => Unit): Unit = {
@@ -226,7 +226,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    *
    * @param callback The callback that should be run sequentially to all other sequential callbacks for the dependent cell.
    */
-  private[cell] def scheduleSequentialCallback[K <: Key[V], V](callback: NextSequentialDepRunnable[K, V]): Unit = {
+  private[cell] def scheduleSequentialCallback[K <: Key[V], V](callback: SequentialCallbackRunnable[K, V]): Unit = {
     incSubmittedTasks() // note that decSubmitted Tasks is called in callSequentialCallback
 
     val dependentCell = callback.dependentCell
@@ -257,7 +257,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    * If the returned list is not empty, a next callback must be run.
    */
   @tailrec
-  private def dequeueSequentialCallback[K <: Key[V], V](cell: Cell[K, V]): Queue[NextDepRunnable[_, _]] = {
+  private def dequeueSequentialCallback[K <: Key[V], V](cell: Cell[K, V]): Queue[SequentialCallbackRunnable[_, _]] = {
     val registered = cellsNotDone.get()
     if (registered.contains(cell)) {
       // remove the task that has just been finished
