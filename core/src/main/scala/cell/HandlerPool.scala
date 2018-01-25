@@ -285,7 +285,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
           Pop an element from the queue only if it is completely done!
           That way, one can always start running sequential callbacks, if the list has been empty.
          */
-        val task = tasks.head.asInstanceOf[NextDepRunnable[K, V]] // The queue must not be empty! Caller has to assert this.
+        val task = tasks.head // The queue must not be empty! Caller has to assert this.
 
         try {
           task.run()

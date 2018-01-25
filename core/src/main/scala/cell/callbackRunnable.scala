@@ -19,6 +19,9 @@ private[cell] trait CallbackRunnable[K <: Key[V], V] extends Runnable with OnCom
 
   /** Add this CallbackRunnable to its handler pool. */
   def execute(): Unit
+
+  /** Essentially, call the callback. */
+  override def run(): Unit
 }
 
 /**
@@ -48,7 +51,8 @@ private[cell] trait SequentialCallbackRunnable[K <: Key[V], V] extends CallbackR
 }
 
 /**
- * A dependency between to cells consisting of a dependent cell(completer), an other cell and the callback to calculate new values for the dependent cell.
+ * A dependency between to cells consisting of a dependent cell(completer),
+  * an other cell and the callback to calculate new values for the dependent cell.
  */
 private[cell] trait Dependency[K <: Key[V], V] {
   val dependentCompleter: CellCompleter[K, V]
@@ -91,7 +95,7 @@ private[cell] class CompleteConcurrentCallbackRunnable[K <: Key[V], V](override 
  * @param pool               The handler pool that runs the callback function
  * @param dependentCompleter The (completer) of the cell, that depends on `otherCell`.
  * @param otherCell          The cell that `dependentCompleter` depends on.
- * @param valueCallback           Called to retrieve the new value for the dependent cell.
+ * @param valueCallback      Called to retrieve the new value for the dependent cell.
  */
 private[cell] abstract class CompleteDepRunnable[K <: Key[V], V](
   override val pool: HandlerPool,
@@ -202,6 +206,9 @@ private[cell] abstract class NextDepRunnable[K <: Key[V], V](
     case Failure(_) => /* do nothing */
   }
 
+  // Remove the dependency, if `otherCell` is complete.
+  // There is no need to removeCompleteDeps, because if those existed,
+  // a CompleteDepRunnable would have been called and removed the dep
   if (otherCell.isComplete) dependentCompleter.removeNextDep(otherCell)
 }) with Dependency[K, V]
 
