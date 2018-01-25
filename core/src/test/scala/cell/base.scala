@@ -1997,18 +1997,23 @@ class BaseSuite extends FunSuite {
     val n = 1000
 
     val runningCallbacks = new AtomicInteger(0)
-    val latch = new CountDownLatch(n+1)
+    val latch = new CountDownLatch(1)
     val random = new scala.util.Random()
 
     val pool = new HandlerPool
     val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](pool, lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice)
 
+    var otherLatches: Set[CountDownLatch] = Set.empty
 
     val cell1 = completer1.cell
     for (i <- 1 to n) {
       val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](pool, lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice)
+      val latch2 = new CountDownLatch(1)
+
+      otherLatches = otherLatches + latch2
+
       completer2.cell.onComplete(_ => {
-        latch.countDown()
+        latch2.countDown()
       })
 
       cell1.whenCompleteSequential(completer2.cell, (x: Int) => {
@@ -2027,10 +2032,13 @@ class BaseSuite extends FunSuite {
         latch.countDown()
       })
 
-      pool.execute(() => completer2.putFinal(i))
+      pool.execute(() =>
+        completer2.putFinal(i)
+      )
     }
 
     latch.await()
+    otherLatches.foreach(_.await())
 
     assert(cell1.getResult() == n * n)
 
@@ -2121,7 +2129,8 @@ class BaseSuite extends FunSuite {
     var count = 0
 
     val runningCallbacks = new AtomicInteger(0)
-    val latch = new CountDownLatch(n+1)
+    val latch = new CountDownLatch(1)
+    var otherLatches: Set[CountDownLatch] = Set.empty
     val random = new scala.util.Random()
 
     val pool = new HandlerPool
@@ -2131,8 +2140,11 @@ class BaseSuite extends FunSuite {
     for (i <- 1 to n) {
       val completer2 = CellCompleter[StringIntKey, Int](pool, "someotherkey")
 
+      val latch2 = new CountDownLatch(1)
+      otherLatches = otherLatches + latch2
+
       completer2.cell.onComplete(_ => {
-        latch.countDown()
+        latch2.countDown()
       })
 
       cell1.whenNextSequential(completer2.cell, (x: Int) => {
@@ -2158,6 +2170,7 @@ class BaseSuite extends FunSuite {
 
 
     latch.await()
+    otherLatches.foreach(_.await())
 
     assert(cell1.getResult() == n)
 
