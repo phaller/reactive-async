@@ -4,7 +4,7 @@ import lattice.Key
 
 import scala.concurrent.OnCompleteRunnable
 import scala.util.control.NonFatal
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 /**
  * Run a callback in a handler pool, if a value in a cell changes.
@@ -57,16 +57,19 @@ private[cell] trait Dependency[K <: Key[V], V] {
 }
 
 /**
+ * To be run when `otherCell` gets its final update.
  * @param pool          The handler pool that runs the callback function
  * @param dependentCell The cell, that depends on `otherCell`.
- * @param otherCell     The cell that depends on this callback
- * @param callback      Callback function that is triggered on an onComplete event
+ * @param otherCell     Cell that triggers this callback.
+ * @param callback      Callback function that is triggered on an onNext event
  */
-// depedentCell is needed to not call whenNext callback, if whenComplete callback exists.
-private[cell] class CompleteCallbackRunnable[K <: Key[V], V](override val pool: HandlerPool, val dependentCell: Cell[K, V], val otherCell: Cell[K, V], val callback: Try[V] => Any)
-  extends ConcurrentCallbackRunnable[K, V] {
+private[cell] abstract class CompleteCallbackRunnable[K <: Key[V], V](
+  override val pool: HandlerPool,
+  val dependentCell: Cell[K, V], // needed to not call whenNext callback, if whenComplete callback exists.
+  otherCell: Cell[K, V],
+  val callback: Try[V] => Any)
+  extends CallbackRunnable[K, V] {
 
-  override val cell: Cell[K, V] = otherCell
   // must be filled in before running it
   var started: Boolean = false
 
@@ -77,6 +80,11 @@ private[cell] class CompleteCallbackRunnable[K <: Key[V], V](override val pool: 
   }
 }
 
+private[cell] class CompleteConcurrentCallbackRunnable[K <: Key[V], V](override val pool: HandlerPool, override val dependentCell: Cell[K, V], otherCell: Cell[K, V], override val callback: Try[V] => Any)
+  extends CompleteCallbackRunnable[K, V](pool, dependentCell, otherCell, callback) with ConcurrentCallbackRunnable[K, V] {
+  override val cell: Cell[K, V] = otherCell
+}
+
 /**
  * Dependency between `dependentCompleter` and `otherCell`.
  *
@@ -85,7 +93,7 @@ private[cell] class CompleteCallbackRunnable[K <: Key[V], V](override val pool: 
  * @param otherCell          The cell that `dependentCompleter` depends on.
  * @param valueCallback           Called to retrieve the new value for the dependent cell.
  */
-private[cell] class CompleteDepRunnable[K <: Key[V], V](
+private[cell] abstract class CompleteDepRunnable[K <: Key[V], V](
   override val pool: HandlerPool,
   override val dependentCompleter: CellCompleter[K, V],
   override val otherCell: Cell[K, V],
@@ -108,6 +116,39 @@ private[cell] class CompleteDepRunnable[K <: Key[V], V](
 }) with Dependency[K, V]
 
 /**
+ * Dependency between `dependentCompleter` and `otherCell`.
+ *
+ * @param pool               The handler pool that runs the callback function
+ * @param dependentCompleter The (completer) of the cell, that depends on `otherCell`.
+ * @param otherCell          The cell that `dependentCompleter` depends on.
+ * @param valueCallback   Called to retrieve the new value for the dependent cell.
+ */
+private[cell] class CompleteConcurrentDepRunnable[K <: Key[V], V](
+  override val pool: HandlerPool,
+  override val dependentCompleter: CellCompleter[K, V],
+  override val otherCell: Cell[K, V],
+  override val valueCallback: V => Outcome[V]) extends CompleteDepRunnable[K, V](pool, dependentCompleter, otherCell, valueCallback) with ConcurrentCallbackRunnable[K, V] {
+  override val cell: Cell[K, V] = otherCell
+}
+
+/**
+ * Dependency between `dependentCompleter` and `otherCell`.
+ *
+ * @param pool               The handler pool that runs the callback function
+ * @param dependentCompleter The (completer) of the cell, that depends on `otherCell`.
+ * @param otherCell          The cell that `dependentCompleter` depends on.
+ * @param valueCallback   Called to retrieve the new value for the dependent cell.
+ */
+private[cell] class CompleteSequentialDepRunnable[K <: Key[V], V](
+  override val pool: HandlerPool,
+  override val dependentCompleter: CellCompleter[K, V],
+  override val otherCell: Cell[K, V],
+  override val valueCallback: V => Outcome[V]) extends CompleteDepRunnable[K, V](pool, dependentCompleter, otherCell, valueCallback) with SequentialCallbackRunnable[K, V] {
+  override val cell: Cell[K, V] = otherCell
+}
+
+/**
+ * To be run when `otherCell` gets a final update.
  * @param pool          The handler pool that runs the callback function
  * @param dependentCell The cell, that depends on `otherCell`.
  * @param otherCell     Cell that triggers this callback.

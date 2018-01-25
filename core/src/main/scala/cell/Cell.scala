@@ -38,6 +38,7 @@ trait Cell[K <: Key[V], V] {
    * @param valueCallback  Callback that receives the final value of `other` and returns an `Outcome` for `this` cell.
    */
   def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
+  def whenCompleteSequential(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
 
   /**
    * Adds a dependency on some `other` cell.
@@ -390,6 +391,14 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
    *  is completed (either prior or after an invocation of `whenComplete`).
    */
   override def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
+    this.whenComplete(other, valueCallback, false)
+  }
+
+  override def whenCompleteSequential(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
+    this.whenComplete(other, valueCallback, true)
+  }
+
+  private def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V], sequential: Boolean): Unit = {
     var success = false
     while (!success) {
       state.get() match {
@@ -398,13 +407,19 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
           // in fact, do nothing
           success = true
 
-      case raw: State[_, _] => // not completed
-        val newDep = new CompleteConcurrentDepRunnable(pool, this, other, valueCallback)
-        other.addCompleteCallback(newDep, this)
+        case raw: State[_, _] => // not completed
+          val newDep: CompleteDepRunnable[K, V] =
+            if (sequential) new CompleteSequentialDepRunnable(pool, this, other, valueCallback)
+            else new CompleteConcurrentDepRunnable(pool, this, other, valueCallback)
 
           val current = raw.asInstanceOf[State[K, V]]
-          val newState = new State(current.res, current.completeDeps + other, current.completeCallbacks, current.nextDeps, current.nextCallbacks)
-          if (state.compareAndSet(current, newState)) {
+          val depRegistered =
+            if (current.nextDeps.contains(other)) true
+            else {
+              val newState = new State(current.res, current.completeDeps + other, current.completeCallbacks, current.nextDeps, current.nextCallbacks)
+              state.compareAndSet(current, newState)
+            }
+          if (depRegistered) {
             success = true
             other.addCompleteCallback(newDep, this)
           }
