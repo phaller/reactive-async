@@ -304,53 +304,15 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
     this.putFinal(value)
   }
 
-  /**
-   * Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
-   *  `putNext` or a final result via `putFinal`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
-   *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `v`
-   *  respectively. To calculate `v`, the `valueCallback` function is called with the result of `other` and a flag that is `true` iff `other` is been completed with `v`.
-   *
-   *  If `v` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
-   *  the cell is not updated.
-   *
-   *  The thereby introduced dependency is removed when `this` cell
-   *  is completed (either prior or after an invocation of `whenNext`).
-   */
   override def when(other: Cell[K, V], valueCallback: (V, Boolean) => Outcome[V]): Unit = {
     this.whenNext(other, valueCallback(_, false))
     this.whenComplete(other, valueCallback(_, true))
   }
 
-  /**
-   * Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
-   *  `putNext`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
-   *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `v`
-   *  respectively. To calculate `v`, the `valueCallback` function is called with the result of `other`.
-   *
-   *  If `v` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
-   *  the cell is not updated.
-   *
-   *  The thereby introduced dependency is removed when `this` cell
-   *  is completed (either prior or after an invocation of `whenNext`).
-   */
   override def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
     this.whenNext(other, valueCallback, sequential = false)
   }
 
-  /**
-   * Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
-   *  `putNext`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
-   *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `v`
-   *  respectively. To calculate `v`, the `valueCallback` function is called with the result of `other`.
-   *
-   *  If `v` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
-   *  the cell is not updated.
-   *
-   *  The thereby introduced dependency is removed when `this` cell
-   *  is completed (either prior or after an invocation of `whenNext`).
-   *
-   *  The `valueCallback` is guaranteed to not be called concurrently.
-   */
   override def whenNextSequential(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
     this.whenNext(other, valueCallback, sequential = true)
   }
@@ -384,14 +346,6 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
     }
   }
 
-  /**
-   * Adds dependency on `other` cell: when `other` cell is completed, evaluate `pred`
-   *  with the result of `other`. If this evaluation yields true, complete `this` cell
-   *  with what the function `valueCallback` returns.
-   *
-   *  The thereby introduced dependency is removed when `this` cell
-   *  is completed (either prior or after an invocation of `whenComplete`).
-   */
   override def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
     this.whenComplete(other, valueCallback, false)
   }
