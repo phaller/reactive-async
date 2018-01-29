@@ -394,10 +394,10 @@ class BaseSuite extends FunSuite {
     val pool = new HandlerPool
     val latch = new CountDownLatch(10000)
     val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
-    val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
 
     for (i <- 1 to 10000) {
       pool.execute(() => {
+        val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
         completer1.cell.whenNext(completer2.cell, (x: Immutability) => {
           if (x == Mutable) NextOutcome(Mutable)
           else NoOutcome
@@ -408,7 +408,30 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    assert(completer1.cell.numNextDependencies == 1)
+    assert(completer1.cell.numNextDependencies == 10000)
+
+    pool.shutdown()
+  }
+
+  test("whenComplete: Dependencies concurrency test") {
+    val pool = new HandlerPool
+    val latch = new CountDownLatch(10000)
+    val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+
+    for (i <- 1 to 10000) {
+      pool.execute(() => {
+        val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+        completer1.cell.whenComplete(completer2.cell, (x: Immutability) => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        latch.countDown()
+      })
+    }
+
+    latch.await()
+
+    assert(completer1.cell.numCompleteDependencies == 10000)
 
     pool.shutdown()
   }
