@@ -2,8 +2,6 @@ package cell
 
 import lattice.{ Lattice, NaturalNumberLattice, NaturalNumberKey }
 
-import scala.annotation.tailrec
-
 import org.scalameter.api._
 import org.scalameter.picklers.noPickler._
 

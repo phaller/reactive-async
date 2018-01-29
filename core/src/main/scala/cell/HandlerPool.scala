@@ -7,7 +7,8 @@ import scala.annotation.tailrec
 import scala.util.control.NonFatal
 import scala.concurrent.{ Await, Future, Promise }
 import scala.concurrent.duration._
-import lattice.{ DefaultKey, Key, Lattice }
+
+import lattice.{ DefaultKey, Key, Updater }
 import org.opalj.graphs._
 
 import scala.collection.immutable.Queue
@@ -37,11 +38,11 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    *
    * @param key The key to resolve this cell if in a cycle or no result computed.
    * @param init A callback to return the initial value for this cell and to set up dependencies.
-   * @param lattice The lattice of which the values of this cell are taken from.
+   * @param updater The updater used to update the value of this cell.
    * @return Returns a cell.
    */
-  def mkCell[K <: Key[V], V](key: K, init: (Cell[K, V]) => Outcome[V])(implicit lattice: Lattice[V]): Cell[K, V] = {
-    CellCompleter(key, init)(lattice, this).cell
+  def mkCell[K <: Key[V], V](key: K, init: (Cell[K, V]) => Outcome[V])(implicit updater: Updater[V]): Cell[K, V] = {
+    CellCompleter(key, init)(updater, this).cell
   }
 
   /**
@@ -49,11 +50,11 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    *
    * Creates a new, completed cell with value `v`.
    *
-   * @param lattice The lattice from which the values of this cell are taken
+   * @param updater The updater used to update the value of this cell.
    * @return Returns a cell with value `v`.
    */
-  def mkCompletedCell[V](result: V)(implicit lattice: Lattice[V]): Cell[DefaultKey[V], V] = {
-    CellCompleter.completed(result)(lattice, this).cell
+  def mkCompletedCell[V](result: V)(implicit updater: Updater[V]): Cell[DefaultKey[V], V] = {
+    CellCompleter.completed(result)(updater, this).cell
   }
 
   @tailrec

@@ -21,11 +21,13 @@ object StringIntKey {
     new StringIntKey(s)
 }
 
-class StringIntLattice extends Lattice[Int] {
-  override def join(current: Int, next: Int): Int = {
-    if (current != next) next
-    else current
-  }
+class StringIntUpdater extends Updater[Int] with PartialOrderingWithBottom[Int] {
+  override def update(v1: Int, v2: Int): Int =
+    if (v1 != v2) v2
+    else v1
 
-  override def empty: Int = 0
+  override def bottom: Int = 0
+
+  override def lteq(x: Int, y: Int): Boolean = x <= y
 }
+

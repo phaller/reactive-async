@@ -1,7 +1,7 @@
 package opal
 
 import cell._
-import lattice.{ Lattice, Key }
+import lattice.{ MonotonicUpdater, Key, Lattice }
 
 object ImmutabilityKey extends Key[Immutability] {
 
@@ -31,17 +31,31 @@ case object Immutable extends Immutability
 object Immutability {
 
   implicit object ImmutabilityLattice extends Lattice[Immutability] {
-    override def join(current: Immutability, next: Immutability): Immutability = {
-      if (<=(next, current)) current
-      else next
+    override def join(v1: Immutability, v2: Immutability): Immutability = {
+      if (lteq(v2, v1)) v1
+      else v2
     }
 
-    def <=(lhs: Immutability, rhs: Immutability): Boolean = {
+    override def lteq(lhs: Immutability, rhs: Immutability): Boolean = {
       lhs == rhs || lhs == Immutable ||
         (lhs == ConditionallyImmutable && rhs != Immutable)
     }
 
-    override def empty: Immutability = Immutable
+    override def bottom: Immutability = Immutable
+  }
+
+  implicit object ImmutabilityUpdater extends MonotonicUpdater[Immutability] {
+    override def update(v1: Immutability, v2: Immutability): Immutability = {
+      if (lteq(v2, v1)) v1
+      else v2
+    }
+
+    def lteq(lhs: Immutability, rhs: Immutability): Boolean = {
+      lhs == rhs || lhs == Immutable ||
+        (lhs == ConditionallyImmutable && rhs != Immutable)
+    }
+
+    override def bottom: Immutability = Immutable
   }
 
 }

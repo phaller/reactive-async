@@ -1,7 +1,7 @@
 package opal
 
 import cell._
-import lattice.{ Lattice, LatticeViolationException, Key }
+import lattice.{ MonotonicUpdater, Key, Lattice, NotMonotonicException }
 
 object PurityKey extends Key[Purity] {
 
@@ -22,15 +22,13 @@ case object Pure extends Purity
 case object Impure extends Purity
 
 object Purity {
-
-  implicit object PurityLattice extends Lattice[Purity] {
-    override def join(current: Purity, next: Purity): Purity = {
-      if (current == UnknownPurity) next
-      else if (current == next) current
-      else throw LatticeViolationException(current, next)
+  implicit object PurityUpdater extends MonotonicUpdater[Purity] {
+    override def lteq(v1: Purity, v2: Purity): Boolean = {
+      if (v1 == UnknownPurity) true
+      else if (v1 == v2) true
+      else false
     }
 
-    override val empty: Purity = UnknownPurity
+    override val bottom: Purity = UnknownPurity
   }
-
 }
