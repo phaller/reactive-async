@@ -12,10 +12,17 @@ import lattice.{ DefaultKey, Key, Updater }
 import org.opalj.graphs._
 
 import scala.collection.immutable.Queue
+import scala.util.{ Success, Try }
 
 /* Need to have reference equality for CAS.
+ *
+ * quiescenceCellHandlers use NEXTCallbackRunnable, because (a) pool might reach quiescence
+ * repeatedly and (b) cell might not be completed, when quiescence is reached.
  */
-private class PoolState(val handlers: List[() => Unit] = List(), val submittedTasks: Int = 0) {
+private class PoolState(
+  val quiescenceHandlers: List[() => Unit] = List(),
+  val quiescenceCellHandlers: List[NextCallbackRunnable[_, _]] = List(),
+  val submittedTasks: Int = 0) {
   def isQuiescent(): Boolean =
     submittedTasks == 0
 }
@@ -63,10 +70,24 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     if (state.isQuiescent) {
       execute(new Runnable { def run(): Unit = handler() })
     } else {
-      val newState = new PoolState(handler :: state.handlers, state.submittedTasks)
+      val newState = new PoolState(handler :: state.quiescenceHandlers, state.quiescenceCellHandlers, state.submittedTasks)
       val success = poolState.compareAndSet(state, newState)
       if (!success)
         onQuiescent(handler)
+    }
+  }
+
+  @tailrec
+  final def onQuiescent[K <: Key[V], V](cell: Cell[K, V])(handler: Try[V] => Unit): Unit = {
+    val state = poolState.get()
+    if (state.isQuiescent) {
+      execute(new Runnable { def run(): Unit = handler(Success(cell.getResult())) })
+    } else {
+      val runnable = new NextConcurrentCallbackRunnable(this, null, cell, handler)
+      val newState = new PoolState(state.quiescenceHandlers, runnable :: state.quiescenceCellHandlers, state.submittedTasks)
+      val success = poolState.compareAndSet(state, newState)
+      if (!success)
+        onQuiescent(cell)(handler)
     }
   }
 
@@ -265,7 +286,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     var submitSuccess = false
     while (!submitSuccess) {
       val state = poolState.get()
-      val newState = new PoolState(state.handlers, state.submittedTasks + 1)
+      val newState = new PoolState(state.quiescenceHandlers, state.quiescenceCellHandlers, state.submittedTasks + 1)
       submitSuccess = poolState.compareAndSet(state, newState)
     }
   }
@@ -276,28 +297,34 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    */
   private def decSubmittedTasks(i: Int = 1): Unit = {
     var success = false
-    var handlersToRun: Option[List[() => Unit]] = None
+    var quiescenceHandlersToRun: Option[List[() => Unit]] = None
+    var quiescenceCellHandlersToRun: Option[List[NextCallbackRunnable[_, _]]] = None
     while (!success) {
       val state = poolState.get()
       if (state.submittedTasks > i) {
-        handlersToRun = None
-        val newState = new PoolState(state.handlers, state.submittedTasks - i)
+        quiescenceHandlersToRun = None
+        val newState = new PoolState(state.quiescenceHandlers, state.quiescenceCellHandlers, state.submittedTasks - i)
         success = poolState.compareAndSet(state, newState)
       } else if (state.submittedTasks == 1) {
-        handlersToRun = Some(state.handlers)
+        quiescenceHandlersToRun = Some(state.quiescenceHandlers)
+        quiescenceCellHandlersToRun = Some(state.quiescenceCellHandlers)
         val newState = new PoolState()
         success = poolState.compareAndSet(state, newState)
       } else {
         throw new Exception("BOOM")
       }
     }
-    if (handlersToRun.nonEmpty) {
-      handlersToRun.get.foreach { handler =>
+
+    if (quiescenceHandlersToRun.nonEmpty) {
+      quiescenceHandlersToRun.get.foreach { handler =>
         execute(new Runnable {
           def run(): Unit = handler()
         })
       }
     }
+    if (quiescenceCellHandlersToRun.nonEmpty)
+      quiescenceCellHandlersToRun.get.foreach(_.execute())
+
   }
 
   // Shouldn't we use:
