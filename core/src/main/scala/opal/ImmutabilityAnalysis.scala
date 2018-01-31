@@ -35,7 +35,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
 
     // 1. Initialization of key data structures (two cell(completer) per class file)
     // One for Object Immutability and one for Type Immutability.
-    val pool = new HandlerPool()
+    implicit val pool = new HandlerPool()
 
     // classFileToObjectTypeCellCompleter._1 = ObjectImmutability
     // classFileToObjectTypeCellCompleter._2 = TypeImmutability
@@ -44,8 +44,8 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
     for {
       classFile <- project.allProjectClassFiles
     } {
-      val cellCompleter1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
-      val cellCompleter2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+      val cellCompleter1 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
+      val cellCompleter2 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
       classFileToObjectTypeCellCompleter = classFileToObjectTypeCellCompleter + ((classFile, (cellCompleter1, cellCompleter2)))
     }
 
@@ -138,7 +138,7 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
     manager: FPCFAnalysesManager): BasicReport = {
     // 1. Initialization of key data structures (two cell(completer) per class file)
     // One for Object Immutability and one for Type Immutability.
-    val pool = new HandlerPool()
+    implicit val pool = new HandlerPool()
 
     // classFileToObjectTypeCellCompleter._1 = ObjectImmutability
     // classFileToObjectTypeCellCompleter._2 = TypeImmutability
@@ -147,8 +147,8 @@ object ImmutabilityAnalysis extends DefaultOneStepAnalysis {
     for {
       classFile <- project.allProjectClassFiles
     } {
-      val cellCompleter1 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
-      val cellCompleter2 = CellCompleter[ImmutabilityKey.type, Immutability](pool, ImmutabilityKey)
+      val cellCompleter1 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
+      val cellCompleter2 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
       classFileToObjectTypeCellCompleter = classFileToObjectTypeCellCompleter + ((classFile, (cellCompleter1, cellCompleter2)))
     }
 

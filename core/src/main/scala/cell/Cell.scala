@@ -110,15 +110,15 @@ trait Cell[K <: Key[V], V] {
 
 object Cell {
 
-  def completed[V](pool: HandlerPool, result: V)(implicit lattice: Lattice[V]): Cell[DefaultKey[V], V] = {
-    val completer = CellCompleter.completed(pool, result)
+  def completed[V](result: V)(implicit lattice: Lattice[V], pool: HandlerPool): Cell[DefaultKey[V], V] = {
+    val completer = CellCompleter.completed(result)(lattice, pool)
     completer.cell
   }
 
   def sequence[K <: Key[V], V](in: List[Cell[K, V]])(implicit pool: HandlerPool): Cell[DefaultKey[List[V]], List[V]] = {
     implicit val lattice: Lattice[List[V]] = Lattice.trivial[List[V]]
     val completer =
-      CellCompleter[DefaultKey[List[V]], List[V]](pool, new DefaultKey[List[V]])
+      CellCompleter[DefaultKey[List[V]], List[V]](new DefaultKey[List[V]])
     in match {
       case List(c) =>
         c.onComplete {
@@ -169,6 +169,8 @@ private object State {
 
 private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V]) extends Cell[K, V] with CellCompleter[K, V] {
 
+  implicit val ctx = pool
+
   private val nodepslatch = new CountDownLatch(1)
   private val nonextdepslatch = new CountDownLatch(1)
 
@@ -217,7 +219,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)] = {
     implicit val theLattice: Lattice[V] = lattice
     val completer =
-      CellCompleter[DefaultKey[(V, V)], (V, V)](pool, new DefaultKey[(V, V)])
+      CellCompleter[DefaultKey[(V, V)], (V, V)](new DefaultKey[(V, V)])
     this.onComplete {
       case Success(x) =>
         that.onComplete {

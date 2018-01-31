@@ -53,13 +53,13 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
     val startTime = System.currentTimeMillis // Used for measuring execution time
     // 1. Initialization of key data structures (one cell(completer) per method)
-    val pool = new HandlerPool()
+    implicit val pool = new HandlerPool()
     var methodToCellCompleter = Map.empty[Method, CellCompleter[PurityKey.type, Purity]]
     for {
       classFile <- project.allProjectClassFiles
       method <- classFile.methods
     } {
-      val cellCompleter = CellCompleter[PurityKey.type, Purity](pool, PurityKey)
+      val cellCompleter = CellCompleter[PurityKey.type, Purity]( PurityKey)
       methodToCellCompleter = methodToCellCompleter + ((method, cellCompleter))
     }
 

@@ -19,9 +19,9 @@ class InternalBaseSuite extends FunSuite {
   implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
 
   test("cellDependencies: By adding dependencies") {
-    val pool = new HandlerPool
-    val completer1 = CellCompleter[StringIntKey, Int](pool, "key1")
-    val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("key1")
+    val completer2 = CellCompleter[StringIntKey, Int]("key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)
@@ -32,9 +32,9 @@ class InternalBaseSuite extends FunSuite {
   }
 
   test("cellDependencies: By removing dependencies") {
-    val pool = new HandlerPool
-    val completer1 = CellCompleter[StringIntKey, Int](pool, "key1")
-    val completer2 = CellCompleter[StringIntKey, Int](pool, "key2")
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("key1")
+    val completer2 = CellCompleter[StringIntKey, Int]("key2")
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)

@@ -32,9 +32,9 @@ object ReactiveAsyncBenchmarks extends PerformanceTest.Microbenchmark {
         exec.benchRuns -> 9) in {
           r =>
             {
-              val pool = new HandlerPool(nrOfThreads)
+              implicit val pool = new HandlerPool(nrOfThreads)
               for (i <- 1 to r)
-                pool.execute(() => { CellCompleter[NaturalNumberKey.type, Int](pool, NaturalNumberKey) }: Unit)
+                pool.execute(() => { CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey) }: Unit)
               waitUntilQuiescent(pool)
             }
         }
@@ -48,10 +48,10 @@ object ReactiveAsyncBenchmarks extends PerformanceTest.Microbenchmark {
         exec.benchRuns -> 9) in {
           r =>
             {
-              val pool = new HandlerPool(nrOfThreads)
+              implicit val pool = new HandlerPool(nrOfThreads)
               for (i <- 1 to r) {
                 pool.execute(() => {
-                  val cellCompleter = CellCompleter[NaturalNumberKey.type, Int](pool, NaturalNumberKey)
+                  val cellCompleter = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)
                   cellCompleter.putFinal(1)
                 })
               }
@@ -66,8 +66,8 @@ object ReactiveAsyncBenchmarks extends PerformanceTest.Microbenchmark {
       using(Gen.unit(s"$nrOfCells cells")) config (
         exec.benchRuns -> 9) in {
           (Unit) =>
-            val pool = new HandlerPool(nrOfThreads)
-            val cellCompleter = CellCompleter[NaturalNumberKey.type, Int](pool, NaturalNumberKey)
+            implicit val pool = new HandlerPool(nrOfThreads)
+            val cellCompleter = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)
             for (i <- 1 to nrOfCells) pool.execute(() => cellCompleter.putNext(i))
             waitUntilQuiescent(pool)
         }
