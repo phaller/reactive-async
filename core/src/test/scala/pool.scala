@@ -32,11 +32,11 @@ class PoolSuite extends FunSuite {
   test("register cells concurrently") {
     implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
 
-    val pool = new HandlerPool()
+    implicit val pool = new HandlerPool()
     var regCells = new ConcurrentHashMap[Cell[StringIntKey, Int], Cell[StringIntKey, Int]]()
     for (_ <- 1 to 1000) {
       pool.execute(() => {
-        val completer = CellCompleter[StringIntKey, Int](pool, "somekey")
+        val completer = CellCompleter[StringIntKey, Int]("somekey")
         regCells.put(completer.cell, completer.cell)
         ()
       })

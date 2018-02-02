@@ -59,7 +59,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       classFile <- project.allProjectClassFiles
       method <- classFile.methods
     } {
-      val cellCompleter = CellCompleter[PurityKey.type, Purity]( PurityKey)
+      val cellCompleter = CellCompleter[PurityKey.type, Purity](PurityKey)
       methodToCellCompleter = methodToCellCompleter + ((method, cellCompleter))
     }
 
