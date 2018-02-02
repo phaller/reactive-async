@@ -31,7 +31,7 @@ object CellCompleter {
    * Create a completer for a cell holding values of type `V`
    * given a `HandlerPool` and a `Key[V]`.
    */
-  def apply[K <: Key[V], V](pool: HandlerPool, key: K)(implicit lattice: Lattice[V]): CellCompleter[K, V] = {
+  def apply[K <: Key[V], V](key: K)(implicit lattice: Lattice[V], pool: HandlerPool): CellCompleter[K, V] = {
     val impl = new CellImpl[K, V](pool, key, lattice)
     pool.register(impl)
     impl
@@ -43,7 +43,7 @@ object CellCompleter {
    * Note: there is no `K` type parameter, since we always use type
    * `DefaultKey[V]`, no other key would make sense.
    */
-  def completed[V](pool: HandlerPool, result: V)(implicit lattice: Lattice[V]): CellCompleter[DefaultKey[V], V] = {
+  def completed[V](result: V)(implicit lattice: Lattice[V], pool: HandlerPool): CellCompleter[DefaultKey[V], V] = {
     val impl = new CellImpl[DefaultKey[V], V](pool, new DefaultKey[V], lattice)
     pool.register(impl)
     impl.putFinal(result)
