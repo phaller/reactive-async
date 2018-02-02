@@ -38,6 +38,7 @@ trait Cell[K <: Key[V], V] {
    * @param valueCallback  Callback that receives the final value of `other` and returns an `Outcome` for `this` cell.
    */
   def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
+  def whenCompleteSequential(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
 
   /**
    * Adds a dependency on some `other` cell.
@@ -54,6 +55,7 @@ trait Cell[K <: Key[V], V] {
    * @param valueCallback  Callback that receives the new value of `other` and returns an `Outcome` for `this` cell.
    */
   def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
+  def whenNextSequential(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit
 
   /**
    * Adds a dependency on some `other` cell.
@@ -287,6 +289,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         current.nextCallbacks.values.size
     }
   }
+
   override def numCompleteCallbacks: Int = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result
@@ -331,6 +334,28 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
    *  is completed (either prior or after an invocation of `whenNext`).
    */
   override def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
+    this.whenNext(other, valueCallback, sequential = false)
+  }
+
+  /**
+   * Adds dependency on `other` cell: when `other` cell receives an intermediate result by using
+   *  `putNext`, evaluate `pred` with the result of `other`. If this evaluation yields `WhenNext`
+   *  or `WhenNextComplete`, `this` cell receives an intermediate or a final result `v`
+   *  respectively. To calculate `v`, the `valueCallback` function is called with the result of `other`.
+   *
+   *  If `v` is `Some(v)`, then the shortcut value is `v`. Otherwise if `value` is `None`,
+   *  the cell is not updated.
+   *
+   *  The thereby introduced dependency is removed when `this` cell
+   *  is completed (either prior or after an invocation of `whenNext`).
+   *
+   *  The `valueCallback` is guaranteed to not be called concurrently.
+   */
+  override def whenNextSequential(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
+    this.whenNext(other, valueCallback, sequential = true)
+  }
+
+  private def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V], sequential: Boolean): Unit = {
     var success = false
     while (!success) {
       state.get() match {
@@ -340,7 +365,9 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
           success = true
 
         case raw: State[_, _] => // not completed
-          val newDep = new NextConcurrentDepRunnable(pool, this, other, valueCallback)
+          val newDep: NextDepRunnable[K, V] =
+            if (sequential) new NextSequentialDepRunnable(pool, this, other, valueCallback)
+            else new NextConcurrentDepRunnable(pool, this, other, valueCallback)
 
           val current = raw.asInstanceOf[State[K, V]]
           val depRegistered =
@@ -354,9 +381,9 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
             other.addNextCallback(newDep, this)
           }
       }
-
     }
   }
+
   /**
    * Adds dependency on `other` cell: when `other` cell is completed, evaluate `pred`
    *  with the result of `other`. If this evaluation yields true, complete `this` cell
@@ -366,6 +393,14 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
    *  is completed (either prior or after an invocation of `whenComplete`).
    */
   override def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
+    this.whenComplete(other, valueCallback, false)
+  }
+
+  override def whenCompleteSequential(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
+    this.whenComplete(other, valueCallback, true)
+  }
+
+  private def whenComplete(other: Cell[K, V], valueCallback: V => Outcome[V], sequential: Boolean): Unit = {
     var success = false
     while (!success) {
       state.get() match {
@@ -374,13 +409,19 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
           // in fact, do nothing
           success = true
 
-      case raw: State[_, _] => // not completed
-        val newDep = new CompleteConcurrentDepRunnable(pool, this, other, valueCallback)
-        other.addCompleteCallback(newDep, this)
+        case raw: State[_, _] => // not completed
+          val newDep: CompleteDepRunnable[K, V] =
+            if (sequential) new CompleteSequentialDepRunnable(pool, this, other, valueCallback)
+            else new CompleteConcurrentDepRunnable(pool, this, other, valueCallback)
 
           val current = raw.asInstanceOf[State[K, V]]
-          val newState = new State(current.res, current.completeDeps + other, current.completeCallbacks, current.nextDeps, current.nextCallbacks)
-          if (state.compareAndSet(current, newState)) {
+          val depRegistered =
+            if (current.nextDeps.contains(other)) true
+            else {
+              val newState = new State(current.res, current.completeDeps + other, current.completeCallbacks, current.nextDeps, current.nextCallbacks)
+              state.compareAndSet(current, newState)
+            }
+          if (depRegistered) {
             success = true
             other.addCompleteCallback(newDep, this)
           }
@@ -476,6 +517,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         val depsCells = pre.completeDeps
         val nextDepsCells = pre.nextDeps
         if (pre.completeCallbacks.isEmpty) {
+          // call callbacks
           pre.nextCallbacks.values.foreach { callbacks =>
             callbacks.foreach(callback => callback.execute())
           }
@@ -485,6 +527,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
           pre.completeCallbacks.values.foreach { callbacks =>
             callbacks.foreach(callback => callback.execute())
           }
+          // call (concurrent) callbacks
           pre.nextCallbacks.values.foreach { callbacks =>
             callbacks.foreach { callback =>
               if (!pre.completeCallbacks.contains(callback.dependentCell))
