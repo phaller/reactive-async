@@ -1,12 +1,12 @@
 package cell
 
 import org.scalatest.FunSuite
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{ ConcurrentHashMap, CountDownLatch }
 
 import scala.util.{ Failure, Success }
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
-import lattice.{ Lattice, StringIntLattice, StringIntKey, LatticeViolationException, DefaultKey, Key }
+import lattice.{ DefaultKey, Key, Lattice, LatticeViolationException, StringIntKey, StringIntLattice }
 import opal._
 import org.opalj.br.analyses.Project
 import java.io.File

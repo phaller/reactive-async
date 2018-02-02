@@ -43,9 +43,12 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   }
 
   def register[K <: Key[V], V](cell: Cell[K, V]): Unit = {
-    val registered = cellsNotDone.get()
-    val newRegistered = registered + (cell -> cell)
-    cellsNotDone.compareAndSet(registered, newRegistered)
+    var success = false
+    while (!success) {
+      val registered = cellsNotDone.get()
+      val newRegistered = registered + (cell -> cell)
+      success = cellsNotDone.compareAndSet(registered, newRegistered)
+    }
   }
 
   def deregister[K <: Key[V], V](cell: Cell[K, V]): Unit = {
