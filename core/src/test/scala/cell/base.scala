@@ -764,6 +764,32 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("whenNext: concurrent put next") {
+    var exptectedValue: Option[Immutability] = None
+
+    for (_ <- 1 to 100) {
+      implicit val pool = new HandlerPool
+      val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
+      val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
+
+      val cell1 = completer1.cell
+
+      pool.execute(() => cell1.whenNext(completer2.cell, x => {
+        if (x == Mutable) NextOutcome(Mutable)
+        else NoOutcome
+      }))
+      pool.execute(() => completer2.putNext(Mutable))
+
+      val fut = pool.quiescentResolveDefaults
+      Await.ready(fut, 2.seconds)
+
+      if (exptectedValue.isEmpty) exptectedValue = Some(cell1.getResult())
+      else assert(cell1.getResult() == exptectedValue.get)
+
+      pool.shutdown()
+    }
+  }
+
   test("whenNextSequential: One cell with several dependencies on the same cell concurrency test") {
     implicit val pool = new HandlerPool
 
@@ -1139,7 +1165,7 @@ class BaseSuite extends FunSuite {
     completer.putNext(Set(3, 5))
     cell.onNext {
       case Success(v) =>
-        assert(v === Set(3, 4, 5))
+        assert(v === Set(3, 4, 5) || v === Set(3, 5))
         latch.countDown()
       case Failure(e) =>
         assert(false)
@@ -1479,12 +1505,12 @@ class BaseSuite extends FunSuite {
     completer3.putNext(-1)
     completer4.putNext(-1)
 
-    // create a cSCC, assert that none of the callbacks get called.
-    cell1.whenNext(cell2, v => { assert(false); NextOutcome(-2) })
-    cell1.whenNext(cell3, v => { assert(false); NextOutcome(-2) })
-    cell2.whenNext(cell4, v => { assert(false); NextOutcome(-2) })
-    cell3.whenNext(cell4, v => { assert(false); NextOutcome(-2) })
-    cell4.whenNext(cell1, v => { assert(false); NextOutcome(-2) })
+    // create a cSCC, assert that none of the callbacks get called again.
+    cell1.whenNext(cell2, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell1.whenNext(cell3, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell2.whenNext(cell4, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell3.whenNext(cell4, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell4.whenNext(cell1, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
 
     for (c <- List(cell1, cell2, cell3, cell4))
       c.onComplete {
@@ -1527,11 +1553,11 @@ class BaseSuite extends FunSuite {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called.
-    cell1.whenNextSequential(cell2, v => { assert(false); NextOutcome(-2) })
-    cell1.whenNextSequential(cell3, v => { assert(false); NextOutcome(-2) })
-    cell2.whenNextSequential(cell4, v => { assert(false); NextOutcome(-2) })
-    cell3.whenNextSequential(cell4, v => { assert(false); NextOutcome(-2) })
-    cell4.whenNextSequential(cell1, v => { assert(false); NextOutcome(-2) })
+    cell1.whenNextSequential(cell2, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell1.whenNextSequential(cell3, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell2.whenNextSequential(cell4, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell3.whenNextSequential(cell4, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell4.whenNextSequential(cell1, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
 
     for (c <- List(cell1, cell2, cell3, cell4))
       c.onComplete {
@@ -1573,12 +1599,12 @@ class BaseSuite extends FunSuite {
     completer3.putNext(-1)
     completer4.putNext(-1)
 
-    // create a cSCC, assert that none of the callbacks get called.
-    cell1.whenNext(cell2, v => { assert(false); NextOutcome(-2) })
-    cell1.whenNext(cell3, v => { assert(false); NextOutcome(-2) })
-    cell2.whenNext(cell4, v => { assert(false); NextOutcome(-2) })
-    cell3.whenNext(cell4, v => { assert(false); NextOutcome(-2) })
-    cell4.whenNext(cell1, v => { assert(false); NextOutcome(-2) })
+    // create a cSCC, assert that none of the callbacks get called again.
+    cell1.whenNext(cell2, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell1.whenNext(cell3, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell2.whenNext(cell4, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell3.whenNext(cell4, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell4.whenNext(cell1, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
 
     for (c <- List(cell1, cell2, cell3, cell4))
       c.onComplete {
@@ -1621,11 +1647,11 @@ class BaseSuite extends FunSuite {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called.
-    cell1.whenNextSequential(cell2, v => { assert(false); NextOutcome(-2) })
-    cell1.whenNextSequential(cell3, v => { assert(false); NextOutcome(-2) })
-    cell2.whenNextSequential(cell4, v => { assert(false); NextOutcome(-2) })
-    cell3.whenNextSequential(cell4, v => { assert(false); NextOutcome(-2) })
-    cell4.whenNextSequential(cell1, v => { assert(false); NextOutcome(-2) })
+    cell1.whenNextSequential(cell2, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell1.whenNextSequential(cell3, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell2.whenNextSequential(cell4, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell3.whenNextSequential(cell4, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
+    cell4.whenNextSequential(cell1, v => if (v != -1) { assert(false); NextOutcome(-2) } else NoOutcome)
 
     for (c <- List(cell1, cell2, cell3, cell4))
       c.onComplete {
