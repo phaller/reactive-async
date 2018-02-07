@@ -68,5 +68,4 @@ class PoolSuite extends FunSuite {
     assert(regCells.size === 1000)
   }
 
-
 }

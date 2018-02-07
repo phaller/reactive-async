@@ -482,27 +482,15 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
         res
 
       case (pre: State[K, V], newVal: Try[V]) =>
+        pre.nextCallbacks.values.foreach { callbacks =>
+          callbacks.foreach(callback => callback.execute())
+        }
+        pre.completeCallbacks.values.foreach { callbacks =>
+          callbacks.foreach(callback => callback.execute())
+        }
+
         val depsCells = pre.completeDeps
         val nextDepsCells = pre.nextDeps
-        if (pre.completeCallbacks.isEmpty) {
-          // call callbacks
-          pre.nextCallbacks.values.foreach { callbacks =>
-            callbacks.foreach(callback => callback.execute())
-          }
-        } else {
-          // onNext callbacks with these cells should not be triggered, because they have
-          // onComplete callbacks which are triggered instead.
-          pre.completeCallbacks.values.foreach { callbacks =>
-            callbacks.foreach(callback => callback.execute())
-          }
-          // call (concurrent) callbacks
-          pre.nextCallbacks.values.foreach { callbacks =>
-            callbacks.foreach { callback =>
-              if (!pre.completeCallbacks.contains(callback.dependentCell))
-                callback.execute()
-            }
-          }
-        }
 
         if (depsCells.nonEmpty)
           depsCells.foreach(_.removeCompleteCallbacks(this))
