@@ -63,9 +63,9 @@ class BaseSuite extends FunSuite {
 
     try {
       completer.putFinal(ConditionallyImmutable)
-      assert(false)
+      assert(true)
     } catch {
-      case ise: IllegalStateException => assert(true)
+      case ise: IllegalStateException => assert(false)
       case e: Exception => assert(false)
     }
 

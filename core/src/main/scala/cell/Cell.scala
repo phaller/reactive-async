@@ -475,7 +475,9 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     // the only call to `tryCompleteAndGetState`
     val res = tryCompleteAndGetState(resolved) match {
       case finalRes: Try[_] => // was already complete
-        val res = finalRes == value // FIXME: should compare to joined value
+        val finalResult = finalRes.asInstanceOf[Try[V]].get
+        val newVal = value.map(tryJoin(finalResult, _))
+        val res = finalRes == newVal
         res
 
       case (pre: State[K, V], newVal: Try[V]) =>
