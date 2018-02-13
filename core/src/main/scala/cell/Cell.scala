@@ -106,11 +106,11 @@ trait Cell[K <: Key[V], V] {
   private[cell] def addNextCallback(callback: NextCallbackRunnable[K, V], cell: Cell[K, V]): Unit
 
   private[cell] def resolveWithValue(value: V): Unit
-  private[cell] def cellDependencies: Seq[Cell[K, V]]
-  private[cell] def totalCellDependencies: Seq[Cell[K, V]]
+  def cellDependencies: Seq[Cell[K, V]]
+  def totalCellDependencies: Seq[Cell[K, V]]
 
-  private[cell] def removeCompleteCallbacks(cell: Cell[K, V]): Unit
-  private[cell] def removeNextCallbacks(cell: Cell[K, V]): Unit
+  def removeCompleteCallbacks(cell: Cell[K, V]): Unit
+  def removeNextCallbacks(cell: Cell[K, V]): Unit
 }
 
 object Cell {
@@ -272,7 +272,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
     else (current.completeDeps ++ current.nextDeps).size
   }
 
-  override private[cell] def cellDependencies: Seq[Cell[K, V]] = {
+  override def cellDependencies: Seq[Cell[K, V]] = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result
         Seq[Cell[K, V]]()
@@ -282,7 +282,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
     }
   }
 
-  override private[cell] def totalCellDependencies: Seq[Cell[K, V]] = {
+  override def totalCellDependencies: Seq[Cell[K, V]] = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result
         Seq[Cell[K, V]]()
@@ -552,7 +552,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
   }
 
   @tailrec
-  override private[cell] final def removeCompleteCallbacks(cell: Cell[K, V]): Unit = {
+  override final def removeCompleteCallbacks(cell: Cell[K, V]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]
@@ -566,7 +566,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
   }
 
   @tailrec
-  override private[cell] final def removeNextCallbacks(cell: Cell[K, V]): Unit = {
+  override final def removeNextCallbacks(cell: Cell[K, V]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]
