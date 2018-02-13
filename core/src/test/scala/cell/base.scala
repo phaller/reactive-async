@@ -1387,6 +1387,62 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("whenNext and whenComplete: same depender") {
+    val latch1 = new CountDownLatch(1)
+
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("c1")
+    val completer2 = CellCompleter[StringIntKey, Int]("c2")
+
+    completer2.cell.whenNext(completer1.cell, (v) => {
+      assert(false)
+      FinalOutcome(10)
+    })
+    completer2.cell.whenComplete(completer1.cell, (v) => {
+      FinalOutcome(10)
+    })
+
+    completer2.cell.onComplete(v => latch1.countDown())
+
+    completer1.putFinal(10)
+
+    latch1.await()
+
+    pool.shutdown()
+
+    assert(completer1.cell.getResult() == 10)
+    assert(completer2.cell.getResult() == 10)
+  }
+
+  test("whenNext and whenComplete: different depender") {
+    val latch1 = new CountDownLatch(2)
+
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("c1")
+    val completer2 = CellCompleter[StringIntKey, Int]("c2")
+    val completer3 = CellCompleter[StringIntKey, Int]("c3")
+
+    completer2.cell.whenNext(completer1.cell, (v) => {
+      FinalOutcome(10)
+    })
+    completer3.cell.whenComplete(completer1.cell, (v) => {
+      FinalOutcome(10)
+    })
+
+    completer2.cell.onComplete(v => latch1.countDown())
+    completer3.cell.onComplete(v => latch1.countDown())
+
+    completer1.putFinal(10)
+
+    latch1.await()
+
+    pool.shutdown()
+
+    assert(completer1.cell.getResult() == 10)
+    assert(completer2.cell.getResult() == 10)
+    assert(completer3.cell.getResult() == 10)
+  }
+
   test("putNext and putFinal: concurrency test") {
     implicit val pool = new HandlerPool
 
@@ -1497,10 +1553,11 @@ class BaseSuite extends FunSuite {
           latch.countDown()
       }
 
+    pool.triggerExecution(cell1)
+
     // resolve cells
-    pool.whileQuiescentResolveCell
     val fut = pool.quiescentResolveCell
-    Await.result(fut, 2.second)
+    Await.result(fut, 2.seconds)
     latch.await()
 
     pool.shutdown()
@@ -1544,10 +1601,11 @@ class BaseSuite extends FunSuite {
           latch.countDown()
       }
 
+    pool.triggerExecution(cell1)
+
     // resolve cells
-    pool.whileQuiescentResolveCell
     val fut = pool.quiescentResolveCell
-    Await.result(fut, 2.second)
+    Await.result(fut, 2.seconds)
     latch.await()
 
     pool.shutdown()

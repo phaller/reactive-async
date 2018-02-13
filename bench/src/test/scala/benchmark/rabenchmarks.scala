@@ -1,4 +1,5 @@
-import cell.{ CellCompleter, HandlerPool }
+package cell
+
 import lattice.{ Lattice, NaturalNumberLattice, NaturalNumberKey }
 
 import scala.annotation.tailrec
