@@ -447,7 +447,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("whenNext: dependency 2") {
-    val latch = new CountDownLatch(1)
+    val latch = new CountDownLatch(2)
 
     implicit val pool = new HandlerPool
     val completer1 = CellCompleter[StringIntKey, Int]("somekey")
@@ -455,7 +455,7 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNext(completer2.cell, (x: Int) => {
-      if (x == 10) NextOutcome(30)
+      if (x == 10) NextOutcome(20)
       else NoOutcome
     })
     cell1.whenComplete(completer2.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
@@ -472,9 +472,11 @@ class BaseSuite extends FunSuite {
     }
     cell1.onNext {
       case Success(x) =>
-        assert(false)
+        assert(x === 20)
+        latch.countDown()
       case Failure(e) =>
         assert(false)
+        latch.countDown()
     }
 
     completer2.putFinal(10)
@@ -486,7 +488,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("whenNextSequential: dependency 2") {
-    val latch = new CountDownLatch(1)
+    val latch = new CountDownLatch(2)
 
     implicit val pool = new HandlerPool
     val completer1 = CellCompleter[StringIntKey, Int]("somekey")
@@ -494,7 +496,7 @@ class BaseSuite extends FunSuite {
 
     val cell1 = completer1.cell
     cell1.whenNextSequential(completer2.cell, (x: Int) => {
-      if (x == 10) NextOutcome(30)
+      if (x == 10) NextOutcome(20)
       else NoOutcome
     })
     cell1.whenComplete(completer2.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
@@ -511,9 +513,11 @@ class BaseSuite extends FunSuite {
     }
     cell1.onNext {
       case Success(x) =>
-        assert(false)
+        assert(x === 20)
+        latch.countDown()
       case Failure(e) =>
         assert(false)
+        latch.countDown()
     }
 
     completer2.putFinal(10)
@@ -738,6 +742,66 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("whenNext: concurrent put final") {
+    var expectedValue: Option[Immutability] = None
+
+    for (_ <- 1 to 100) {
+      implicit val pool = new HandlerPool
+      val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
+      val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
+
+      val cell1 = completer1.cell
+
+      pool.execute(() => cell1.whenComplete(completer2.cell, x => {
+        NoOutcome
+      }))
+
+      pool.execute(() => cell1.whenNext(completer2.cell, x => {
+        if (x == Mutable) NextOutcome(Mutable)
+        else NoOutcome
+      }))
+      pool.execute(() => completer2.putFinal(Mutable))
+
+      val fut = pool.quiescentResolveCycles
+      Await.ready(fut, 2.seconds)
+
+      if (expectedValue.isEmpty) expectedValue = Some(cell1.getResult())
+      else assert(cell1.getResult() == expectedValue.get)
+
+      pool.shutdown()
+    }
+  }
+
+  test("whenNextSequential: concurrent put final") {
+    var expectedValue: Option[Immutability] = None
+
+    for (_ <- 1 to 100) {
+      implicit val pool = new HandlerPool
+      val completer1 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
+      val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
+
+      val cell1 = completer1.cell
+
+      pool.execute(() => cell1.whenCompleteSequential(completer2.cell, x => {
+        NoOutcome
+      }))
+
+      pool.execute(() => cell1.whenNextSequential(completer2.cell, x => {
+        if (x == Mutable) NextOutcome(Mutable)
+        else NoOutcome
+      }))
+      pool.execute(() => completer2.putFinal(Mutable))
+
+      val fut = pool.quiescentResolveCycles
+      Await.ready(fut, 2.seconds)
+
+      if (expectedValue.isEmpty) expectedValue = Some(cell1.getResult())
+      else assert(cell1.getResult() == expectedValue.get)
+
+      pool.shutdown()
+    }
+  }
+
   test("whenNext: One cell with several dependencies on the same cell concurrency test") {
     implicit val pool = new HandlerPool
 
@@ -948,7 +1012,7 @@ class BaseSuite extends FunSuite {
 
     cell1.onNext {
       case Success(x) =>
-        assert(x === 8)
+        assert(x === 8 || x === 20)
         latch1.countDown()
       case Failure(e) =>
         assert(false)
@@ -989,7 +1053,7 @@ class BaseSuite extends FunSuite {
 
     cell1.onNext {
       case Success(x) =>
-        assert(x === 8)
+        assert(x === 8 || x === 20)
         latch1.countDown()
       case Failure(e) =>
         assert(false)
@@ -1029,8 +1093,7 @@ class BaseSuite extends FunSuite {
 
     cell1.onNext {
       case Success(x) =>
-        assert(x === 8)
-        assert(!cell1.isComplete)
+        assert((x === 8 && !cell1.isComplete) || x === 10)
         latch1.countDown()
       case Failure(e) =>
         assert(false)
@@ -1395,7 +1458,6 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int]("c2")
 
     completer2.cell.whenNext(completer1.cell, (v) => {
-      assert(false)
       FinalOutcome(10)
     })
     completer2.cell.whenComplete(completer1.cell, (v) => {
