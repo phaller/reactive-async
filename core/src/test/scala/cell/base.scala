@@ -2346,6 +2346,111 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("recursive quiescentResolveCycles") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer2 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+
+    cell1.whenNext(cell1, x => {
+      Thread.sleep(200)
+      NoOutcome
+    })
+
+    cell2.whenNext(cell1, x => {
+      Thread.sleep(200)
+      FinalOutcome(x * 2)
+    })
+
+    val fut = pool.quiescentResolveCycles
+    Await.ready(fut, 2.seconds)
+
+    assert(completer1.cell.getResult == 42)
+    assert(completer2.cell.getResult == 84)
+
+    pool.shutdown()
+  }
+
+  test("recursive quiescentResolveDefaults") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer2 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+
+    cell2.whenNext(cell1, x => {
+      Thread.sleep(200)
+      FinalOutcome(x * 2)
+    })
+
+    val fut = pool.quiescentResolveDefaults
+    Await.ready(fut, 2.seconds)
+
+    assert(completer2.cell.getResult == 86)
+
+    pool.shutdown()
+  }
+
+  test("recursive quiescentResolveCell using resolve") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer2 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+
+    cell1.whenNext(cell1, x => {
+      Thread.sleep(200)
+      NoOutcome
+    })
+
+    cell2.whenNext(cell1, x => {
+      Thread.sleep(200)
+      FinalOutcome(x * 2)
+    })
+
+    val fut = pool.quiescentResolveCell
+    Await.ready(fut, 2.seconds)
+
+    assert(completer1.cell.getResult == 42)
+    assert(completer2.cell.getResult == 84)
+
+    pool.shutdown()
+  }
+
+  test("recursive quiescentResolveCell using fallback") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer2 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+
+    cell1.whenNext(cell2, x => {
+      Thread.sleep(200)
+      FinalOutcome(x * 2)
+    })
+
+    val fut = pool.quiescentResolveCell
+    Await.ready(fut, 2.seconds)
+
+    assert(completer1.cell.getResult == 86)
+    assert(completer2.cell.getResult == 43)
+
+    pool.shutdown()
+  }
+
+  class RecursiveQuiescentTestKey extends Key[Int] {
+    override def resolve[K <: Key[Int]](
+      cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+      Seq((cells.head, 42))
+    }
+
+    override def fallback[K <: Key[Int]](
+      cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+      cells.map(cell ⇒ (cell, 43))
+    }
+  }
+
   /*test("ImmutabilityAnalysis: Concurrency") {
     val file = new File("lib")
     val lib = Project(file)

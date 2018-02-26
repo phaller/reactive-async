@@ -5,10 +5,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
 import scala.util.control.NonFatal
-import scala.concurrent.Await
+import scala.concurrent.{ Await, Future, Promise }
 import scala.concurrent.duration._
-import scala.concurrent.{ Future, Promise }
-
 import lattice.{ DefaultKey, Key, Lattice }
 import org.opalj.graphs._
 
@@ -123,6 +121,13 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     }
   }
 
+  /**
+   * Wait for a quiescent state when no more tasks are being executed. Afterwards, it will resolve
+   * unfinished cells using the keys resolve function and recursively wait for resolution.
+   *
+   * @return The future will be set once the resolve is finished and the quiescent state is reached.
+   *         The boolean parameter indicates if cycles where resolved or not.
+   */
   def quiescentResolveCycles[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
@@ -131,12 +136,28 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
       if (registered.nonEmpty) {
         val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
+
+        // Wait again for quiescent state. It's possible that other tasks where scheduled while
+        // resolving the cells.
+        if (cSCCs.nonEmpty) {
+          p.completeWith(quiescentResolveCycles)
+        } else {
+          p.success(false)
+        }
+      } else {
+        p.success(false)
       }
-      p.success(true)
     }
     p.future
   }
 
+  /**
+   * Wait for a quiescent state when no more tasks are being executed. Afterwards, it will resolve
+   * unfinished cells using the keys fallback function and recursively wait for resolution.
+   *
+   * @return The future will be set once the resolve is finished and the quiescent state is reached.
+   *         The boolean parameter indicates if cycles where resolved or not.
+   */
   def quiescentResolveDefaults[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
@@ -144,27 +165,49 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
       val rest = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (rest.nonEmpty) {
         resolveDefault(rest)
+
+        // Wait again for quiescent state. It's possible that other tasks where scheduled while
+        // resolving the cells.
+        p.completeWith(quiescentResolveDefaults)
+      } else {
+        p.success(false)
       }
-      p.success(true)
     }
     p.future
   }
 
+  /**
+   * Wait for a quiescent state when no more tasks are being executed. Afterwards, it will resolve
+   * unfinished cells using the keys resolve function. If more cells are unresolved, use the
+   * fallback function and recursively wait for resolution.
+   *
+   * @return The future will be set once the resolve is finished and the quiescent state is reached.
+   *         The boolean parameter indicates if cycles where resolved or not.
+   */
   def quiescentResolveCell[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Find one closed strongly connected component (cell)
       val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().keys.asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      var resolvedCycles = false
       if (registered.nonEmpty) {
         val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
+        resolvedCycles = cSCCs.nonEmpty
       }
       // Finds the rest of the unresolved cells (that have been triggered)
       val rest = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (rest.nonEmpty) {
         resolveDefault(rest)
       }
-      p.success(true)
+
+      // Wait again for quiescent state. It's possible that other tasks where scheduled while
+      // resolving the cells.
+      if (resolvedCycles || rest.nonEmpty) {
+        p.completeWith(quiescentResolveCell)
+      } else {
+        p.success(false)
+      }
     }
     p.future
   }
