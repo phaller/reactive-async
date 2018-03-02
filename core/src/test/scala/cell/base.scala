@@ -1943,7 +1943,6 @@ class BaseSuite extends FunSuite {
 
     object TheKey extends DefaultKey[Value] {
       override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
-        println("resolving with resolve: " + cells)
         cells.map(cell => (cell, Resolved))
       }
       override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
@@ -1990,7 +1989,6 @@ class BaseSuite extends FunSuite {
 
     object TheKey extends DefaultKey[Value] {
       override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
-        println("resolving with resolve: " + cells)
         cells.map(cell => (cell, Resolved))
       }
       override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
@@ -2344,6 +2342,141 @@ class BaseSuite extends FunSuite {
     }
 
     pool.shutdown()
+  }
+
+  test("whenNextSequential: discard callbacks on completion") {
+    val latch1 = new CountDownLatch(1)
+    val latch2 = new CountDownLatch(1)
+
+    val n = 10000
+
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice, pool)
+    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice, pool)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+    cell1.trigger()
+
+    cell1.whenNextSequential(cell2, v => {
+      latch1.await() // wait for some puts/triggers
+      FinalOutcome(n)
+    })
+
+    for (i <- 1 to n)
+      pool.execute(() => completer2.putNext(i)) // was pool.execute(…)
+    latch1.countDown()
+
+    pool.onQuiescent(() => {
+      pool.shutdown()
+      latch2.countDown()
+    })
+    // pool needs to reach quiescence, even if cell1 is completed early:
+    latch2.await()
+
+    assert(cell1.getResult() == n)
+    assert(cell2.getResult() == n)
+    assert(cell1.isComplete)
+    assert(!cell2.isComplete)
+  }
+
+  test("cell dependency on itself") {
+    class ReactivePropertyStoreKey extends Key[Int] {
+      override def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+        Seq((cells.head, 42))
+      }
+
+      override def fallback[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+        cells.map(cell ⇒ (cell, cell.getResult()))
+      }
+
+      override def toString = "ReactivePropertyStoreKey"
+    }
+
+    implicit val pool = new HandlerPool(parallelism = 1)
+    val completer1 = CellCompleter[ReactivePropertyStoreKey, Int](new ReactivePropertyStoreKey())
+    val completer2 = CellCompleter[ReactivePropertyStoreKey, Int](new ReactivePropertyStoreKey())
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+
+    val completer10 = CellCompleter[ReactivePropertyStoreKey, Int](new ReactivePropertyStoreKey())
+    val completer20 = CellCompleter[ReactivePropertyStoreKey, Int](new ReactivePropertyStoreKey())
+    val cell10 = completer10.cell
+    val cell20 = completer20.cell
+
+    completer2.putNext(1)
+    cell2.whenNext(cell1, x => {
+      if (x == 42) {
+        completer2.putFinal(43)
+      }
+      NoOutcome
+    })
+
+    completer20.putNext(1)
+    cell20.whenNext(cell10, x => {
+      if (x == 10) {
+        completer20.putFinal(43)
+      }
+      NoOutcome
+    })
+
+    completer1.putNext(10)
+    completer10.putNext(10)
+
+    cell1.whenNext(cell1, _ => {
+      NoOutcome
+    })
+
+    cell1.trigger()
+    cell2.trigger()
+    cell10.trigger()
+    cell20.trigger()
+
+    val fut = pool.quiescentResolveCycles
+    Await.ready(fut, 2.seconds)
+
+    val fut2 = pool.quiescentResolveDefaults
+    Await.ready(fut2, 2.seconds)
+
+  }
+
+  test("whenCompleteSequential: discard callbacks on completion") {
+    val latch1 = new CountDownLatch(1)
+    val latch2 = new CountDownLatch(1)
+
+    implicit val pool = new HandlerPool
+
+    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice, pool)
+    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice, pool)
+    val completer3 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice, pool)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+    val cell3 = completer3.cell
+    cell1.trigger()
+
+    cell1.whenCompleteSequential(cell2, v => {
+      latch1.await() // wait for some puts/triggers
+      FinalOutcome(10)
+    })
+    cell1.whenCompleteSequential(cell3, NextOutcome(_))
+
+    completer2.putFinal(3)
+    completer3.putNext(2)
+    completer3.putNext(3)
+    latch1.countDown()
+
+    pool.onQuiescent(() => {
+      pool.shutdown()
+      latch2.countDown()
+    })
+    // pool needs to reach quiescence, even if cell1 is completed early:
+    latch2.await()
+
+    assert(cell1.getResult() == 10)
+    assert(cell2.getResult() == 3)
+    assert(cell3.getResult() == 3)
+    assert(cell1.isComplete)
+    assert(cell2.isComplete)
+    assert(!cell3.isComplete)
   }
 
   test("recursive quiescentResolveCycles") {
