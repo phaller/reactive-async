@@ -1,8 +1,7 @@
 package cell
 
 import scala.util.Try
-
-import lattice.{ Lattice, Key, DefaultKey }
+import lattice.{ DefaultKey, Key, Updater }
 
 /**
  * Interface trait for programmatically completing a cell. Analogous to `Promise[V]`.
@@ -33,8 +32,8 @@ object CellCompleter {
    * Create a completer for a cell holding values of type `V`
    * given a `HandlerPool` and a `Key[V]`.
    */
-  def apply[K <: Key[V], V](key: K, init: (Cell[K, V]) => Outcome[V] = (_: Cell[K, V]) => NoOutcome)(implicit lattice: Lattice[V], pool: HandlerPool): CellCompleter[K, V] = {
-    val impl = new CellImpl[K, V](pool, key, lattice, init)
+  def apply[K <: Key[V], V](key: K, init: (Cell[K, V]) => Outcome[V] = (_: Cell[K, V]) => NoOutcome)(implicit updater: Updater[V], pool: HandlerPool): CellCompleter[K, V] = {
+    val impl = new CellImpl[K, V](pool, key, updater, init)
     pool.register(impl)
     impl
   }
@@ -45,8 +44,8 @@ object CellCompleter {
    * Note: there is no `K` type parameter, since we always use type
    * `DefaultKey[V]`, no other key would make sense.
    */
-  def completed[V](result: V)(implicit lattice: Lattice[V], pool: HandlerPool): CellCompleter[DefaultKey[V], V] = {
-    val impl = new CellImpl[DefaultKey[V], V](pool, new DefaultKey[V], lattice, _ => NoOutcome)
+  def completed[V](result: V)(implicit updater: Updater[V], pool: HandlerPool): CellCompleter[DefaultKey[V], V] = {
+    val impl = new CellImpl[DefaultKey[V], V](pool, new DefaultKey[V], updater, _ => NoOutcome)
     pool.register(impl)
     impl.putFinal(result)
     impl

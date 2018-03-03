@@ -16,7 +16,7 @@ import org.opalj.br.analyses.Project
 
 class InternalBaseSuite extends FunSuite {
 
-  implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
+  implicit val stringIntUpdater: Updater[Int] = new StringIntUpdater
 
   test("cellDependencies: By adding dependencies") {
     implicit val pool = new HandlerPool

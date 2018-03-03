@@ -1,12 +1,12 @@
 package cell
 
 import org.scalatest.FunSuite
-import java.util.concurrent.{ ConcurrentHashMap, CountDownLatch }
+import java.util.concurrent.CountDownLatch
 
 import scala.util.{ Failure, Success }
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
-import lattice.{ DefaultKey, Key, Lattice, LatticeViolationException, StringIntKey, StringIntLattice }
+import lattice.{ DefaultKey, Key, Lattice, MonotonicUpdater, NaturalNumberLattice, NotMonotonicException, StringIntKey, StringIntUpdater, Updater }
 import opal._
 import org.opalj.br.analyses.Project
 import java.io.File
@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class BaseSuite extends FunSuite {
 
-  implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
+  implicit val stringIntUpdater: Updater[Int] = new StringIntUpdater
 
   test("putFinal") {
     val latch = new CountDownLatch(1)
@@ -1164,8 +1164,8 @@ class BaseSuite extends FunSuite {
     val latch = new CountDownLatch(1)
 
     implicit val setLattice = new Lattice[Set[Int]] {
-      def join(curr: Set[Int], next: Set[Int]) = curr ++ next
-      def empty = Set.empty[Int]
+      def join(curr: Set[Int], v2: Set[Int]): Set[Int] = curr ++ v2
+      def bottom = Set.empty[Int]
     }
     val key = new lattice.DefaultKey[Set[Int]]
 
@@ -1191,8 +1191,8 @@ class BaseSuite extends FunSuite {
     val latch = new CountDownLatch(1)
 
     implicit val setLattice = new Lattice[Set[Int]] {
-      def join(curr: Set[Int], next: Set[Int]) = curr ++ next
-      def empty = Set.empty[Int]
+      def join(curr: Set[Int], v2: Set[Int]): Set[Int] = curr ++ v2
+      def bottom = Set.empty[Int]
     }
     val key = new lattice.DefaultKey[Set[Int]]
 
@@ -1347,32 +1347,32 @@ class BaseSuite extends FunSuite {
     assert(finalRes.size == 0)
   }
 
-  test("PurityLattice: successful joins") {
-    val lattice = Purity.PurityLattice
+  test("PurityUpdate: successful updated") {
+    val lattice = Purity.PurityUpdater
 
-    val purity = lattice.join(UnknownPurity, Pure)
+    val purity = lattice.update(UnknownPurity, Pure)
     assert(purity == Pure)
 
-    val newPurity = lattice.join(purity, Pure)
+    val newPurity = lattice.update(purity, Pure)
     assert(newPurity == Pure)
   }
 
-  test("PurityLattice: failed joins") {
-    val lattice = Purity.PurityLattice
+  test("PurityUpdater: failed updates") {
+    val lattice = Purity.PurityUpdater
 
     try {
-      val newPurity = lattice.join(Impure, Pure)
+      val newPurity = lattice.update(Impure, Pure)
       assert(false)
     } catch {
-      case lve: LatticeViolationException[_] => assert(true)
+      case lve: NotMonotonicException[_] => assert(true)
       case e: Exception => assert(false)
     }
 
     try {
-      val newPurity = lattice.join(Pure, Impure)
+      val newPurity = lattice.update(Pure, Impure)
       assert(false)
     } catch {
-      case lve: LatticeViolationException[_] => assert(true)
+      case lve: NotMonotonicException[_] => assert(true)
       case e: Exception => assert(false)
     }
   }
@@ -1553,14 +1553,14 @@ class BaseSuite extends FunSuite {
   }
 
   test("if exception-throwing tasks should still run quiescent handlers") {
-    val intMaxLattice = new Lattice[Int] {
-      def join(current: Int, next: Int) = math.max(current, next)
-      def empty = 0
+    implicit val intMaxLattice: Lattice[Int] = new Lattice[Int] {
+      override def join(v1: Int, v2: Int): Int = Math.max(v1, v2)
+      def bottom = 0
     }
     val key = new lattice.DefaultKey[Int]
 
-    val pool = new HandlerPool(unhandledExceptionHandler = { t => /* do nothing */ })
-    val completer = CellCompleter[key.type, Int](key)(intMaxLattice, pool)
+    implicit val pool = new HandlerPool(unhandledExceptionHandler = { t => /* do nothing */ })
+    val completer = CellCompleter[key.type, Int](key)
 
     pool.execute { () =>
       // NOTE: This will print a stacktrace, but that is fine (not a bug).
@@ -1773,10 +1773,9 @@ class BaseSuite extends FunSuite {
     case object ShouldNotHappen extends Value
 
     object Value {
-
-      implicit object ValueLattice extends Lattice[Value] {
-        override def join(current: Value, next: Value): Value = next
-        override val empty: Value = Bottom
+      implicit object ValueUpdater extends MonotonicUpdater[Value] {
+        override def lteq(v1: Value, v2: Value): Boolean = true
+        override val bottom: Value = Bottom
       }
     }
 
@@ -1808,10 +1807,9 @@ class BaseSuite extends FunSuite {
     case object ShouldNotHappen extends Value
 
     object Value {
-
-      implicit object ValueLattice extends Lattice[Value] {
-        override def join(current: Value, next: Value): Value = next
-        override val empty: Value = Bottom
+      implicit object ValueUpdater extends MonotonicUpdater[Value] {
+        override def lteq(v1: Value, v2: Value): Boolean = true
+        override val bottom: Value = Bottom
       }
     }
 
@@ -1844,12 +1842,9 @@ class BaseSuite extends FunSuite {
     case object ShouldNotHappen extends Value
 
     object Value {
-      implicit object ValueLattice extends Lattice[Value] {
-        override def join(current: Value, next: Value): Value = {
-          if (current == Bottom) next
-          else throw LatticeViolationException(current, next)
-        }
-        override val empty: Value = Bottom
+      implicit object ValueUpdater extends MonotonicUpdater[Value] {
+        override def lteq(v1: Value, v2: Value): Boolean = v1 == bottom
+        override val bottom: Value = Bottom
       }
     }
 
@@ -1888,12 +1883,9 @@ class BaseSuite extends FunSuite {
     case object ShouldNotHappen extends Value
 
     object Value {
-      implicit object ValueLattice extends Lattice[Value] {
-        override def join(current: Value, next: Value): Value = {
-          if (current == Bottom) next
-          else throw LatticeViolationException(current, next)
-        }
-        override val empty: Value = Bottom
+      implicit object ValueUpdater extends MonotonicUpdater[Value] {
+        override def lteq(v1: Value, v2: Value): Boolean = v1 == bottom
+        override val bottom: Value = Bottom
       }
     }
 
@@ -1934,10 +1926,9 @@ class BaseSuite extends FunSuite {
     case object ShouldNotHappen extends Value
 
     object Value {
-
-      implicit object ValueLattice extends Lattice[Value] {
-        override def join(current: Value, next: Value): Value = next
-        override val empty: Value = Bottom
+      implicit object ValueUpdater extends MonotonicUpdater[Value] {
+        override def lteq(v1: Value, v2: Value): Boolean = true
+        override val bottom: Value = Bottom
       }
     }
 
@@ -1981,10 +1972,9 @@ class BaseSuite extends FunSuite {
     case object ShouldNotHappen extends Value
 
     object Value {
-
-      implicit object ValueLattice extends Lattice[Value] {
-        override def join(current: Value, next: Value): Value = next
-        override val empty: Value = Bottom
+      implicit object ValueUpdater extends MonotonicUpdater[Value] {
+        override def lteq(v1: Value, v2: Value): Boolean = true
+        override val bottom: Value = Bottom
       }
     }
 
@@ -2028,12 +2018,10 @@ class BaseSuite extends FunSuite {
     case object ShouldNotHappen extends Value
 
     object Value {
-
-      implicit object ValueLattice extends Lattice[Value] {
-        override def join(current: Value, next: Value): Value = next
-        override val empty: Value = Bottom
+      implicit object ValueUpdater extends MonotonicUpdater[Value] {
+        override def lteq(v1: Value, v2: Value): Boolean = true
+        override val bottom: Value = Bottom
       }
-
     }
 
     object TheKey extends DefaultKey[Value] {
@@ -2077,12 +2065,10 @@ class BaseSuite extends FunSuite {
     case object ShouldNotHappen extends Value
 
     object Value {
-
-      implicit object ValueLattice extends Lattice[Value] {
-        override def join(current: Value, next: Value): Value = next
-        override val empty: Value = Bottom
+      implicit object ValueUpdater extends MonotonicUpdater[Value] {
+        override def lteq(v1: Value, v2: Value): Boolean = true
+        override val bottom: Value = Bottom
       }
-
     }
 
     object TheKey extends DefaultKey[Value] {
@@ -2124,14 +2110,14 @@ class BaseSuite extends FunSuite {
     val latch = new CountDownLatch(1)
     val random = new scala.util.Random()
 
-    val pool = new HandlerPool
-    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice, pool)
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
 
     var otherLatches: Set[CountDownLatch] = Set.empty
 
     val cell1 = completer1.cell
     for (i <- 1 to n) {
-      val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice, pool)
+      val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
       val latch2 = new CountDownLatch(1)
 
       otherLatches = otherLatches + latch2
@@ -2175,9 +2161,9 @@ class BaseSuite extends FunSuite {
     val latch = new CountDownLatch(1)
     val random = new scala.util.Random()
 
-    val pool = new HandlerPool
-    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice, pool)
-    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(new lattice.NaturalNumberLattice, pool)
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
+    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
 
     val cell1 = completer1.cell
     cell1.whenNextSequential(completer2.cell, (x: Int) => {
@@ -2300,18 +2286,18 @@ class BaseSuite extends FunSuite {
   }
 
   test("whenComplete: called at most once") {
-    val intMaxLattice = new Lattice[Int] {
-      def join(current: Int, next: Int): Int = math.max(current, next)
-      def empty = 0
+    implicit val intMaxLattice: Lattice[Int] = new Lattice[Int] {
+      override def join(x: Int, y: Int): Int = Math.max(x, y)
+      def bottom = 0
     }
     val key = new lattice.DefaultKey[Int]
 
-    val pool = new HandlerPool
+    implicit val pool = new HandlerPool
 
     for (_ <- 1 to 100) {
       val latch = new CountDownLatch(1)
-      val completer1 = CellCompleter[key.type, Int](key)(intMaxLattice, pool)
-      val completer2 = CellCompleter[key.type, Int](key)(intMaxLattice, pool)
+      val completer1 = CellCompleter[key.type, Int](key)
+      val completer2 = CellCompleter[key.type, Int](key)
       var called = 0
       completer2.cell.whenComplete(completer1.cell, _ => {
         assert(called === 0)

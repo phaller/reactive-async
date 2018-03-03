@@ -2,7 +2,7 @@ package cell
 
 import java.util.concurrent.CountDownLatch
 
-import lattice.{ DefaultKey, Lattice, StringIntKey, StringIntLattice }
+import lattice.{ DefaultKey, Lattice, StringIntKey, StringIntUpdater, Updater }
 import org.scalatest.FunSuite
 
 import scala.concurrent.Await
@@ -10,7 +10,7 @@ import scala.concurrent.duration._
 
 class LazySuite extends FunSuite {
 
-  implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
+  implicit val stringIntUpdater: Updater[Int] = new StringIntUpdater
 
   test("lazy init") {
     val latch = new CountDownLatch(1)

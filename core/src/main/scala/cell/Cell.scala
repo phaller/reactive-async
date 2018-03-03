@@ -5,7 +5,7 @@ import java.util.concurrent.{ CountDownLatch, ExecutionException }
 
 import scala.annotation.tailrec
 import scala.util.{ Failure, Success, Try }
-import lattice.{ DefaultKey, Key, Lattice, LatticeViolationException }
+import lattice.{ DefaultKey, Key, Updater, NotMonotonicException, PartialOrderingWithBottom }
 
 trait Cell[K <: Key[V], V] {
   private[cell] val completer: CellCompleter[K, V]
@@ -115,13 +115,13 @@ trait Cell[K <: Key[V], V] {
 
 object Cell {
 
-  def completed[V](result: V)(implicit lattice: Lattice[V], pool: HandlerPool): Cell[DefaultKey[V], V] = {
-    val completer = CellCompleter.completed(result)(lattice, pool)
+  def completed[V](result: V)(implicit updater: Updater[V], pool: HandlerPool): Cell[DefaultKey[V], V] = {
+    val completer = CellCompleter.completed(result)(updater, pool)
     completer.cell
   }
 
   def sequence[K <: Key[V], V](in: List[Cell[K, V]])(implicit pool: HandlerPool): Cell[DefaultKey[List[V]], List[V]] = {
-    implicit val lattice: Lattice[List[V]] = Lattice.trivial[List[V]]
+    implicit val updater: Updater[List[V]] = Updater.partialOrderingToUpdater(PartialOrderingWithBottom.trivial[List[V]])
     val completer =
       CellCompleter[DefaultKey[List[V]], List[V]](new DefaultKey[List[V]])
     in match {
@@ -169,11 +169,11 @@ private class State[K <: Key[V], V](
   val nextCallbacks: Map[Cell[K, V], List[NextCallbackRunnable[K, V]]])
 
 private object State {
-  def empty[K <: Key[V], V](lattice: Lattice[V]): State[K, V] =
-    new State[K, V](lattice.empty, false, Set(), Map(), Set(), Map())
+  def empty[K <: Key[V], V](updater: Updater[V]): State[K, V] =
+    new State[K, V](updater.bottom, false, Set(), Map(), Set(), Map())
 }
 
-private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: Lattice[V], val init: (Cell[K, V]) => Outcome[V]) extends Cell[K, V] with CellCompleter[K, V] {
+private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: Updater[V], val init: (Cell[K, V]) => Outcome[V]) extends Cell[K, V] with CellCompleter[K, V] {
 
   override val completer: CellCompleter[K, V] = this.asInstanceOf[CellCompleter[K, V]]
 
@@ -188,7 +188,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
    *
    * Assumes that dependencies need to be kept until a final result is known.
    */
-  private val state = new AtomicReference[AnyRef](State.empty[K, V](lattice))
+  private val state = new AtomicReference[AnyRef](State.empty[K, V](updater))
 
   // `CellCompleter` and corresponding `Cell` are the same run-time object.
   override def cell: Cell[K, V] = this
@@ -229,9 +229,9 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
   }
 
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)] = {
-    implicit val theLattice: Lattice[V] = lattice
+    implicit val theUpdater: Updater[V] = updater
     val completer =
-      CellCompleter[DefaultKey[(V, V)], (V, V)](new DefaultKey[(V, V)])
+      CellCompleter[DefaultKey[(V, V)], (V, V)](new DefaultKey[(V, V)])(Updater.pair(updater), pool)
     this.onComplete {
       case Success(x) =>
         that.onComplete {
@@ -407,15 +407,11 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
 
   /**
    * Called by 'putNext' and 'putFinal'. It will try to join the current state
-   * with the new value by using the given lattice and return the new value.
+   * with the new value by using the given updater and return the new value.
    * If 'current == v' then it will return 'v'.
    */
   private def tryJoin(current: V, next: V): V = {
-    try {
-      lattice.join(current, next)
-    } catch {
-      case LatticeViolationException(c, n) => current
-    }
+    updater.update(current, next)
   }
 
   /**
@@ -427,13 +423,14 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, lattice: L
   private[cell] final def tryNewState(value: V): Boolean = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result already
-        val finalResult = finalRes.asInstanceOf[Try[V]].get
-        val newVal = tryJoin(finalResult, value)
-        val res = finalRes == Success(newVal)
-        if (!res) {
-          println(s"problem with $this; existing value: $finalRes, new value: $newVal")
+        try {
+          val finalResult = finalRes.asInstanceOf[Try[V]].get
+          val newVal = tryJoin(finalResult, value)
+          val res = finalRes == Success(newVal)
+          res
+        } catch {
+          case _: NotMonotonicException[_] => false
         }
-        res
       case raw: State[_, _] => // not completed
         val current = raw.asInstanceOf[State[K, V]]
         val newVal = tryJoin(current.res, value)

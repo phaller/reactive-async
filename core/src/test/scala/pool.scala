@@ -6,7 +6,7 @@ import org.scalatest.FunSuite
 
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
-import lattice.{ Lattice, StringIntKey, StringIntLattice }
+import lattice.{ Lattice, StringIntKey, StringIntUpdater, Updater }
 
 class PoolSuite extends FunSuite {
   test("onQuiescent") {
@@ -31,7 +31,7 @@ class PoolSuite extends FunSuite {
   }
 
   test("register cells concurrently") {
-    implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
+    implicit val stringIntUpdater: Updater[Int] = new StringIntUpdater
 
     implicit val pool = new HandlerPool()
     var regCells = new ConcurrentHashMap[Cell[StringIntKey, Int], Cell[StringIntKey, Int]]()
@@ -51,7 +51,7 @@ class PoolSuite extends FunSuite {
   }
 
   test("register cells concurrently 2") {
-    implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
+    implicit val stringIntUpdater: Updater[Int] = new StringIntUpdater
 
     implicit val pool = new HandlerPool()
     var regCells = new ConcurrentHashMap[Cell[StringIntKey, Int], Cell[StringIntKey, Int]]()

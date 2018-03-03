@@ -2,38 +2,59 @@ package lattice
 
 import scala.annotation.implicitNotFound
 
-@implicitNotFound("type ${V} does not have a Lattice instance")
-trait Lattice[V] {
+trait PartialOrderingWithBottom[V] extends PartialOrdering[V] {
   /**
-   * Return Some(v) if a new value v was computed (v != current), else None.
-   * If it fails, throw exception.
+   * Result of comparing x with operand y. Returns None if operands are not comparable. If operands are comparable, returns Some(r) where
+   * r < 0 iff x < y
+   * r == 0 iff x == y
+   * r > 0 iff x > y
    */
-  def join(current: V, next: V): V
-  def empty: V
+  override def tryCompare(x: V, y: V): Option[Int] =
+    if (lt(x, y)) Some(-1)
+    else if (gt(x, y)) Some(1)
+    else if (equiv(x, y)) Some(0)
+    else None
+
+  def bottom: V
+}
+
+object PartialOrderingWithBottom {
+  def trivial[T >: Null]: PartialOrderingWithBottom[T] = {
+    new PartialOrderingWithBottom[T] {
+      override def bottom: T = null
+      override def lteq(v1: T, v2: T): Boolean =
+        (v1 == bottom) || (v1 == v2)
+    }
+  }
+}
+
+@implicitNotFound("type ${V} does not have a Lattice instance")
+trait Lattice[V] extends PartialOrderingWithBottom[V] {
+  /**
+   * Return the join of v1 and v2 wrt. the lattice.
+   */
+  def join(v1: V, v2: V): V
+
+  def lteq(v1: V, v2: V): Boolean = {
+    join(v1, v2) == v2
+  }
+
+  override def gteq(v1: V, v2: V): Boolean = {
+    join(v1, v2) == v1
+  }
 }
 
 object Lattice {
-
   implicit def pair[T](implicit lattice: Lattice[T]): Lattice[(T, T)] = {
     new Lattice[(T, T)] {
-      def join(current: (T, T), next: (T, T)): (T, T) =
-        (lattice.join(current._1, next._1), lattice.join(current._2, next._2))
-      def empty: (T, T) =
-        (lattice.empty, lattice.empty)
+      def join(v1: (T, T), v2: (T, T)): (T, T) =
+        (lattice.join(v1._1, v2._1), lattice.join(v1._2, v2._2))
+      def bottom: (T, T) =
+        (lattice.bottom, lattice.bottom)
+      override def lteq(v1: (T, T), v2: (T, T)): Boolean =
+        lattice.lteq(v1._1, v2._1) && lattice.lteq(v1._2, v2._2)
+      override def gteq(v1: (T, T), v2: (T, T)): Boolean =
+        lattice.gteq(v1._1, v2._1) && lattice.gteq(v1._2, v2._2)
     }
   }
-
-  def trivial[T >: Null]: Lattice[T] = {
-    new Lattice[T] {
-      override def empty: T = null
-      override def join(current: T, next: T): T = {
-        if (current == null) next
-        else throw LatticeViolationException(current, next)
-      }
-    }
-  }
-
 }
-
-final case class LatticeViolationException[D](current: D, next: D) extends IllegalStateException(
-  s"Violation of lattice with current $current and next $next!")

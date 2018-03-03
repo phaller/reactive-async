@@ -3,7 +3,7 @@ package latticetest
 import org.scalatest.FunSuite
 
 import cell._
-import lattice.{ Lattice, LatticeViolationException, Key }
+import lattice.{ Lattice, NotMonotonicException, Key }
 
 object Util {
 
@@ -27,7 +27,7 @@ class PowerSetLattice[T] extends Lattice[Set[T]] {
   def join(left: Set[T], right: Set[T]): Set[T] =
     left ++ right
 
-  def empty: Set[T] =
+  def bottom: Set[T] =
     Set[T]()
 
 }
