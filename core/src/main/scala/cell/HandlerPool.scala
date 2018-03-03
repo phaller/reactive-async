@@ -90,11 +90,17 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    * @param cell The cell.
    */
   def deregister[K <: Key[V], V](cell: Cell[K, V]): Unit = {
-    var success = false
-    while (!success) {
-      val registered = cellsNotDone.get()
+    val registered = cellsNotDone.get()
+    if (registered.contains(cell)) {
       val newRegistered = registered - cell
-      success = cellsNotDone.compareAndSet(registered, newRegistered)
+      if (cellsNotDone.compareAndSet(registered, newRegistered)) {
+        if (registered(cell).lengthCompare(1) > 0)
+          // Note that the first element of the queue is already running,
+          // so decSubmittedTasks(1) will be called, when this element
+          // has been completed. The following elements won't be executed
+          // any more, so we can call decSubmittedTasks for them.
+          decSubmittedTasks(registered(cell).size - 1)
+      } else deregister(cell) // try deregister again
     }
   }
 
@@ -133,7 +139,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Find one closed strongly connected component (cell)
-      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().keys.asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (registered.nonEmpty) {
         val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
@@ -189,7 +195,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Find one closed strongly connected component (cell)
-      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().keys.asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
       var resolvedCycles = false
       if (registered.nonEmpty) {
         val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
@@ -264,14 +270,14 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    * Decrease the number of submitted tasks and run registered handlers, if quiescent.
    * Change the PoolState accordingly.
    */
-  private def decSubmittedTasks(): Unit = {
+  private def decSubmittedTasks(i: Int = 1): Unit = {
     var success = false
     var handlersToRun: Option[List[() => Unit]] = None
     while (!success) {
       val state = poolState.get()
-      if (state.submittedTasks > 1) {
+      if (state.submittedTasks > i) {
         handlersToRun = None
-        val newState = new PoolState(state.handlers, state.submittedTasks - 1)
+        val newState = new PoolState(state.handlers, state.submittedTasks - i)
         success = poolState.compareAndSet(state, newState)
       } else if (state.submittedTasks == 1) {
         handlersToRun = Some(state.handlers)
@@ -323,8 +329,6 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    * @param callback The callback that should be run sequentially to all other sequential callbacks for the dependent cell.
    */
   private[cell] def scheduleSequentialCallback[K <: Key[V], V](callback: SequentialCallbackRunnable[K, V]): Unit = {
-    incSubmittedTasks() // note that decSubmitted Tasks is called in callSequentialCallback
-
     val dependentCell = callback.dependentCell
     var success = false
     var startCallback = false
@@ -335,6 +339,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
         val newCallbackQueue = oldCallbackQueue.enqueue(callback)
         val newRegistered = registered + (dependentCell -> newCallbackQueue)
         success = cellsNotDone.compareAndSet(registered, newRegistered)
+        if (success) incSubmittedTasks() // note that decSubmitted Tasks is called in callSequentialCallback
         startCallback = oldCallbackQueue.isEmpty
       } else {
         success = true
