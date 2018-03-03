@@ -598,13 +598,13 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
 
   // Schedules execution of `callback` when next intermediate result is available.
   override private[cell] def onNext[U](callback: Try[V] => U): Unit = {
-    val runnable = new NextConcurrentCallbackRunnable[K, V](pool, this, this, callback)
+    val runnable = new NextConcurrentCallbackRunnable[K, V](pool, null, this, callback) // NULL indicates that no cell is waiting for this callback.
     dispatchOrAddNextCallback(runnable)
   }
 
   // Schedules execution of `callback` when completed with final result.
   override def onComplete[U](callback: Try[V] => U): Unit = {
-    val runnable = new CompleteConcurrentCallbackRunnable[K, V](pool, this, this, callback)
+    val runnable = new CompleteConcurrentCallbackRunnable[K, V](pool, null, this, callback) // NULL indicates that no cell is waiting for this callback.
     dispatchOrAddCallback(runnable)
   }
 
