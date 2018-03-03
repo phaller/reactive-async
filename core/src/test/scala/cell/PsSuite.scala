@@ -8,7 +8,7 @@ import scala.concurrent.Await
 
 class PsSuite extends FunSuite {
 
-  implicit val stringIntLattice: Lattice[Int] = new StringIntLattice
+  implicit val stringIntUpdater: Updater[Int] = new StringIntUpdater
 
   test("cell dependency on itself whenNextSequential") {
     implicit val pool = new HandlerPool
