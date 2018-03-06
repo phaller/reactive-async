@@ -2574,16 +2574,41 @@ class BaseSuite extends FunSuite {
     implicit val pool = new HandlerPool
     val completer1 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
     val completer2 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer3 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer4 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer5 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer6 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+
     val cell1 = completer1.cell
     val cell2 = completer2.cell
+    val cell3 = completer3.cell
+    val cell4 = completer4.cell
+    val cell5 = completer5.cell
+    val cell6 = completer6.cell
 
     cell2.whenNext(cell1, x => {
+      FinalOutcome(x * 2)
+    })
+    cell3.whenComplete(cell1, x => {
+      FinalOutcome(x * 2)
+    })
+    cell4.whenNextSequential(cell1, x => {
+      FinalOutcome(x * 2)
+    })
+    cell5.whenCompleteSequential(cell1, x => {
+      FinalOutcome(x * 2)
+    })
+    cell6.when(cell1, (x, _) => {
       FinalOutcome(x * 2)
     })
 
     assert(!cell1.dependsOn(cell1))
     assert(!cell1.dependsOn(cell2))
     assert(cell2.dependsOn(cell1))
+    assert(cell3.dependsOn(cell1))
+    assert(cell4.dependsOn(cell1))
+    assert(cell5.dependsOn(cell1))
+    assert(cell6.dependsOn(cell1))
 
     pool.shutdown()
   }
@@ -2591,13 +2616,32 @@ class BaseSuite extends FunSuite {
   test("cell dependsOn selfdepending") {
     implicit val pool = new HandlerPool
     val completer1 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer2 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer3 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer4 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+
     val cell1 = completer1.cell
+    val cell2 = completer2.cell
+    val cell3 = completer3.cell
+    val cell4 = completer4.cell
 
     cell1.whenNext(cell1, x => {
       FinalOutcome(x * 2)
     })
+    cell2.whenNextSequential(cell2, x => {
+      FinalOutcome(x * 2)
+    })
+    cell3.whenComplete(cell3, x => {
+      FinalOutcome(x * 2)
+    })
+    cell4.whenNextSequential(cell4, x => {
+      FinalOutcome(x * 2)
+    })
 
     assert(cell1.dependsOn(cell1))
+    assert(cell2.dependsOn(cell2))
+    assert(cell3.dependsOn(cell3))
+    assert(cell4.dependsOn(cell4))
 
     pool.shutdown()
   }

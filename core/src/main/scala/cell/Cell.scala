@@ -676,13 +676,11 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   override def dependsOn(cell: Cell[K, V]): Boolean = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result
-        // do not add dependency
-        // in fact, do nothing
         false
 
       case raw: State[_, _] => // not completed
         val current = raw.asInstanceOf[State[K, V]]
-        current.nextDeps.contains(cell)
+        current.nextDeps.contains(cell) || current.completeDeps.contains(cell)
     }
   }
 
