@@ -111,6 +111,8 @@ trait Cell[K <: Key[V], V] {
 
   def removeCompleteCallbacks(cell: Cell[K, V]): Unit
   def removeNextCallbacks(cell: Cell[K, V]): Unit
+
+  def dependsOn(cell: Cell[K, V]): Boolean
 }
 
 object Cell {
@@ -664,6 +666,22 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     case t: InterruptedException => Failure(new ExecutionException("Boxed InterruptedException", t))
     case e: Error => Failure(new ExecutionException("Boxed Error", e))
     case t => Failure(t)
+  }
+
+  /**
+   * Checks if this cell depends on a given cell.
+   * @param cell The dependee cell
+   * @return true if this cell depends on cell. False otherwise
+   */
+  override def dependsOn(cell: Cell[K, V]): Boolean = {
+    state.get() match {
+      case finalRes: Try[_] => // completed with final result
+        false
+
+      case raw: State[_, _] => // not completed
+        val current = raw.asInstanceOf[State[K, V]]
+        current.nextDeps.contains(cell) || current.completeDeps.contains(cell)
+    }
   }
 
 }
