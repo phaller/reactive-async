@@ -2007,6 +2007,53 @@ class BaseSuite extends FunSuite {
     assert(in.cell.getResult() == Fallback)
   }
 
+  test("whenComplete: Cycle with additional ingoing dep") {
+    sealed trait Value
+    case object Bottom extends Value
+    case object Resolved extends Value
+    case object Fallback extends Value
+    case object OK extends Value
+    case object ShouldNotHappen extends Value
+
+    object Value {
+
+      implicit object ValueLattice extends Lattice[Value] {
+        override def join(current: Value, next: Value): Value = next
+        override val bottom: Value = Bottom
+      }
+    }
+
+    object TheKey extends DefaultKey[Value] {
+      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+        println("resolving with resolve: " + cells)
+        cells.map(cell => (cell, Resolved))
+      }
+      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+        cells.map(cell => (cell, Fallback))
+      }
+    }
+
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[TheKey.type, Value](TheKey)
+    val completer2 = CellCompleter[TheKey.type, Value](TheKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+    val in = CellCompleter[TheKey.type, Value](TheKey)
+    cell1.whenComplete(cell2, v => NextOutcome(ShouldNotHappen))
+    cell2.whenComplete(cell1, v => NextOutcome(ShouldNotHappen))
+    cell2.whenComplete(in.cell, v => { assert(false); NextOutcome(ShouldNotHappen) })
+
+    pool.whileQuiescentResolveCell
+    val fut = pool.quiescentResolveCycles
+    Await.ready(fut, 1.minutes)
+
+    pool.shutdown()
+
+    assert(cell1.getResult() != ShouldNotHappen)
+    assert(cell2.getResult() != ShouldNotHappen)
+    assert(in.cell.getResult() == Fallback)
+  }
+
   test("whenNext: Cycle with additional outgoing dep") {
     sealed trait Value
     case object Bottom extends Value
