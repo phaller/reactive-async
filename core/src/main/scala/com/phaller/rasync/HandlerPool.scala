@@ -117,20 +117,6 @@ class HandlerPool(
     p.future
   }
 
-  def whileQuiescentResolveCell[K <: Key[V], V]: Unit = {
-    while (!cellsNotDone.isEmpty) {
-      val fut = this.quiescentResolveCell
-      Await.ready(fut, 15.minutes)
-    }
-  }
-
-  def whileQuiescentResolveDefault[K <: Key[V], V]: Unit = {
-    while (!cellsNotDone.isEmpty) {
-      val fut = this.quiescentResolveDefaults
-      Await.ready(fut, 15.minutes)
-    }
-  }
-
   /**
    * Wait for a quiescent state when no more tasks are being executed. Afterwards, it will resolve
    * unfinished cycles (cSCCs) of cells using the keys resolve function and recursively wait for resolution.
