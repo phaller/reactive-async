@@ -2293,20 +2293,20 @@ class BaseSuite extends FunSuite {
 
   test("whenNextSequential: state") {
     val n = 1000
-    var count = 0
+    var max = 0
 
     val runningCallbacks = new AtomicInteger(0)
     val latch = new CountDownLatch(1)
     val random = new scala.util.Random()
 
     implicit val pool = new HandlerPool
-    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
-    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
+    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
 
     val cell1 = completer1.cell
     cell1.whenNextSequential(completer2.cell, (x: Int) => {
       assert(runningCallbacks.incrementAndGet() == 1)
-      count += 1
+      max = Math.max(max, x)
       Thread.`yield`()
       try {
         Thread.sleep(random.nextInt(3))
@@ -2314,7 +2314,7 @@ class BaseSuite extends FunSuite {
         case _: InterruptedException => /* ignore */
       }
       assert(runningCallbacks.decrementAndGet() == 0)
-      Outcome(count, count == n)
+      Outcome(max, max == n)
     })
 
     cell1.onComplete(_ => {
@@ -2327,13 +2327,14 @@ class BaseSuite extends FunSuite {
     latch.await()
 
     assert(cell1.getResult() == n)
+    assert(max == n)
 
-    pool.onQuiescenceShutdown()
+    pool.onQuiescent(() => pool.onQuiescenceShutdown())
   }
 
   test("whenCompleteSequential: state") {
     val n = 1000
-    var count = 0
+    var max = 0
 
     val runningCallbacks = new AtomicInteger(0)
     val latch = new CountDownLatch(1)
@@ -2341,11 +2342,11 @@ class BaseSuite extends FunSuite {
     val random = new scala.util.Random()
 
     implicit val pool = new HandlerPool
-    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
     val cell1 = completer1.cell
 
     for (i <- 1 to n) {
-      val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+      val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
 
       val latch2 = new CountDownLatch(1)
       otherLatches = otherLatches + latch2
@@ -2356,7 +2357,7 @@ class BaseSuite extends FunSuite {
 
       cell1.whenNextSequential(completer2.cell, (x: Int) => {
         assert(runningCallbacks.incrementAndGet() == 1)
-        count += 1
+        max = Math.max(max, x)
         Thread.`yield`()
         try {
           Thread.sleep(random.nextInt(3))
@@ -2364,7 +2365,7 @@ class BaseSuite extends FunSuite {
           case _: InterruptedException => /* ignore */
         }
         assert(runningCallbacks.decrementAndGet() == 0)
-        Outcome(count, count == n)
+        Outcome(max, max == n)
       })
 
       cell1.onComplete(_ => {
