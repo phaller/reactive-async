@@ -34,7 +34,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("putFinal: 2 putFinals with same value to the same cell") {
@@ -51,7 +51,7 @@ class BaseSuite extends FunSuite {
       case e: Exception => assert(false)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("putFinal: putFinal on complete cell without adding new information") {
@@ -69,7 +69,7 @@ class BaseSuite extends FunSuite {
       case e: Exception => assert(false)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("putFinal: putFinal on complete cell adding new information") {
@@ -87,7 +87,7 @@ class BaseSuite extends FunSuite {
       case e: Exception => assert(false)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenComplete") {
@@ -113,7 +113,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenCompleteSequential") {
@@ -139,7 +139,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenComplete: dependency 1") {
@@ -167,7 +167,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenCompleteSequential: dependency 1") {
@@ -195,7 +195,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenComplete: dependency 2") {
@@ -212,7 +212,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenCompleteSequential: dependency 2") {
@@ -229,7 +229,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenComplete: dependency 3") {
@@ -246,7 +246,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenCompleteSequential: dependency 3") {
@@ -263,7 +263,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenComplete: callback removal") {
@@ -281,7 +281,7 @@ class BaseSuite extends FunSuite {
     assert(completer1.cell.getResult() == Immutable)
     assert(completer2.cell.getResult() == Mutable)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenCompleteSequential: callback removal") {
@@ -299,7 +299,7 @@ class BaseSuite extends FunSuite {
     assert(completer1.cell.getResult() == Immutable)
     assert(completer2.cell.getResult() == Mutable)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("onNext") {
@@ -323,7 +323,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext") {
@@ -353,7 +353,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 1)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential") {
@@ -383,7 +383,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 1)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: dependency 1") {
@@ -413,7 +413,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: dependency 1") {
@@ -443,7 +443,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: dependency 2") {
@@ -484,7 +484,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: dependency 2") {
@@ -525,7 +525,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: Triggered by putFinal when no whenComplete exist for same cell") {
@@ -555,7 +555,7 @@ class BaseSuite extends FunSuite {
     completer2.putFinal(10)
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: Triggered by putFinal when no whenComplete exist for same cell") {
@@ -585,7 +585,7 @@ class BaseSuite extends FunSuite {
     completer2.putFinal(10)
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: Remove whenNext dependencies from cells that depend on a completing cell") {
@@ -606,7 +606,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: Remove whenNext dependencies from cells that depend on a completing cell") {
@@ -627,7 +627,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 0)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: callback removal") {
@@ -648,7 +648,7 @@ class BaseSuite extends FunSuite {
     assert(completer1.cell.getResult() == Immutable)
     assert(completer2.cell.getResult() == Mutable)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: callback removal") {
@@ -669,7 +669,7 @@ class BaseSuite extends FunSuite {
     assert(completer1.cell.getResult() == Immutable)
     assert(completer2.cell.getResult() == Mutable)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: Dependencies concurrency test") {
@@ -692,7 +692,7 @@ class BaseSuite extends FunSuite {
 
     assert(completer1.cell.numNextDependencies == 10000)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenComplete: Dependencies concurrency test") {
@@ -715,7 +715,7 @@ class BaseSuite extends FunSuite {
 
     assert(completer1.cell.numCompleteDependencies == 10000)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: Dependencies concurrency test") {
@@ -739,7 +739,7 @@ class BaseSuite extends FunSuite {
 
     assert(completer1.cell.numNextDependencies == 10000)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: concurrent put final") {
@@ -768,7 +768,7 @@ class BaseSuite extends FunSuite {
       if (expectedValue.isEmpty) expectedValue = Some(cell1.getResult())
       else assert(cell1.getResult() == expectedValue.get)
 
-      pool.shutdown()
+      pool.onQuiescenceShutdown()
     }
   }
 
@@ -798,7 +798,7 @@ class BaseSuite extends FunSuite {
       if (expectedValue.isEmpty) expectedValue = Some(cell1.getResult())
       else assert(cell1.getResult() == expectedValue.get)
 
-      pool.shutdown()
+      pool.onQuiescenceShutdown()
     }
   }
 
@@ -825,7 +825,7 @@ class BaseSuite extends FunSuite {
       assert(completer1.cell.getResult() == Mutable)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: One cell with several dependencies on the same cell concurrency test") {
@@ -855,7 +855,7 @@ class BaseSuite extends FunSuite {
     }
     assert(numErrorsWithCell1 == 0, "errors with cell 1")
     assert(numErrorsWithCell2 == 0, "errors with cell 2")
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: complete dependent cell") {
@@ -894,7 +894,7 @@ class BaseSuite extends FunSuite {
       case e: Exception => assert(false)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: complete dependent cell") {
@@ -933,7 +933,7 @@ class BaseSuite extends FunSuite {
       case e: Exception => assert(false)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: complete depedent cell, dependency 1") {
@@ -963,7 +963,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: complete depedent cell, dependency 1") {
@@ -993,7 +993,7 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: complete dependent cell, dependency 2") {
@@ -1034,7 +1034,7 @@ class BaseSuite extends FunSuite {
     completer2.putNext(10)
     latch2.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: complete dependent cell, dependency 2") {
@@ -1075,7 +1075,7 @@ class BaseSuite extends FunSuite {
     completer2.putNext(10)
     latch2.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("when: values passed to callback") {
@@ -1119,7 +1119,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.isComplete)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("put: isFinal == true") {
@@ -1138,7 +1138,7 @@ class BaseSuite extends FunSuite {
     completer.put(6, true)
 
     latch.await()
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("put: isFinal == false") {
@@ -1157,7 +1157,7 @@ class BaseSuite extends FunSuite {
     completer.put(10, false)
 
     latch.await()
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("putFinal: result passed to callbacks") {
@@ -1184,7 +1184,7 @@ class BaseSuite extends FunSuite {
     completer.putFinal(Set(4))
 
     latch.await()
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("putNext: result passed to callbacks") {
@@ -1211,7 +1211,7 @@ class BaseSuite extends FunSuite {
     completer.putNext(Set(4))
 
     latch.await()
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("handler pool") {
@@ -1225,7 +1225,7 @@ class BaseSuite extends FunSuite {
     latch2.await()
     assert(true)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("quiescent incomplete cells") {
@@ -1401,7 +1401,7 @@ class BaseSuite extends FunSuite {
     completer.putNext(Immutable)
     assert(cell.getResult() == ConditionallyImmutable)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("putNext: Failed, using ImmutabilityLattce") {
@@ -1422,7 +1422,7 @@ class BaseSuite extends FunSuite {
       case e: Exception => assert(false)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("putNext: concurrency test") {
@@ -1447,7 +1447,7 @@ class BaseSuite extends FunSuite {
       assert(completer.cell.getResult() == Mutable)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext and whenComplete: same depender") {
@@ -1470,7 +1470,7 @@ class BaseSuite extends FunSuite {
 
     latch1.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
 
     assert(completer1.cell.getResult() == 10)
     assert(completer2.cell.getResult() == 10)
@@ -1498,7 +1498,7 @@ class BaseSuite extends FunSuite {
 
     latch1.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
 
     assert(completer1.cell.getResult() == 10)
     assert(completer2.cell.getResult() == 10)
@@ -1527,7 +1527,7 @@ class BaseSuite extends FunSuite {
       assert(completer.cell.getResult() == Mutable)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("New ImmutabilityLattice: successful joins") {
@@ -1574,7 +1574,7 @@ class BaseSuite extends FunSuite {
       case _: java.util.concurrent.TimeoutException => assert(false)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: cSCC with constant resolution") {
@@ -1622,7 +1622,7 @@ class BaseSuite extends FunSuite {
     Await.result(fut, 2.seconds)
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: cSCC with constant resolution") {
@@ -1670,7 +1670,7 @@ class BaseSuite extends FunSuite {
     Await.result(fut, 2.seconds)
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: cSCC with default resolution") {
@@ -1717,7 +1717,7 @@ class BaseSuite extends FunSuite {
     Await.result(fut, 2.second)
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: cSCC with default resolution") {
@@ -1764,7 +1764,7 @@ class BaseSuite extends FunSuite {
     Await.result(fut, 2.second)
     latch.await()
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: Cycle with default resolution") {
@@ -1798,7 +1798,7 @@ class BaseSuite extends FunSuite {
       assert(cell2.getResult() != ShouldNotHappen)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: Cycle with default resolution") {
@@ -1832,7 +1832,7 @@ class BaseSuite extends FunSuite {
       assert(cell2.getResult() != ShouldNotHappen)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: Cycle with constant resolution") {
@@ -1873,7 +1873,7 @@ class BaseSuite extends FunSuite {
       assert(cell2.getResult() == OK)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: Cycle with constant resolution") {
@@ -1914,7 +1914,7 @@ class BaseSuite extends FunSuite {
       assert(cell2.getResult() == OK)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNext: Cycle with additional ingoing dep") {
@@ -1955,7 +1955,7 @@ class BaseSuite extends FunSuite {
     val fut = pool.quiescentResolveCycles
     Await.ready(fut, 1.minutes)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
 
     assert(cell1.getResult() != ShouldNotHappen)
     assert(cell2.getResult() != ShouldNotHappen)
@@ -2000,7 +2000,7 @@ class BaseSuite extends FunSuite {
     val fut = pool.quiescentResolveCycles
     Await.ready(fut, 1.minutes)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
 
     assert(cell1.getResult() != ShouldNotHappen)
     assert(cell2.getResult() != ShouldNotHappen)
@@ -2047,7 +2047,7 @@ class BaseSuite extends FunSuite {
     val fut = pool.quiescentResolveCycles
     Await.ready(fut, 1.minutes)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
 
     assert(cell1.getResult() != ShouldNotHappen)
     assert(cell2.getResult() != ShouldNotHappen)
@@ -2094,7 +2094,7 @@ class BaseSuite extends FunSuite {
     val fut = pool.quiescentResolveCycles
     Await.ready(fut, 1.minutes)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
 
     assert(cell1.getResult() != ShouldNotHappen)
     assert(cell2.getResult() != ShouldNotHappen)
@@ -2149,7 +2149,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.getResult() == n * n)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: calling sequentially") {
@@ -2188,7 +2188,7 @@ class BaseSuite extends FunSuite {
     assert(cell1.getResult() == n * n)
     assert(completer2.cell.getResult() == n)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: state") {
@@ -2228,7 +2228,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.getResult() == n)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenCompleteSequential: state") {
@@ -2280,7 +2280,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.getResult() == n)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenComplete: called at most once") {
@@ -2327,7 +2327,7 @@ class BaseSuite extends FunSuite {
       assert(called === 1)
     }
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("whenNextSequential: discard callbacks on completion") {
@@ -2353,7 +2353,7 @@ class BaseSuite extends FunSuite {
     latch1.countDown()
 
     pool.onQuiescent(() => {
-      pool.shutdown()
+      pool.onQuiescenceShutdown()
       latch2.countDown()
     })
     // pool needs to reach quiescence, even if cell1 is completed early:
@@ -2451,7 +2451,7 @@ class BaseSuite extends FunSuite {
     latch1.countDown()
 
     pool.onQuiescent(() => {
-      pool.shutdown()
+      pool.onQuiescenceShutdown()
       latch2.countDown()
     })
     // pool needs to reach quiescence, even if cell1 is completed early:
@@ -2488,7 +2488,7 @@ class BaseSuite extends FunSuite {
     assert(completer1.cell.getResult == 42)
     assert(completer2.cell.getResult == 84)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("recursive quiescentResolveDefaults") {
@@ -2508,7 +2508,7 @@ class BaseSuite extends FunSuite {
 
     assert(completer2.cell.getResult == 86)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("recursive quiescentResolveCell using resolve") {
@@ -2534,7 +2534,7 @@ class BaseSuite extends FunSuite {
     assert(completer1.cell.getResult == 42)
     assert(completer2.cell.getResult == 84)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("recursive quiescentResolveCell using fallback") {
@@ -2555,7 +2555,7 @@ class BaseSuite extends FunSuite {
     assert(completer1.cell.getResult == 86)
     assert(completer2.cell.getResult == 43)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   class RecursiveQuiescentTestKey extends Key[Int] {
