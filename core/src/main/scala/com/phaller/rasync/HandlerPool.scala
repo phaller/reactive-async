@@ -262,16 +262,25 @@ class HandlerPool(
   /** Resolve all cells with the associated value. */
   private def resolve[K <: Key[V], V](results: Iterable[(Cell[K, V], V)]): Unit = {
     val cells = results.map(_._1).toSeq
-    for ((c, v) <- results)
-      execute(new Runnable {
+
+    // split the results into several blocks for several threads
+    // the "+ 1" guarantuees, that the number of blocks is (a) > 0 and (b) <= parallelism.
+    val blocks = results.sliding(results.size / parallelism + 1)
+
+    for (block <- blocks) {
+      execute(new Runnable() {
         override def run(): Unit = {
-          // Remove all callbacks that target other cells of this set.
-          // The result of those cells is explicitely given in `results`.
-          //          c.removeAllCallbacks(cells)
-          // we can now safely put a final value
-          c.resolveWithValue(v, cells)
+          // handle all results of one block:
+          for ((c, v) <- block) {
+            // Resolve cell `c` but do not inform any
+            // other `cells` of the same cycle to avoid
+            // cyclic propagations.
+            c.resolveWithValue(v, cells)
+          }
         }
       })
+    }
+
   }
 
   /**
