@@ -115,7 +115,7 @@ trait Cell[K <: Key[V], V] {
   def removeNextCallbacks(cell: Cell[K, V]): Unit
 
   private[rasync] def removeAllCallbacks(cell: Cell[K, V]): Unit
-  private[rasync] def removeAllCallbacks(cells: Seq[Cell[K, V]]): Unit
+  private[rasync] def removeAllCallbacks(cells: Iterable[Cell[K, V]]): Unit
 
   def isADependee(): Boolean
 }
@@ -483,7 +483,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
         val currentState = current.asInstanceOf[State[K, V]]
         val newVal = Success(tryJoin(currentState.res, v.get))
         if (state.compareAndSet(current, newVal))
-          (currentState, newVal)
+          currentState
         else
           tryCompleteAndGetState(v)
 
@@ -502,7 +502,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
         val res = finalRes == newVal
         res
 
-      case (pre: State[K, V], newVal: Try[V]) =>
+      case pre: State[K, V] =>
         val nextCallbacks = pre.nextCallbacks
         val completeCallbacks = pre.completeCallbacks
 
@@ -609,7 +609,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   }
 
   @tailrec
-  override private[rasync] final def removeAllCallbacks(cells: Seq[Cell[K, V]]): Unit = {
+  override private[rasync] final def removeAllCallbacks(cells: Iterable[Cell[K, V]]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]

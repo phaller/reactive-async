@@ -5,11 +5,11 @@ import lattice.{ MonotonicUpdater, Key, Lattice, NotMonotonicException }
 
 object PurityKey extends Key[Purity] {
 
-  def resolve[K <: Key[Purity]](cells: Seq[Cell[K, Purity]]): Seq[(Cell[K, Purity], Purity)] = {
+  def resolve[K <: Key[Purity]](cells: Iterable[Cell[K, Purity]]): Iterable[(Cell[K, Purity], Purity)] = {
     cells.map(cell => (cell, Pure))
   }
 
-  def fallback[K <: Key[Purity]](cells: Seq[Cell[K, Purity]]): Seq[(Cell[K, Purity], Purity)] = {
+  def fallback[K <: Key[Purity]](cells: Iterable[Cell[K, Purity]]): Iterable[(Cell[K, Purity], Purity)] = {
     cells.map(cell => (cell, Pure))
   }
 

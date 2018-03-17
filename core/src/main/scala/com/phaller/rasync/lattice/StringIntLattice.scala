@@ -4,11 +4,11 @@ package lattice
 import scala.language.implicitConversions
 
 class StringIntKey(s: String) extends Key[Int] {
-  def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+  def resolve[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
     cells.map((cell: Cell[K, Int]) => (cell, 0))
   }
 
-  def fallback[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+  def fallback[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
     cells.map((cell: Cell[K, Int]) => (cell, 1))
   }
 
