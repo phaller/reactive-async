@@ -111,6 +111,8 @@ trait Cell[K <: Key[V], V] {
 
   def removeCompleteCallbacks(cell: Cell[K, V]): Unit
   def removeNextCallbacks(cell: Cell[K, V]): Unit
+
+  def isADependee(): Boolean
 }
 
 object Cell {
@@ -664,6 +666,15 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     case t: InterruptedException => Failure(new ExecutionException("Boxed InterruptedException", t))
     case e: Error => Failure(new ExecutionException("Boxed Error", e))
     case t => Failure(t)
+  }
+
+  /**
+   * Checks if this cell is a dependee of some other cells. This is true if some cells called
+   * whenNext[Sequential / Complete](thisCell, f)
+   * @return True if some cells depends on this one, false otherwise
+   */
+  override def isADependee(): Boolean = {
+    numCompleteCallbacks > 0 || numNextCallbacks > 0
   }
 
 }
