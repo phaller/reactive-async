@@ -266,6 +266,31 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
+  test("whenNext/whenComplete: dependency ") {
+    val latch = new CountDownLatch(1)
+
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+    val completer3 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenComplete(completer2.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+    cell1.whenNext(completer2.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+    cell1.whenCompleteSequential(completer2.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+    cell1.whenNextSequential(completer2.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+
+    cell1.whenNext(completer3.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+    cell1.whenComplete(completer3.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+    cell1.whenNextSequential(completer3.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+    cell1.whenCompleteSequential(completer3.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+
+    assert(cell1.numCompleteDependencies == 2)
+    assert(cell1.numNextDependencies == 2)
+
+    pool.shutdown()
+  }
+
   test("whenComplete: callback removal") {
     implicit val pool = new HandlerPool
 
