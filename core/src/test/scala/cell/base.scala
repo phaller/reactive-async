@@ -1091,6 +1091,11 @@ class BaseSuite extends FunSuite {
       Outcome(x, isFinal) // complete, if completer2 is completed
     })
 
+    assert(cell1.numNextDependencies == 1)
+    assert(cell1.numTotalDependencies == 1)
+    assert(completer2.cell.numNextCallbacks == 1)
+    assert(completer2.cell.numCompleteCallbacks == 1)
+
     cell1.onNext {
       case Success(x) =>
         assert((x === 8 && !cell1.isComplete) || x === 10)
@@ -1121,6 +1126,56 @@ class BaseSuite extends FunSuite {
 
     pool.shutdown()
   }
+
+  test("whenSequential: values passed to callback") {
+    val latch1 = new CountDownLatch(1)
+    val latch2 = new CountDownLatch(1)
+
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenSequential(completer2.cell, (x, isFinal) => {
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(cell1.numNextDependencies == 1)
+    assert(cell1.numTotalDependencies == 1)
+    assert(completer2.cell.numNextCallbacks == 1)
+    assert(completer2.cell.numCompleteCallbacks == 1)
+
+    cell1.onNext {
+      case Success(x) =>
+        assert((x === 8 && !cell1.isComplete) || x === 10)
+        latch1.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch1.countDown()
+    }
+
+    cell1.onComplete {
+      case Success(x) =>
+        assert(x === 10)
+        latch2.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch2.countDown()
+    }
+
+    completer1.putNext(8)
+    latch1.await()
+
+    assert(!cell1.isComplete)
+
+    completer2.putFinal(10)
+    latch2.await()
+
+    assert(cell1.isComplete)
+
+    pool.shutdown()
+  }
+
 
   test("put: isFinal == true") {
     val latch = new CountDownLatch(1)

@@ -75,6 +75,7 @@ trait Cell[K <: Key[V], V] {
    * @param valueCallback  Callback that receives the new value of `other` and returns an `Outcome` for `this` cell.
    */
   def when(other: Cell[K, V], valueCallback: (V, Boolean) => Outcome[V]): Unit
+  def whenSequential(other: Cell[K, V], valueCallback: (V, Boolean) => Outcome[V]): Unit
 
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)]
 
@@ -319,6 +320,11 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   override def when(other: Cell[K, V], valueCallback: (V, Boolean) => Outcome[V]): Unit = {
     this.whenNext(other, valueCallback(_, false))
     this.whenComplete(other, valueCallback(_, true))
+  }
+
+  override def whenSequential(other: Cell[K, V], valueCallback: (V, Boolean) => Outcome[V]): Unit = {
+    this.whenNextSequential(other, valueCallback(_, false))
+    this.whenCompleteSequential(other, valueCallback(_, true))
   }
 
   override def whenNext(other: Cell[K, V], valueCallback: V => Outcome[V]): Unit = {
