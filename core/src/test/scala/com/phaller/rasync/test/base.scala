@@ -142,6 +142,56 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
+  test("whenComplete: only registered once") {
+    implicit val pool: HandlerPool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+
+    def f(x: Int): Outcome[Int] = if (x == 10) FinalOutcome(20) else NoOutcome
+    def g(x: Int): Outcome[Int] = if (x == 20) FinalOutcome(30) else NoOutcome
+
+    // first registration should succeed
+    assert(cell1.whenComplete(completer2.cell, f))
+
+    // every subsequent whenComplete should fail
+    assert(!cell1.whenComplete(completer2.cell, f))
+    assert(!cell1.whenComplete(completer2.cell, g))
+    assert(!cell1.whenCompleteSequential(completer2.cell, f))
+    assert(!cell1.whenCompleteSequential(completer2.cell, g))
+
+    // subsequent whenNext should succeed
+    assert(cell1.whenNext(completer2.cell, f))
+
+    pool.shutdown()
+  }
+
+  test("whenCompleteSequential: only registered once") {
+    implicit val pool: HandlerPool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+
+    def f(x: Int): Outcome[Int] = if (x == 10) FinalOutcome(20) else NoOutcome
+    def g(x: Int): Outcome[Int] = if (x == 20) FinalOutcome(30) else NoOutcome
+
+    // first registration should succeed
+    assert(cell1.whenCompleteSequential(completer2.cell, f))
+
+    // every subsequent whenComplete should fail
+    assert(!cell1.whenComplete(completer2.cell, f))
+    assert(!cell1.whenComplete(completer2.cell, g))
+    assert(!cell1.whenCompleteSequential(completer2.cell, f))
+    assert(!cell1.whenCompleteSequential(completer2.cell, g))
+
+    // subsequent whenNext should succeed
+    assert(cell1.whenNext(completer2.cell, f))
+
+    pool.shutdown()
+  }
+
   test("whenComplete: dependency 1") {
     val latch = new CountDownLatch(1)
 
@@ -409,6 +459,56 @@ class BaseSuite extends FunSuite {
     assert(cell1.numNextDependencies == 1)
 
     pool.onQuiescenceShutdown()
+  }
+
+  test("whenNext: only registered once") {
+    implicit val pool: HandlerPool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+
+    def f(x: Int): Outcome[Int] = if (x == 10) FinalOutcome(20) else NoOutcome
+    def g(x: Int): Outcome[Int] = if (x == 20) FinalOutcome(30) else NoOutcome
+
+    // first registration should succeed
+    assert(cell1.whenNext(completer2.cell, f))
+
+    // every subsequent whenNext should fail
+    assert(!cell1.whenNext(completer2.cell, f))
+    assert(!cell1.whenNext(completer2.cell, g))
+    assert(!cell1.whenNextSequential(completer2.cell, f))
+    assert(!cell1.whenNextSequential(completer2.cell, g))
+
+    // subsequent whenComplete should succeed
+    assert(cell1.whenComplete(completer2.cell, f))
+
+    pool.shutdown()
+  }
+
+  test("whenNextSequential: only registered once") {
+    implicit val pool: HandlerPool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+
+    def f(x: Int): Outcome[Int] = if (x == 10) FinalOutcome(20) else NoOutcome
+    def g(x: Int): Outcome[Int] = if (x == 20) FinalOutcome(30) else NoOutcome
+
+    // first registration should succeed
+    assert(cell1.whenNextSequential(completer2.cell, f))
+
+    // every subsequent whenNext should fail
+    assert(!cell1.whenNext(completer2.cell, f))
+    assert(!cell1.whenNext(completer2.cell, g))
+    assert(!cell1.whenNextSequential(completer2.cell, f))
+    assert(!cell1.whenNextSequential(completer2.cell, g))
+
+    // subsequent whenComplete should succeed
+    assert(cell1.whenComplete(completer2.cell, f))
+
+    pool.shutdown()
   }
 
   test("whenNext: dependency 1") {
@@ -778,14 +878,20 @@ class BaseSuite extends FunSuite {
       val cell1 = completer1.cell
       cell1.trigger()
 
-      pool.execute(() => cell1.whenComplete(completer2.cell, x => {
-        NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenComplete(completer2.cell, x => {
+          NoOutcome
+        })
+        ()
+      })
 
-      pool.execute(() => cell1.whenNext(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenNext(completer2.cell, x => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        ()
+      })
       pool.execute(() => completer2.putFinal(Mutable))
 
       val fut = pool.quiescentResolveCell
@@ -808,14 +914,20 @@ class BaseSuite extends FunSuite {
 
       val cell1 = completer1.cell
 
-      pool.execute(() => cell1.whenCompleteSequential(completer2.cell, x => {
-        NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenCompleteSequential(completer2.cell, x => {
+          NoOutcome
+        })
+        ()
+      })
 
-      pool.execute(() => cell1.whenNextSequential(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenNextSequential(completer2.cell, x => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        ()
+      })
       pool.execute(() => completer2.putFinal(Mutable))
 
       val fut = pool.quiescentResolveCycles
@@ -864,10 +976,13 @@ class BaseSuite extends FunSuite {
 
       val cell1 = completer1.cell
 
-      pool.execute(() => cell1.whenNext(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenNext(completer2.cell, x => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        ()
+      })
       pool.execute(() => completer2.putNext(Mutable))
 
       val fut = pool.quiescentResolveDefaults
@@ -1226,6 +1341,250 @@ class BaseSuite extends FunSuite {
     assert(cell1.isComplete)
 
     pool.shutdown()
+  }
+
+  test("when: fails if next dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, NextOutcome(_))
+    val success = cell1.when(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("when: fails if complete dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenComplete(completer2.cell, NextOutcome(_))
+    val success = cell1.when(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("when: fails if next and complete dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, NextOutcome(_))
+    cell1.whenComplete(completer2.cell, NextOutcome(_))
+    val success = cell1.when(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("when: fails if next sequential dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNextSequential(completer2.cell, NextOutcome(_))
+    val success = cell1.when(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("when: fails if complete sequential dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenComplete(completer2.cell, NextOutcome(_))
+    val success = cell1.when(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("when: fails if next and complete sequential dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNextSequential(completer2.cell, NextOutcome(_))
+    cell1.whenCompleteSequential(completer2.cell, NextOutcome(_))
+    val success = cell1.when(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("whenSequential: fails if next dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, NextOutcome(_))
+    val success = cell1.whenSequential(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("whenSequential: fails if complete dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenComplete(completer2.cell, NextOutcome(_))
+    val success = cell1.whenSequential(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("whenSequential: fails if next and complete dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNext(completer2.cell, NextOutcome(_))
+    cell1.whenComplete(completer2.cell, NextOutcome(_))
+    val success = cell1.whenSequential(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("whenSequential: fails if next sequential dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNextSequential(completer2.cell, NextOutcome(_))
+    val success = cell1.whenSequential(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("whenSequential: fails if complete sequential dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenComplete(completer2.cell, NextOutcome(_))
+    val success = cell1.whenSequential(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
+  }
+
+  test("whenSequential: fails if next and complete sequential dep has been registered already") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
+    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+
+    val cell1 = completer1.cell
+    cell1.whenNextSequential(completer2.cell, NextOutcome(_))
+    cell1.whenCompleteSequential(completer2.cell, NextOutcome(_))
+    val success = cell1.whenSequential(completer2.cell, (x, isFinal) => {
+      assert(false)
+      Outcome(x, isFinal) // complete, if completer2 is completed
+    })
+
+    assert(!success)
+
+    completer2.putNext(10)
+    completer2.putFinal(20)
+
+    pool.onQuiescent(() => pool.shutdown())
   }
 
   test("put: isFinal == true") {
