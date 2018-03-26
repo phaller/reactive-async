@@ -1626,47 +1626,46 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-//  test("whenNext: 2-cSCC with constant resolution") {
-//    val latch = new CountDownLatch(4)
-//
-//    implicit val pool = new HandlerPool(1)
-//
-//    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
-//    val cell1 = completer1.cell
-//    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
-//    val cell2 = completer2.cell
-//
-//
-//
-//    // create a cSCC, assert that none of the callbacks get called again.
-//    cell1.whenNext(cell2, v => if (v != 10) { assert(false); NextOutcome(20) } else NoOutcome)
-//    cell2.whenNext(cell1, v => if (v != 10) { assert(false); NextOutcome(20) } else NoOutcome)
-//
-//    // set unwanted values:
-//    completer1.putNext(10)
-//    completer2.putNext(10)
-//
-//    for (c <- List(cell1, cell2))
-//      c.onComplete {
-//        case Success(v) =>
-//          assert(v === 0)
-//          assert(c.numNextDependencies === 0)
-//          latch.countDown()
-//        case Failure(e) =>
-//          assert(false)
-//          latch.countDown()
-//      }
-//
-//    pool.triggerExecution(cell1)
-//
-//    // resolve cells
-//    val fut = pool.quiescentResolveCell
-//    Await.result(fut, 2.seconds)
-//    latch.await()
-//
-//    pool.shutdown()
-//  }
-
+  //  test("whenNext: 2-cSCC with constant resolution") {
+  //    val latch = new CountDownLatch(4)
+  //
+  //    implicit val pool = new HandlerPool(1)
+  //
+  //    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
+  //    val cell1 = completer1.cell
+  //    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
+  //    val cell2 = completer2.cell
+  //
+  //
+  //
+  //    // create a cSCC, assert that none of the callbacks get called again.
+  //    cell1.whenNext(cell2, v => if (v != 10) { assert(false); NextOutcome(20) } else NoOutcome)
+  //    cell2.whenNext(cell1, v => if (v != 10) { assert(false); NextOutcome(20) } else NoOutcome)
+  //
+  //    // set unwanted values:
+  //    completer1.putNext(10)
+  //    completer2.putNext(10)
+  //
+  //    for (c <- List(cell1, cell2))
+  //      c.onComplete {
+  //        case Success(v) =>
+  //          assert(v === 0)
+  //          assert(c.numNextDependencies === 0)
+  //          latch.countDown()
+  //        case Failure(e) =>
+  //          assert(false)
+  //          latch.countDown()
+  //      }
+  //
+  //    pool.triggerExecution(cell1)
+  //
+  //    // resolve cells
+  //    val fut = pool.quiescentResolveCell
+  //    Await.result(fut, 2.seconds)
+  //    latch.await()
+  //
+  //    pool.shutdown()
+  //  }
 
   test("whenNext: cSCC with constant resolution") {
     val latch = new CountDownLatch(4)

@@ -202,7 +202,11 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
    * Assumes that dependencies need to be kept until a final result is known.
    */
   private val state = new AtomicReference[AnyRef](State.empty[K, V](updater))
-  private val numIncomingCallbacks = new AtomicReference[(Int, V)]((0, updater.bottom)) // Should this be included into `state`?
+
+  /* first element is the number of incoming callbacks,
+   * second element is the value that has been propagated to dependent cells (or initially bottom)
+   */
+  private val numIncomingCallbacks = new AtomicReference[(Int, V)]((0, updater.bottom))
 
   // `CellCompleter` and corresponding `Cell` are the same run-time object.
   override def cell: Cell[K, V] = this
@@ -758,10 +762,10 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   @tailrec
   override final private[cell] def incIncomingCallbacks(): Unit = {
     val current = numIncomingCallbacks.get()
-    val next =
-      if (current._1 == 0) (current._1 + 1, getResult())
-      else (current._1 + 1, current._2)
-    if (!numIncomingCallbacks.compareAndSet(current, next)) incIncomingCallbacks()
+    val next = (current._1 + 1, current._2)
+
+    if (!numIncomingCallbacks.compareAndSet(current, next))
+      incIncomingCallbacks()
   }
 
   /**
@@ -771,11 +775,19 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   @tailrec
   override final private[cell] def decIncomingCallbacks(): Unit = {
     val current = numIncomingCallbacks.get()
-    val next = (current._1 - 1, current._2)
+
+    // If we drop to zero, store the current result as the latest propagated value
+    val next =
+      if (current._1 == 1)
+        (0, getResult())
+      else
+        (current._1 - 1, current._2)
+
     if (numIncomingCallbacks.compareAndSet(current, next)) {
-      if ((next._1 == 0) && (next._2 != getResult()))
+      // CAS was successfull. Call dependent cells, if we dropped to zero and
+      // have new information to propagated
+      if (current._1 == 1 && next._2 != current._2)
         triggerNextCallbacks()
-    }
-    else decIncomingCallbacks()
+    } else decIncomingCallbacks()
   }
 }
