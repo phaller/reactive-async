@@ -311,6 +311,8 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     // Submit task to the pool
     incSubmittedTasks()
 
+    println(s"added task $task")
+
     // Run the task
     pool.execute(new Runnable {
       def run(): Unit = {
