@@ -1,7 +1,6 @@
-package npv
+package com.phaller.rasync.npv
 
 import java.util.concurrent.ThreadLocalRandom
-
 
 trait Distribution {
   def sample(): Double
@@ -16,7 +15,7 @@ class SingleValueDistribution(value: Double) extends Distribution {
 }
 
 class TriangleDistribution(min: Double, likely: Double, max: Double)
-        extends Distribution {
+  extends Distribution {
 
   assert(max >= likely)
   assert(likely >= min)

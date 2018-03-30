@@ -1,7 +1,6 @@
-package npv
+package com.phaller.rasync.npv
 
-import scala.concurrent.{Promise, Future, ExecutionContext}
-
+import scala.concurrent.{ Promise, Future, ExecutionContext }
 
 object NpvTask {
 
@@ -23,11 +22,9 @@ object NpvTask {
 
 }
 
-class NpvTask(p: Promise[StatsCollector], min: Double, max: Double, numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)
-             (implicit ctx: ExecutionContext) extends AbstractNpvTask {
+class NpvTask(p: Promise[StatsCollector], min: Double, max: Double, numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)(implicit ctx: ExecutionContext) extends AbstractNpvTask {
 
-  def this(p: Promise[StatsCollector], numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)
-          (implicit ctx: ExecutionContext) {
+  def this(p: Promise[StatsCollector], numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)(implicit ctx: ExecutionContext) {
     this(p, NpvTask.calculateMin(flows, rate), NpvTask.calculateMax(flows, rate), numBuckets, numIterations, rate, flows: _*)
   }
 
