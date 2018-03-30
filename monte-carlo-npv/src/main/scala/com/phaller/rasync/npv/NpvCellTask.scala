@@ -1,10 +1,9 @@
 package com.phaller.rasync.npv
 
-import com.phaller.rasync.lattice.{DefaultKey, Lattice, NotMonotonicException, NaturalNumberLattice, NaturalNumberKey}
-import com.phaller.rasync.{Cell, CellCompleter, HandlerPool}
+import com.phaller.rasync.lattice.{ DefaultKey, Lattice, NotMonotonicException, NaturalNumberLattice, NaturalNumberKey }
+import com.phaller.rasync.{ Cell, CellCompleter, HandlerPool }
 
-import scala.util.{Success, Failure}
-
+import scala.util.{ Success, Failure }
 
 abstract class AbstractNpvTask extends Runnable {
 
@@ -20,7 +19,7 @@ abstract class AbstractNpvTask extends Runnable {
   }
 
   def calcNumChunks(n: Int): Int = {
-    val nc: Int = Math.ceil(Math.sqrt(n/minChunkSize)).asInstanceOf[Int]
+    val nc: Int = Math.ceil(Math.sqrt(n / minChunkSize)).asInstanceOf[Int]
     nc
   }
 }
@@ -34,15 +33,13 @@ class StatsLattice extends Lattice[StatsCollector] {
   }
 }
 
-class NpvCellTask(p: CellCompleter[DefaultKey[StatsCollector], StatsCollector], min: Double, max: Double, numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)
-             (implicit pool: HandlerPool) extends AbstractNpvTask {
+class NpvCellTask(p: CellCompleter[DefaultKey[StatsCollector], StatsCollector], min: Double, max: Double, numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)(implicit pool: HandlerPool) extends AbstractNpvTask {
 
   type K = DefaultKey[StatsCollector]
 
   implicit val lattice: Lattice[StatsCollector] = new StatsLattice
 
-  def this(p: CellCompleter[DefaultKey[StatsCollector], StatsCollector], numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)
-          (implicit pool: HandlerPool) {
+  def this(p: CellCompleter[DefaultKey[StatsCollector], StatsCollector], numBuckets: Int, numIterations: Int, rate: Distribution, flows: Distribution*)(implicit pool: HandlerPool) {
     this(p, NpvTask.calculateMin(flows, rate), NpvTask.calculateMax(flows, rate), numBuckets, numIterations, rate, flows: _*)
   }
 

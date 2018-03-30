@@ -9,9 +9,9 @@ class StatsCollector(min: Double, max: Double, numBuckets: Int) {
   val buckets: Array[Int] = Array.ofDim[Int](numBuckets)
 
   def addObs(obs: Double): Unit = {
-    mean = (obs + (numObs * mean)) / (numObs+1)
+    mean = (obs + (numObs * mean)) / (numObs + 1)
     numObs += 1
-    val bucket: Int = Math.floor(numBuckets * (obs - min)/range).asInstanceOf[Int]
+    val bucket: Int = Math.floor(numBuckets * (obs - min) / range).asInstanceOf[Int]
     buckets(bucket) = buckets(bucket) + 1
   }
 
@@ -40,7 +40,7 @@ class StatsCollector(min: Double, max: Double, numBuckets: Int) {
     sb.append("Histogram")
     sb.append(System.lineSeparator())
     for (i <- 0 until numBuckets) {
-      sb.append(f" ${i+1}%3d    ${buckets(i)}%d")
+      sb.append(f" ${i + 1}%3d    ${buckets(i)}%d")
       sb.append(System.lineSeparator())
     }
     sb.append(System.lineSeparator())

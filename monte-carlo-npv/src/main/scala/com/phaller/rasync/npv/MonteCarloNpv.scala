@@ -1,27 +1,26 @@
 package com.phaller.rasync.npv
 
-import scala.concurrent.{Promise, Await, ExecutionContext}
+import scala.concurrent.{ Promise, Await, ExecutionContext }
 import scala.concurrent.duration._
 
-import scala.util.{Success, Failure}
+import scala.util.{ Success, Failure }
 
-import java.util.concurrent.{CountDownLatch, ForkJoinPool}
+import java.util.concurrent.{ CountDownLatch, ForkJoinPool }
 import java.util.concurrent.atomic.AtomicReference
 
-import com.phaller.rasync.{HandlerPool, CellCompleter}
-import com.phaller.rasync.lattice.{Lattice, DefaultKey}
-
+import com.phaller.rasync.{ HandlerPool, CellCompleter }
+import com.phaller.rasync.lattice.{ Lattice, DefaultKey }
 
 class MonteCarloNpv {
   import MonteCarloNpv._
 
   private val initial: Distribution = new SingleValueDistribution(-20000)
-  private val year1: Distribution   = new TriangleDistribution(0, 4000, 10000)
-  private val year2: Distribution   = new TriangleDistribution(0, 4000, 10000)
-  private val year3: Distribution   = new TriangleDistribution(1000, 8000, 20000)
-  private val year4: Distribution   = new TriangleDistribution(1000, 8000, 20000)
-  private val year5: Distribution   = new TriangleDistribution(5000, 12000, 40000)
-  private val rate: Distribution    = new TriangleDistribution(2, 4, 8)
+  private val year1: Distribution = new TriangleDistribution(0, 4000, 10000)
+  private val year2: Distribution = new TriangleDistribution(0, 4000, 10000)
+  private val year3: Distribution = new TriangleDistribution(1000, 8000, 20000)
+  private val year4: Distribution = new TriangleDistribution(1000, 8000, 20000)
+  private val year5: Distribution = new TriangleDistribution(5000, 12000, 40000)
+  private val rate: Distribution = new TriangleDistribution(2, 4, 8)
 
   def sequential(): StatsCollector = {
     implicit val ctx =

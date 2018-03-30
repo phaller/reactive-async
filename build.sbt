@@ -26,6 +26,15 @@ lazy val core: Project = (project in file("core")).
     scalacOptions += "-feature"
   )
 
+lazy val npv: Project = (project in file("monte-carlo-npv")).
+  settings(commonSettings: _*).
+  settings(
+    name := "reactive-async-npv",
+    libraryDependencies += opalCommon,
+    scalacOptions += "-feature"
+  ).
+  dependsOn(core)
+
 lazy val Benchmark = config("bench") extend Test
 
 lazy val bench: Project = (project in file("bench")).
