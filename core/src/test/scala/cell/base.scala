@@ -1944,7 +1944,7 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let cell1 and cell2 form a cycle
+    // Let `cell1` and `cell2` form a cycle
     cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
 
@@ -1993,14 +1993,14 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let cell1 and cell2 form a cycle
+    // Let `cell1` and `cell2` form a cycle
     cell1.whenNextSequential(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNextSequential(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenNextSequential(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the indepdentent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle.
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
@@ -2011,7 +2011,7 @@ class BaseSuite extends FunSuite {
     assert(in.cell.getResult() == Fallback)
   }
 
-  test("whenComplete: Cycle with additional ingoing dep") {
+  test("whenComplete: cycle with additional ingoing dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -2042,14 +2042,14 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let cell1 and cell2 form a cycle
+    // Let `cell1` and `cell2` form a cycle
     cell1.whenComplete(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenComplete(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenComplete(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the indepdentent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle.
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
