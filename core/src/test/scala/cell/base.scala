@@ -34,6 +34,10 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -50,6 +54,10 @@ class BaseSuite extends FunSuite {
     } catch {
       case e: Exception => assert(false)
     }
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -69,6 +77,10 @@ class BaseSuite extends FunSuite {
       case e: Exception => assert(false)
     }
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -86,6 +98,10 @@ class BaseSuite extends FunSuite {
       case ise: IllegalStateException => assert(true)
       case e: Exception => assert(false)
     }
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -113,6 +129,10 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -138,6 +158,10 @@ class BaseSuite extends FunSuite {
     completer2.putFinal(10)
 
     latch.await()
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -167,6 +191,10 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -195,6 +223,10 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -211,6 +243,10 @@ class BaseSuite extends FunSuite {
     cell1.waitUntilNoDeps()
 
     assert(cell1.numCompleteDependencies == 0)
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -229,6 +265,10 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -246,6 +286,10 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numCompleteDependencies == 0)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -262,6 +306,10 @@ class BaseSuite extends FunSuite {
     cell1.waitUntilNoDeps()
 
     assert(cell1.numCompleteDependencies == 0)
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -281,6 +329,10 @@ class BaseSuite extends FunSuite {
     assert(completer1.cell.getResult() == Immutable)
     assert(completer2.cell.getResult() == Mutable)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -298,6 +350,10 @@ class BaseSuite extends FunSuite {
 
     assert(completer1.cell.getResult() == Immutable)
     assert(completer2.cell.getResult() == Mutable)
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -322,6 +378,10 @@ class BaseSuite extends FunSuite {
     completer.putNext(9)
 
     latch.await()
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -353,6 +413,10 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 1)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -382,6 +446,10 @@ class BaseSuite extends FunSuite {
     latch.await()
 
     assert(cell1.numNextDependencies == 1)
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -579,6 +647,10 @@ class BaseSuite extends FunSuite {
     completer2.putFinal(10)
     latch.await()
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -609,6 +681,10 @@ class BaseSuite extends FunSuite {
     completer2.putFinal(10)
     latch.await()
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -629,6 +705,10 @@ class BaseSuite extends FunSuite {
     cell1.waitUntilNoNextDeps()
 
     assert(cell1.numNextDependencies == 0)
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -651,6 +731,10 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 0)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -672,6 +756,10 @@ class BaseSuite extends FunSuite {
     assert(completer1.cell.getResult() == Immutable)
     assert(completer2.cell.getResult() == Mutable)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -692,6 +780,10 @@ class BaseSuite extends FunSuite {
 
     assert(completer1.cell.getResult() == Immutable)
     assert(completer2.cell.getResult() == Mutable)
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -716,6 +808,10 @@ class BaseSuite extends FunSuite {
 
     assert(completer1.cell.numNextDependencies == 10000)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -738,6 +834,10 @@ class BaseSuite extends FunSuite {
     latch.await()
 
     assert(completer1.cell.numCompleteDependencies == 10000)
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -762,6 +862,10 @@ class BaseSuite extends FunSuite {
     latch.await()
 
     assert(completer1.cell.numNextDependencies == 10000)
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -906,6 +1010,11 @@ class BaseSuite extends FunSuite {
     }
     assert(numErrorsWithCell1 == 0, "errors with cell 1")
     assert(numErrorsWithCell2 == 0, "errors with cell 2")
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -944,6 +1053,10 @@ class BaseSuite extends FunSuite {
       case ise: IllegalStateException => assert(true)
       case e: Exception => assert(false)
     }
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -984,6 +1097,10 @@ class BaseSuite extends FunSuite {
       case e: Exception => assert(false)
     }
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -1014,6 +1131,10 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -1043,6 +1164,10 @@ class BaseSuite extends FunSuite {
     completer2.putNext(10)
 
     latch.await()
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -1085,6 +1210,10 @@ class BaseSuite extends FunSuite {
     completer2.putNext(10)
     latch2.await()
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -1125,6 +1254,10 @@ class BaseSuite extends FunSuite {
 
     completer2.putNext(10)
     latch2.await()
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
 
     pool.shutdown()
   }
@@ -1170,6 +1303,10 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.isComplete)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -1189,6 +1326,11 @@ class BaseSuite extends FunSuite {
     completer.put(6, true)
 
     latch.await()
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -1208,6 +1350,11 @@ class BaseSuite extends FunSuite {
     completer.put(10, false)
 
     latch.await()
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
@@ -1235,6 +1382,11 @@ class BaseSuite extends FunSuite {
     completer.putFinal(Set(4))
 
     latch.await()
+
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
   }
 
