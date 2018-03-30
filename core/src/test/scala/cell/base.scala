@@ -413,7 +413,13 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
+
+    assert(!HandlerPool.encounteredRejectedExecution)
   }
 
   test("whenNextSequential: dependency 1") {
@@ -443,7 +449,13 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
+
+    assert(!HandlerPool.encounteredRejectedExecution)
   }
 
   test("whenNext: dependency 2") {
@@ -484,7 +496,13 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 0)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
+
+    assert(!HandlerPool.encounteredRejectedExecution)
   }
 
   test("whenNextSequential: dependency 2") {
@@ -525,7 +543,13 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 0)
 
+    val done = Promise[Boolean]()
+    pool.onQuiescent(() => done.success(true))
+    Await.ready(done.future, 2.seconds)
+
     pool.shutdown()
+
+    assert(!HandlerPool.encounteredRejectedExecution)
   }
 
   test("whenNext: Triggered by putFinal when no whenComplete exist for same cell") {

@@ -1,6 +1,6 @@
 package cell
 
-import java.util.concurrent.ForkJoinPool
+import java.util.concurrent.{ ForkJoinPool, RejectedExecutionException }
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
@@ -18,6 +18,11 @@ import scala.collection.immutable.Queue
 private class PoolState(val handlers: List[() => Unit] = List(), val submittedTasks: Int = 0) {
   def isQuiescent(): Boolean =
     submittedTasks == 0
+}
+
+object HandlerPool {
+  @volatile
+  var encounteredRejectedExecution = false
 }
 
 class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => Unit = _.printStackTrace()) {
@@ -311,19 +316,26 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     // Submit task to the pool
     incSubmittedTasks()
 
-    // Run the task
-    pool.execute(new Runnable {
-      def run(): Unit = {
-        try {
-          task.run()
-        } catch {
-          case NonFatal(e) =>
-            unhandledExceptionHandler(e)
-        } finally {
-          decSubmittedTasks()
+    try {
+      // Run the task
+      pool.execute(new Runnable {
+        def run(): Unit = {
+          try {
+            task.run()
+          } catch {
+            case NonFatal(e) =>
+              unhandledExceptionHandler(e)
+          } finally {
+            decSubmittedTasks()
+          }
         }
-      }
-    })
+      })
+    } catch {
+      case re: RejectedExecutionException =>
+        HandlerPool.encounteredRejectedExecution = true
+        re.printStackTrace()
+        throw re
+    }
   }
 
   /**
