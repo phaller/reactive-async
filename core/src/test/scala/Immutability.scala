@@ -1,6 +1,5 @@
-package opal
+package cell
 
-import cell._
 import lattice.{ MonotonicUpdater, Key, Lattice }
 
 object ImmutabilityKey extends Key[Immutability] {

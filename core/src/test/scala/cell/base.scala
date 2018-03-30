@@ -1,16 +1,15 @@
 package cell
 
 import org.scalatest.FunSuite
+
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.util.{ Failure, Success }
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
+
 import lattice.{ DefaultKey, Key, Lattice, MonotonicUpdater, NaturalNumberLattice, NotMonotonicException, StringIntKey, StringIntUpdater, Updater }
-import opal._
-import org.opalj.br.analyses.Project
-import java.io.File
-import java.util.concurrent.atomic.AtomicInteger
 
 class BaseSuite extends FunSuite {
 
@@ -1396,63 +1395,6 @@ class BaseSuite extends FunSuite {
     assert(res == ConditionallyImmutable)
   }
 
-  test("purity analysis with Demo.java: pure methods") {
-    val file = new File("core")
-    val lib = Project(file)
-
-    val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
-
-    val pureMethods = List(
-      "pureness.Demo{ public static int pureThoughItUsesField(int,int) }",
-      "pureness.Demo{ public static int pureThoughItUsesField2(int,int) }",
-      "pureness.Demo{ public static int simplyPure(int,int) }",
-      "pureness.Demo{ static int foo(int) }",
-      "pureness.Demo{ static int bar(int) }",
-      "pureness.Demo{ static int fooBar(int) }",
-      "pureness.Demo{ static int barFoo(int) }",
-      "pureness.Demo{ static int m1(int) }",
-      "pureness.Demo{ static int m2(int) }",
-      "pureness.Demo{ static int m3(int) }",
-      "pureness.Demo{ static int cm1(int) }",
-      "pureness.Demo{ static int cm2(int) }",
-      "pureness.Demo{ static int scc0(int) }",
-      "pureness.Demo{ static int scc1(int) }",
-      "pureness.Demo{ static int scc2(int) }",
-      "pureness.Demo{ static int scc3(int) }")
-
-    val finalRes = pureMethods.filter(!report.contains(_))
-
-    assert(finalRes.size == 0, report.mkString("\n"))
-  }
-
-  test("purity analysis with Demo.java: impure methods") {
-    val file = new File("core")
-    val lib = Project(file)
-
-    val report = PurityAnalysis.doAnalyze(lib, List.empty, () => false).toConsoleString.split("\n")
-
-    val impureMethods = List(
-      "public static int impure(int)",
-      "static int npfoo(int)",
-      "static int npbar(int)",
-      "static int mm1(int)",
-      "static int mm2(int)",
-      "static int mm3(int)",
-      "static int m1np(int)",
-      "static int m2np(int)",
-      "static int m3np(int)",
-      "static int cpure(int)",
-      "static int cpureCallee(int)",
-      "static int cpureCalleeCallee1(int)",
-      "static int cpureCalleeCallee2(int)",
-      "static int cpureCalleeCalleeCallee(int)",
-      "static int cpureCalleeCalleeCalleeCallee(int)")
-
-    val finalRes = impureMethods.filter(report.contains(_))
-
-    assert(finalRes.size == 0)
-  }
-
   test("PurityUpdate: successful updated") {
     val lattice = Purity.PurityUpdater
 
@@ -1545,7 +1487,7 @@ class BaseSuite extends FunSuite {
       pool.onQuiescent { () => p.success(true) }
 
       try {
-        Await.result(p.future, 2.seconds)
+        Await.result(p.future, 30.seconds)
       } catch {
         case t: Throwable => assert(false, s"failure after $i iterations")
       }
@@ -1873,7 +1815,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNext: Cycle with default resolution") {
+  test("whenNext: cycle with default resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object ShouldNotHappen extends Value
@@ -1906,7 +1848,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNextSequential: Cycle with default resolution") {
+  test("whenNextSequential: cycle with default resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object ShouldNotHappen extends Value
@@ -1939,7 +1881,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNext: Cycle with constant resolution") {
+  test("whenNext: cycle with constant resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object OK extends Value
@@ -1979,7 +1921,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNextSequential: Cycle with constant resolution") {
+  test("whenNextSequential: cycle with constant resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object OK extends Value
@@ -2019,7 +1961,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNext: Cycle with additional ingoing dep") {
+  test("whenNext: cycle with additional incoming dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -2050,14 +1992,14 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let `cell1` and `cell2` form a cycle
+    // let `cell1` and `cell2` form a cycle
     cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenNext(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the indepdentent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
@@ -2068,7 +2010,7 @@ class BaseSuite extends FunSuite {
     assert(in.cell.getResult() == Fallback)
   }
 
-  test("whenNextSequential: Cycle with additional ingoing dep") {
+  test("whenNextSequential: cycle with additional incoming dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -2099,14 +2041,14 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let `cell1` and `cell2` form a cycle
+    // let `cell1` and `cell2` form a cycle
     cell1.whenNextSequential(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNextSequential(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenNextSequential(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the independent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
@@ -2117,7 +2059,7 @@ class BaseSuite extends FunSuite {
     assert(in.cell.getResult() == Fallback)
   }
 
-  test("whenComplete: cycle with additional ingoing dep") {
+  test("whenComplete: cycle with additional incoming dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -2148,14 +2090,14 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let `cell1` and `cell2` form a cycle
+    // let `cell1` and `cell2` form a cycle
     cell1.whenComplete(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenComplete(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenComplete(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the independent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
@@ -2166,7 +2108,7 @@ class BaseSuite extends FunSuite {
     assert(in.cell.getResult() == Fallback)
   }
 
-  test("whenNext: Cycle with additional outgoing dep") {
+  test("whenNext: cycle with additional outgoing dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Dummy extends Value
@@ -2212,7 +2154,7 @@ class BaseSuite extends FunSuite {
     assert(out.cell.getResult() == OK)
   }
 
-  test("whenNextSequential: Cycle with additional outgoing dep") {
+  test("whenNextSequential: cycle with additional outgoing dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Dummy extends Value
@@ -2287,7 +2229,7 @@ class BaseSuite extends FunSuite {
         try {
           Thread.sleep(random.nextInt(3))
         } catch {
-          case _: InterruptedException => /* ignore this */
+          case _: InterruptedException => /* ignore */
         }
         assert(runningCallbacks.decrementAndGet() == 0)
         Outcome(x * n, x == n)
@@ -2327,7 +2269,7 @@ class BaseSuite extends FunSuite {
       try {
         Thread.sleep(random.nextInt(3))
       } catch {
-        case _: InterruptedException => /* ignore this */
+        case _: InterruptedException => /* ignore */
       }
       assert(runningCallbacks.decrementAndGet() == 0)
       Outcome(x * n, x == n)
@@ -2368,7 +2310,7 @@ class BaseSuite extends FunSuite {
       try {
         Thread.sleep(random.nextInt(3))
       } catch {
-        case _: InterruptedException => /* ignore this */
+        case _: InterruptedException => /* ignore */
       }
       assert(runningCallbacks.decrementAndGet() == 0)
       Outcome(count, count == n)
@@ -2418,7 +2360,7 @@ class BaseSuite extends FunSuite {
         try {
           Thread.sleep(random.nextInt(3))
         } catch {
-          case _: InterruptedException => /* ignore this */
+          case _: InterruptedException => /* ignore */
         }
         assert(runningCallbacks.decrementAndGet() == 0)
         Outcome(count, count == n)
@@ -2506,7 +2448,7 @@ class BaseSuite extends FunSuite {
     })
 
     for (i <- 1 to n)
-      pool.execute(() => completer2.putNext(i)) // was pool.execute(…)
+      pool.execute(() => completer2.putNext(i))
     latch1.countDown()
 
     pool.onQuiescent(() => {
@@ -2517,7 +2459,6 @@ class BaseSuite extends FunSuite {
     latch2.await()
 
     assert(cell1.getResult() == n)
-    //assert(cell2.getResult() == n)
     assert(cell1.isComplete)
     assert(!cell2.isComplete)
   }
@@ -2745,29 +2686,4 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
-  /*test("ImmutabilityAnalysis: Concurrency") {
-    val file = new File("lib")
-    val lib = Project(file)
-
-    val manager = lib.get(FPCFAnalysesManagerKey)
-    manager.run(ClassExtensibilityAnalysis)
-    manager.runAll(
-      FieldMutabilityAnalysis
-    )
-
-    // Compare every next result received from the same analysis to `report`
-    val report = ImmutabilityAnalysis.analyzeWithoutClassExtensibilityAndFieldMutabilityAnalysis(lib, manager).toConsoleString.split("\n")
-
-    for (i <- 0 to 1000) {
-      // Next result
-      val newReport = ImmutabilityAnalysis.analyzeWithoutClassExtensibilityAndFieldMutabilityAnalysis(lib, manager).toConsoleString.split("\n")
-
-      // Differs between the elements in `report` and `newReport`.
-      // If they have the exact same elements, `finalRes` should be an
-      // empty list.
-      val finalRes = report.filterNot(newReport.toSet)
-
-      assert(finalRes.isEmpty)
-    }
-  }*/
 }

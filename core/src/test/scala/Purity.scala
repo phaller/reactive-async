@@ -1,6 +1,5 @@
-package opal
+package cell
 
-import cell._
 import lattice.{ MonotonicUpdater, Key, Lattice, NotMonotonicException }
 
 object PurityKey extends Key[Purity] {
