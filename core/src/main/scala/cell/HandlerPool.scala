@@ -431,9 +431,16 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   /**
    * Possibly initiates an orderly shutdown in which previously
    * submitted tasks are executed, but no new tasks are accepted.
+   * This method should only be called, when the pool is quiescent.
    */
   def shutdown(): Unit =
     pool.shutdown()
+
+  /**
+   * Waits for quiescence, then shuts the pool down.
+   */
+  def onQuiescenceShutdown(): Unit =
+    this.onQuiescent(() => pool.shutdown())
 
   def reportFailure(t: Throwable): Unit =
     t.printStackTrace()
