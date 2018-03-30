@@ -2649,6 +2649,23 @@ class BaseSuite extends FunSuite {
     }
   }
 
+  test("cell isADependee") {
+    implicit val pool = new HandlerPool
+    val completer1 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val completer2 = CellCompleter[RecursiveQuiescentTestKey, Int](new RecursiveQuiescentTestKey)
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+
+    cell1.whenNext(cell2, x => {
+      FinalOutcome(1)
+    })
+
+    assert(cell2.isADependee())
+    assert(!cell1.isADependee())
+
+    pool.shutdown()
+  }
+
   /*test("ImmutabilityAnalysis: Concurrency") {
     val file = new File("lib")
     val lib = Project(file)
