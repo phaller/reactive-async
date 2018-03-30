@@ -1,3 +1,6 @@
+package com.phaller.rasync
+package bench
+
 import scala.concurrent.Promise
 import scala.annotation.tailrec
 import org.scalameter.api._
