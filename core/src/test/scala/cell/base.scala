@@ -1815,7 +1815,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNext: Cycle with default resolution") {
+  test("whenNext: cycle with default resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object ShouldNotHappen extends Value
@@ -1848,7 +1848,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNextSequential: Cycle with default resolution") {
+  test("whenNextSequential: cycle with default resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object ShouldNotHappen extends Value
@@ -1881,7 +1881,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNext: Cycle with constant resolution") {
+  test("whenNext: cycle with constant resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object OK extends Value
@@ -1921,7 +1921,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNextSequential: Cycle with constant resolution") {
+  test("whenNextSequential: cycle with constant resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object OK extends Value
@@ -1961,7 +1961,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNext: Cycle with additional ingoing dep") {
+  test("whenNext: cycle with additional incoming dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -1992,14 +1992,14 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let `cell1` and `cell2` form a cycle
+    // let `cell1` and `cell2` form a cycle
     cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenNext(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the indepdentent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
@@ -2010,7 +2010,7 @@ class BaseSuite extends FunSuite {
     assert(in.cell.getResult() == Fallback)
   }
 
-  test("whenNextSequential: Cycle with additional ingoing dep") {
+  test("whenNextSequential: cycle with additional incoming dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -2041,14 +2041,14 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let `cell1` and `cell2` form a cycle
+    // let `cell1` and `cell2` form a cycle
     cell1.whenNextSequential(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNextSequential(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenNextSequential(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the independent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
@@ -2059,7 +2059,7 @@ class BaseSuite extends FunSuite {
     assert(in.cell.getResult() == Fallback)
   }
 
-  test("whenComplete: cycle with additional ingoing dep") {
+  test("whenComplete: cycle with additional incoming dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -2090,14 +2090,14 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let `cell1` and `cell2` form a cycle
+    // let `cell1` and `cell2` form a cycle
     cell1.whenComplete(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenComplete(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenComplete(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the independent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
@@ -2108,7 +2108,7 @@ class BaseSuite extends FunSuite {
     assert(in.cell.getResult() == Fallback)
   }
 
-  test("whenNext: Cycle with additional outgoing dep") {
+  test("whenNext: cycle with additional outgoing dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Dummy extends Value
@@ -2154,7 +2154,7 @@ class BaseSuite extends FunSuite {
     assert(out.cell.getResult() == OK)
   }
 
-  test("whenNextSequential: Cycle with additional outgoing dep") {
+  test("whenNextSequential: cycle with additional outgoing dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Dummy extends Value
@@ -2229,7 +2229,7 @@ class BaseSuite extends FunSuite {
         try {
           Thread.sleep(random.nextInt(3))
         } catch {
-          case _: InterruptedException => /* ignore this */
+          case _: InterruptedException => /* ignore */
         }
         assert(runningCallbacks.decrementAndGet() == 0)
         Outcome(x * n, x == n)
@@ -2269,7 +2269,7 @@ class BaseSuite extends FunSuite {
       try {
         Thread.sleep(random.nextInt(3))
       } catch {
-        case _: InterruptedException => /* ignore this */
+        case _: InterruptedException => /* ignore */
       }
       assert(runningCallbacks.decrementAndGet() == 0)
       Outcome(x * n, x == n)
@@ -2310,7 +2310,7 @@ class BaseSuite extends FunSuite {
       try {
         Thread.sleep(random.nextInt(3))
       } catch {
-        case _: InterruptedException => /* ignore this */
+        case _: InterruptedException => /* ignore */
       }
       assert(runningCallbacks.decrementAndGet() == 0)
       Outcome(count, count == n)
@@ -2360,7 +2360,7 @@ class BaseSuite extends FunSuite {
         try {
           Thread.sleep(random.nextInt(3))
         } catch {
-          case _: InterruptedException => /* ignore this */
+          case _: InterruptedException => /* ignore */
         }
         assert(runningCallbacks.decrementAndGet() == 0)
         Outcome(count, count == n)
@@ -2448,7 +2448,7 @@ class BaseSuite extends FunSuite {
     })
 
     for (i <- 1 to n)
-      pool.execute(() => completer2.putNext(i)) // was pool.execute(…)
+      pool.execute(() => completer2.putNext(i))
     latch1.countDown()
 
     pool.onQuiescent(() => {
@@ -2459,7 +2459,6 @@ class BaseSuite extends FunSuite {
     latch2.await()
 
     assert(cell1.getResult() == n)
-    //assert(cell2.getResult() == n)
     assert(cell1.isComplete)
     assert(!cell2.isComplete)
   }
