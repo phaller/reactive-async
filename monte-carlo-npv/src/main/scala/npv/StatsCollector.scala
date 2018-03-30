@@ -1,4 +1,4 @@
-package npv
+package com.phaller.rasync.npv
 
 class StatsCollector(min: Double, max: Double, numBuckets: Int) {
 

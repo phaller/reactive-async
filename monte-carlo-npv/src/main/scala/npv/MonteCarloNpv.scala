@@ -1,4 +1,4 @@
-package npv
+package com.phaller.rasync.npv
 
 import scala.concurrent.{Promise, Await, ExecutionContext}
 import scala.concurrent.duration._
@@ -8,8 +8,8 @@ import scala.util.{Success, Failure}
 import java.util.concurrent.{CountDownLatch, ForkJoinPool}
 import java.util.concurrent.atomic.AtomicReference
 
-import cell.{HandlerPool, CellCompleter}
-import lattice.{Lattice, DefaultKey}
+import com.phaller.rasync.{HandlerPool, CellCompleter}
+import com.phaller.rasync.lattice.{Lattice, DefaultKey}
 
 
 class MonteCarloNpv {
@@ -46,7 +46,7 @@ class MonteCarloNpv {
 
   def cell(minChunkSize: Int, numChunks: Int)(implicit pool: HandlerPool): StatsCollector = {
     implicit val lattice: Lattice[StatsCollector] = new StatsLattice
-    val p = CellCompleter[DefaultKey[StatsCollector], StatsCollector](pool, new DefaultKey[StatsCollector])
+    val p = CellCompleter[DefaultKey[StatsCollector], StatsCollector](new DefaultKey[StatsCollector])
     val task =
       new NpvCellTask(p, 10, NUM_ITER, rate, initial, year1, year2, year3, year4, year5)
     task.setMinChunkSize(minChunkSize)

@@ -1,4 +1,4 @@
-package npv
+package com.phaller.rasync.npv
 
 object NetPresentValue {
 

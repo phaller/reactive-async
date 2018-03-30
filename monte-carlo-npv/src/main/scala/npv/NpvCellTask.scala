@@ -1,7 +1,7 @@
-package npv
+package com.phaller.rasync.npv
 
-import lattice.{DefaultKey, Lattice, LatticeViolationException, NaturalNumberLattice, NaturalNumberKey}
-import cell.{Cell, CellCompleter, HandlerPool}
+import com.phaller.rasync.lattice.{DefaultKey, Lattice, NotMonotonicException, NaturalNumberLattice, NaturalNumberKey}
+import com.phaller.rasync.{Cell, CellCompleter, HandlerPool}
 
 import scala.util.{Success, Failure}
 
@@ -27,10 +27,10 @@ abstract class AbstractNpvTask extends Runnable {
 
 // trivial lattice
 class StatsLattice extends Lattice[StatsCollector] {
-  override def empty: StatsCollector = null
+  override def bottom: StatsCollector = null
   override def join(current: StatsCollector, next: StatsCollector): StatsCollector = {
     if (current == null) next
-    else throw LatticeViolationException(current, next)
+    else throw NotMonotonicException(current, next)
   }
 }
 
@@ -68,7 +68,7 @@ class NpvCellTask(p: CellCompleter[DefaultKey[StatsCollector], StatsCollector], 
       var completers: List[CellCompleter[K, StatsCollector]] = List()
       for (i <- 0 until children) {
         val statsCompleter =
-          CellCompleter[K, StatsCollector](pool, new DefaultKey[StatsCollector])
+          CellCompleter[K, StatsCollector](new DefaultKey[StatsCollector])
         val subTask = new NpvCellTask(statsCompleter, min, max, numBuckets, numIterations / children, rate, flows: _*)
         subTask.setMinChunkSize(minChunkSize)
         subTask.setNumChunks(numChunks)

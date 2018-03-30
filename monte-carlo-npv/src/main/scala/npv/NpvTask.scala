@@ -1,4 +1,4 @@
-package npv
+package com.phaller.rasync.npv
 
 import scala.concurrent.{Promise, Future, ExecutionContext}
 
