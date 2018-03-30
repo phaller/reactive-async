@@ -1,8 +1,8 @@
-package latticetest
+package com.phaller.rasync
+package test
 
 import org.scalatest.FunSuite
 
-import cell._
 import lattice.{ Lattice, NotMonotonicException, Key }
 
 object Util {

@@ -1,4 +1,4 @@
-package cell
+package com.phaller.rasync
 
 import scala.util.Try
 import lattice.{ DefaultKey, Key, Updater }
@@ -13,17 +13,17 @@ trait CellCompleter[K <: Key[V], V] {
    */
   def cell: Cell[K, V]
 
-  private[cell] def init: (Cell[K, V]) => Outcome[V]
+  private[rasync] def init: (Cell[K, V]) => Outcome[V]
 
   def putFinal(x: V): Unit
   def putNext(x: V): Unit
   def put(x: V, isFinal: Boolean): Unit
 
-  private[cell] def tryNewState(value: V): Boolean
+  private[rasync] def tryNewState(value: V): Boolean
   def tryComplete(value: Try[V]): Boolean
 
-  private[cell] def removeDep(cell: Cell[K, V]): Unit
-  private[cell] def removeNextDep(cell: Cell[K, V]): Unit
+  private[rasync] def removeDep(cell: Cell[K, V]): Unit
+  private[rasync] def removeNextDep(cell: Cell[K, V]): Unit
 }
 
 object CellCompleter {

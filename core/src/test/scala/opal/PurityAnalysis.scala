@@ -1,3 +1,5 @@
+package com.phaller.rasync
+package test
 package opal
 
 import java.net.URL
@@ -5,9 +7,6 @@ import java.net.URL
 import scala.collection.JavaConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
-import cell.{ HandlerPool, Cell, FinalOutcome, NoOutcome, Outcome, NextOutcome }
-import cell.{ PurityKey, Purity, Pure, Impure, UnknownPurity }
 
 import org.opalj.Success
 import org.opalj.br.{ ClassFile, Method, MethodWithBody, PC }

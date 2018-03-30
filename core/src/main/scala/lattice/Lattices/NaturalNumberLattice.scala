@@ -1,3 +1,4 @@
+package com.phaller.rasync
 package lattice
 
 object NaturalNumberKey extends DefaultKey[Int]

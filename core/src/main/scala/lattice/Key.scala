@@ -1,6 +1,5 @@
+package com.phaller.rasync
 package lattice
-
-import cell.Cell
 
 trait Key[V] {
   def resolve[K <: Key[V]](cells: Seq[Cell[K, V]]): Seq[(Cell[K, V], V)]

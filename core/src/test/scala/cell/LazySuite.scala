@@ -1,4 +1,5 @@
-package cell
+package com.phaller.rasync
+package test
 
 import java.util.concurrent.CountDownLatch
 

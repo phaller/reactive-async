@@ -1,4 +1,4 @@
-package cell
+package com.phaller.rasync
 
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{ CountDownLatch, ExecutionException }
@@ -8,7 +8,7 @@ import scala.util.{ Failure, Success, Try }
 import lattice.{ DefaultKey, Key, Updater, NotMonotonicException, PartialOrderingWithBottom }
 
 trait Cell[K <: Key[V], V] {
-  private[cell] val completer: CellCompleter[K, V]
+  private[rasync] val completer: CellCompleter[K, V]
 
   def key: K
 
@@ -82,31 +82,31 @@ trait Cell[K <: Key[V], V] {
   // internal API
 
   // Schedules execution of `callback` when next intermediate result is available.
-  private[cell] def onNext[U](callback: Try[V] => U): Unit //(implicit context: ExecutionContext): Unit
+  private[rasync] def onNext[U](callback: Try[V] => U): Unit //(implicit context: ExecutionContext): Unit
 
   // Schedules execution of `callback` when completed with final result.
-  private[cell] def onComplete[U](callback: Try[V] => U): Unit
+  private[rasync] def onComplete[U](callback: Try[V] => U): Unit
 
   // Only used in tests.
-  private[cell] def waitUntilNoDeps(): Unit
+  private[rasync] def waitUntilNoDeps(): Unit
 
   // Only used in tests.
-  private[cell] def waitUntilNoNextDeps(): Unit
+  private[rasync] def waitUntilNoNextDeps(): Unit
 
-  private[cell] def tasksActive(): Boolean
-  private[cell] def setTasksActive(): Boolean
+  private[rasync] def tasksActive(): Boolean
+  private[rasync] def setTasksActive(): Boolean
 
-  private[cell] def numTotalDependencies: Int
-  private[cell] def numNextDependencies: Int
-  private[cell] def numCompleteDependencies: Int
+  private[rasync] def numTotalDependencies: Int
+  private[rasync] def numNextDependencies: Int
+  private[rasync] def numCompleteDependencies: Int
 
-  private[cell] def numNextCallbacks: Int
-  private[cell] def numCompleteCallbacks: Int
+  private[rasync] def numNextCallbacks: Int
+  private[rasync] def numCompleteCallbacks: Int
 
-  private[cell] def addCompleteCallback(callback: CompleteCallbackRunnable[K, V], cell: Cell[K, V]): Unit
-  private[cell] def addNextCallback(callback: NextCallbackRunnable[K, V], cell: Cell[K, V]): Unit
+  private[rasync] def addCompleteCallback(callback: CompleteCallbackRunnable[K, V], cell: Cell[K, V]): Unit
+  private[rasync] def addNextCallback(callback: NextCallbackRunnable[K, V], cell: Cell[K, V]): Unit
 
-  private[cell] def resolveWithValue(value: V): Unit
+  private[rasync] def resolveWithValue(value: V): Unit
   def cellDependencies: Seq[Cell[K, V]]
   def totalCellDependencies: Seq[Cell[K, V]]
   def isIndependent(): Boolean
@@ -114,8 +114,8 @@ trait Cell[K <: Key[V], V] {
   def removeCompleteCallbacks(cell: Cell[K, V]): Unit
   def removeNextCallbacks(cell: Cell[K, V]): Unit
 
-  private[cell] def removeAllCallbacks(cell: Cell[K, V]): Unit
-  private[cell] def removeAllCallbacks(cells: Seq[Cell[K, V]]): Unit
+  private[rasync] def removeAllCallbacks(cell: Cell[K, V]): Unit
+  private[rasync] def removeAllCallbacks(cells: Seq[Cell[K, V]]): Unit
 
   def isADependee(): Boolean
 }
@@ -261,19 +261,19 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
         pre.asInstanceOf[State[K, V]]
     }
 
-  override private[cell] def numCompleteDependencies: Int = {
+  override private[rasync] def numCompleteDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     else current.completeDeps.size
   }
 
-  override private[cell] def numNextDependencies: Int = {
+  override private[rasync] def numNextDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     else current.nextDeps.size
   }
 
-  override private[cell] def numTotalDependencies: Int = {
+  override private[rasync] def numTotalDependencies: Int = {
     val current = currentState()
     if (current == null) 0
     else (current.completeDeps ++ current.nextDeps).size
@@ -329,7 +329,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     }
   }
 
-  override private[cell] def resolveWithValue(value: V): Unit = {
+  override private[rasync] def resolveWithValue(value: V): Unit = {
     this.putFinal(value)
   }
 
@@ -419,11 +419,11 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     }
   }
 
-  override private[cell] def addCompleteCallback(callback: CompleteCallbackRunnable[K, V], cell: Cell[K, V]): Unit = {
+  override private[rasync] def addCompleteCallback(callback: CompleteCallbackRunnable[K, V], cell: Cell[K, V]): Unit = {
     dispatchOrAddCallback(callback)
   }
 
-  override private[cell] def addNextCallback(callback: NextCallbackRunnable[K, V], cell: Cell[K, V]): Unit = {
+  override private[rasync] def addNextCallback(callback: NextCallbackRunnable[K, V], cell: Cell[K, V]): Unit = {
     dispatchOrAddNextCallback(callback)
   }
 
@@ -442,7 +442,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
    * if it fails.
    */
   @tailrec
-  private[cell] final def tryNewState(value: V): Boolean = {
+  private[rasync] final def tryNewState(value: V): Boolean = {
     state.get() match {
       case finalRes: Try[_] => // completed with final result already
         try {
@@ -532,7 +532,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   }
 
   @tailrec
-  override private[cell] final def removeDep(cell: Cell[K, V]): Unit = {
+  override private[rasync] final def removeDep(cell: Cell[K, V]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]
@@ -549,7 +549,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   }
 
   @tailrec
-  override private[cell] final def removeNextDep(cell: Cell[K, V]): Unit = {
+  override private[rasync] final def removeNextDep(cell: Cell[K, V]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]
@@ -594,7 +594,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   }
 
   @tailrec
-  override private[cell] final def removeAllCallbacks(cell: Cell[K, V]): Unit = {
+  override private[rasync] final def removeAllCallbacks(cell: Cell[K, V]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]
@@ -609,7 +609,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   }
 
   @tailrec
-  override private[cell] final def removeAllCallbacks(cells: Seq[Cell[K, V]]): Unit = {
+  override private[rasync] final def removeAllCallbacks(cells: Seq[Cell[K, V]]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
         val current = pre.asInstanceOf[State[K, V]]
@@ -623,15 +623,15 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     }
   }
 
-  override private[cell] def waitUntilNoDeps(): Unit = {
+  override private[rasync] def waitUntilNoDeps(): Unit = {
     nodepslatch.await()
   }
 
-  override private[cell] def waitUntilNoNextDeps(): Unit = {
+  override private[rasync] def waitUntilNoNextDeps(): Unit = {
     nonextdepslatch.await()
   }
 
-  override private[cell] def tasksActive() = state.get() match {
+  override private[rasync] def tasksActive() = state.get() match {
     case _: Try[_] => false
     case s: State[_, _] => s.tasksActive
   }
@@ -642,7 +642,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
    * @return Returns true, iff the cell's status changed (i.e. it had not been running before).
    */
   @tailrec
-  override private[cell] final def setTasksActive(): Boolean = state.get() match {
+  override private[rasync] final def setTasksActive(): Boolean = state.get() match {
     case pre: State[_, _] =>
       if (pre.tasksActive)
         false
@@ -656,7 +656,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   }
 
   // Schedules execution of `callback` when next intermediate result is available.
-  override private[cell] def onNext[U](callback: Try[V] => U): Unit = {
+  override private[rasync] def onNext[U](callback: Try[V] => U): Unit = {
     val runnable = new NextConcurrentCallbackRunnable[K, V](pool, null, this, callback) // NULL indicates that no cell is waiting for this callback.
     dispatchOrAddNextCallback(runnable)
   }

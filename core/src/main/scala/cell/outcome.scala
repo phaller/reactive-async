@@ -1,4 +1,4 @@
-package cell
+package com.phaller.rasync
 
 /**
  * Use this trait in callbacks to return the new value of a cell.

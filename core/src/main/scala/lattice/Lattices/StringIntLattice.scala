@@ -1,8 +1,7 @@
+package com.phaller.rasync
 package lattice
 
 import scala.language.implicitConversions
-
-import cell.Cell
 
 class StringIntKey(s: String) extends Key[Int] {
   def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {

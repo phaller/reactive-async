@@ -1,3 +1,5 @@
+package com.phaller.rasync
+package test
 package opal
 
 import org.scalatest.FunSuite
@@ -9,7 +11,6 @@ import java.io.File
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
 
-import cell.{ CellCompleter, HandlerPool }
 import lattice.NotMonotonicException
 
 class OPALSuite extends FunSuite {

@@ -1,4 +1,4 @@
-package cell
+package com.phaller.rasync
 
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicReference
@@ -332,7 +332,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    *
    * @param callback The callback that should be run sequentially to all other sequential callbacks for the dependent cell.
    */
-  private[cell] def scheduleSequentialCallback[K <: Key[V], V](callback: SequentialCallbackRunnable[K, V]): Unit = {
+  private[rasync] def scheduleSequentialCallback[K <: Key[V], V](callback: SequentialCallbackRunnable[K, V]): Unit = {
     val dependentCell = callback.dependentCell
     var success = false
     var startCallback = false
@@ -416,7 +416,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    *
    * @param cell The cell that is triggered.
    */
-  private[cell] def triggerExecution[K <: Key[V], V](cell: Cell[K, V]): Unit = {
+  private[rasync] def triggerExecution[K <: Key[V], V](cell: Cell[K, V]): Unit = {
     if (cell.setTasksActive())
       execute(() => {
         val completer = cell.completer
