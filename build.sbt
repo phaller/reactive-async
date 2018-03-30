@@ -30,7 +30,6 @@ lazy val npv: Project = (project in file("monte-carlo-npv")).
   settings(commonSettings: _*).
   settings(
     name := "reactive-async-npv",
-    libraryDependencies += opalCommon,
     scalacOptions += "-feature"
   ).
   dependsOn(core)
