@@ -405,7 +405,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
 
           val current = raw.asInstanceOf[State[K, V]]
           val depRegistered =
-            if (current.nextDeps.contains(other)) true
+            if (current.completeDeps.contains(other)) true
             else {
               val newState = new State(current.res, current.tasksActive, current.completeDeps + other, current.completeCallbacks, current.nextDeps, current.nextCallbacks)
               state.compareAndSet(current, newState)
