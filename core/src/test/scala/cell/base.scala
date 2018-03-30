@@ -1487,7 +1487,7 @@ class BaseSuite extends FunSuite {
       pool.onQuiescent { () => p.success(true) }
 
       try {
-        Await.result(p.future, 2.seconds)
+        Await.result(p.future, 30.seconds)
       } catch {
         case t: Throwable => assert(false, s"failure after $i iterations")
       }
