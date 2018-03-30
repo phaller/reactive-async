@@ -1970,7 +1970,7 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
-  test("whenNext: Cycle with default resolution") {
+  test("whenNext: cycle with default resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object ShouldNotHappen extends Value
@@ -2003,7 +2003,7 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
-  test("whenNextSequential: Cycle with default resolution") {
+  test("whenNextSequential: cycle with default resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object ShouldNotHappen extends Value
@@ -2036,7 +2036,7 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
-  test("whenNext: Cycle with constant resolution") {
+  test("whenNext: cycle with constant resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object OK extends Value
@@ -2076,7 +2076,7 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
-  test("whenNextSequential: Cycle with constant resolution") {
+  test("whenNextSequential: cycle with constant resolution") {
     sealed trait Value
     case object Bottom extends Value
     case object OK extends Value
@@ -2116,7 +2116,7 @@ class BaseSuite extends FunSuite {
     pool.shutdown()
   }
 
-  test("whenNext: Cycle with additional ingoing dep") {
+  test("whenNext: cycle with additional incoming dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -2147,25 +2147,26 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let `cell1` and `cell2` form a cycle
+    // let `cell1` and `cell2` form a cycle
     cell1.whenNext(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNext(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenNext(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the indepdentent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
-    pool.shutdown()
-
-    assert(cell1.getResult() != ShouldNotHappen)
-    assert(cell2.getResult() != ShouldNotHappen)
-    assert(in.cell.getResult() == Fallback)
+    pool.onQuiescent { () =>
+      pool.shutdown()
+      assert(cell1.getResult() != ShouldNotHappen)
+      assert(cell2.getResult() != ShouldNotHappen)
+      assert(in.cell.getResult() == Fallback)
+    }
   }
 
-  test("whenNextSequential: Cycle with additional ingoing dep") {
+  test("whenNextSequential: cycle with additional incoming dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -2196,25 +2197,26 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let `cell1` and `cell2` form a cycle
+    // let `cell1` and `cell2` form a cycle
     cell1.whenNextSequential(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenNextSequential(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenNextSequential(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the independent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
-    pool.shutdown()
-
-    assert(cell1.getResult() != ShouldNotHappen)
-    assert(cell2.getResult() != ShouldNotHappen)
-    assert(in.cell.getResult() == Fallback)
+    pool.onQuiescent { () =>
+      pool.shutdown()
+      assert(cell1.getResult() != ShouldNotHappen)
+      assert(cell2.getResult() != ShouldNotHappen)
+      assert(in.cell.getResult() == Fallback)
+    }
   }
 
-  test("whenComplete: cycle with additional ingoing dep") {
+  test("whenComplete: cycle with additional incoming dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Resolved extends Value
@@ -2245,25 +2247,26 @@ class BaseSuite extends FunSuite {
     val cell2 = completer2.cell
     val in = CellCompleter[TheKey.type, Value](TheKey)
 
-    // Let `cell1` and `cell2` form a cycle
+    // let `cell1` and `cell2` form a cycle
     cell1.whenComplete(cell2, v => NextOutcome(ShouldNotHappen))
     cell2.whenComplete(cell1, v => NextOutcome(ShouldNotHappen))
 
     // the cycle is dependent on incoming information from `in`
     cell2.whenComplete(in.cell, v => { NextOutcome(ShouldNotHappen) })
 
-    // resolve the independent cell `in` and the cycle.
+    // resolve the independent cell `in` and the cycle
     val fut = pool.quiescentResolveCell
     Await.ready(fut, 1.minutes)
 
-    pool.shutdown()
-
-    assert(cell1.getResult() != ShouldNotHappen)
-    assert(cell2.getResult() != ShouldNotHappen)
-    assert(in.cell.getResult() == Fallback)
+    pool.onQuiescent { () =>
+      pool.shutdown()
+      assert(cell1.getResult() != ShouldNotHappen)
+      assert(cell2.getResult() != ShouldNotHappen)
+      assert(in.cell.getResult() == Fallback)
+    }
   }
 
-  test("whenNext: Cycle with additional outgoing dep") {
+  test("whenNext: cycle with additional outgoing dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Dummy extends Value
@@ -2302,14 +2305,16 @@ class BaseSuite extends FunSuite {
     val fut = pool.quiescentResolveCycles
     Await.ready(fut, 1.minutes)
 
-    pool.shutdown()
+    pool.onQuiescent { () =>
+      pool.shutdown()
 
-    assert(cell1.getResult() != ShouldNotHappen)
-    assert(cell2.getResult() != ShouldNotHappen)
-    assert(out.cell.getResult() == OK)
+      assert(cell1.getResult() != ShouldNotHappen)
+      assert(cell2.getResult() != ShouldNotHappen)
+      assert(out.cell.getResult() == OK)
+    }
   }
 
-  test("whenNextSequential: Cycle with additional outgoing dep") {
+  test("whenNextSequential: cycle with additional outgoing dep") {
     sealed trait Value
     case object Bottom extends Value
     case object Dummy extends Value
@@ -2348,11 +2353,13 @@ class BaseSuite extends FunSuite {
     val fut = pool.quiescentResolveCycles
     Await.ready(fut, 1.minutes)
 
-    pool.shutdown()
+    pool.onQuiescent { () =>
+      pool.shutdown()
 
-    assert(cell1.getResult() != ShouldNotHappen)
-    assert(cell2.getResult() != ShouldNotHappen)
-    assert(out.cell.getResult() == OK)
+      assert(cell1.getResult() != ShouldNotHappen)
+      assert(cell2.getResult() != ShouldNotHappen)
+      assert(out.cell.getResult() == OK)
+    }
   }
 
   test("whenCompleteSequential: calling sequentially") {
