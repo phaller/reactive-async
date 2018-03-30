@@ -855,7 +855,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("whenNext: concurrent put next") {
-    var exptectedValue: Option[Immutability] = None
+    var expectedValue: Option[Immutability] = None
 
     for (_ <- 1 to 100) {
       implicit val pool = new HandlerPool
@@ -873,8 +873,8 @@ class BaseSuite extends FunSuite {
       val fut = pool.quiescentResolveDefaults
       Await.ready(fut, 2.seconds)
 
-      if (exptectedValue.isEmpty) exptectedValue = Some(cell1.getResult())
-      else assert(cell1.getResult() == exptectedValue.get)
+      if (expectedValue.isEmpty) expectedValue = Some(cell1.getResult())
+      else assert(cell1.getResult() == expectedValue.get)
 
       pool.shutdown()
     }
@@ -1227,7 +1227,6 @@ class BaseSuite extends FunSuite {
 
     pool.shutdown()
   }
-
 
   test("put: isFinal == true") {
     val latch = new CountDownLatch(1)
