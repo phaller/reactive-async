@@ -126,7 +126,6 @@ class LazySuite extends FunSuite {
     cell2.trigger()
     latch1.await()
 
-    pool.whileQuiescentResolveCell
     val fut = pool.quiescentResolveCycles
     val ready = Await.ready(fut, 2.seconds)
 
