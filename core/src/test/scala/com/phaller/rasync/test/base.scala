@@ -778,14 +778,20 @@ class BaseSuite extends FunSuite {
       val cell1 = completer1.cell
       cell1.trigger()
 
-      pool.execute(() => cell1.whenComplete(completer2.cell, x => {
-        NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenComplete(completer2.cell, x => {
+          NoOutcome
+        })
+        ()
+      })
 
-      pool.execute(() => cell1.whenNext(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenNext(completer2.cell, x => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        ()
+      })
       pool.execute(() => completer2.putFinal(Mutable))
 
       val fut = pool.quiescentResolveCell
@@ -808,14 +814,20 @@ class BaseSuite extends FunSuite {
 
       val cell1 = completer1.cell
 
-      pool.execute(() => cell1.whenCompleteSequential(completer2.cell, x => {
-        NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenCompleteSequential(completer2.cell, x => {
+          NoOutcome
+        })
+        ()
+      })
 
-      pool.execute(() => cell1.whenNextSequential(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenNextSequential(completer2.cell, x => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        ()
+      })
       pool.execute(() => completer2.putFinal(Mutable))
 
       val fut = pool.quiescentResolveCycles
@@ -864,10 +876,13 @@ class BaseSuite extends FunSuite {
 
       val cell1 = completer1.cell
 
-      pool.execute(() => cell1.whenNext(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenNext(completer2.cell, x => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        ()
+      })
       pool.execute(() => completer2.putNext(Mutable))
 
       val fut = pool.quiescentResolveDefaults
@@ -1225,7 +1240,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.isComplete)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("put: isFinal == true") {

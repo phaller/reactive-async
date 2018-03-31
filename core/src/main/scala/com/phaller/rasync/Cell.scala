@@ -122,8 +122,8 @@ trait Cell[K <: Key[V], V] {
 
   def isADependee(): Boolean
 
-  private[cell] def incIncomingCallbacks(): Int
-  private[cell] def decIncomingCallbacks(): Int
+  private[rasync] def incIncomingCallbacks(): Unit
+  private[rasync] def decIncomingCallbacks(): Unit
 }
 
 object Cell {
@@ -760,7 +760,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
 
   /** Called, when a CallbackRunnable r with r.dependentCell == this has been started. */
   @tailrec
-  override final private[cell] def incIncomingCallbacks(): Unit = {
+  override final private[rasync] def incIncomingCallbacks(): Unit = {
     val current = numIncomingCallbacks.get()
     val next = (current._1 + 1, current._2)
 
@@ -773,7 +773,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
    * Triggers all outgoing callbacks, if no more incoming callbacks are running.
    */
   @tailrec
-  override final private[cell] def decIncomingCallbacks(): Unit = {
+  override final private[rasync] def decIncomingCallbacks(): Unit = {
     val current = numIncomingCallbacks.get()
 
     // If we drop to zero, store the current result as the latest propagated value
