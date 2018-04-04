@@ -203,15 +203,15 @@ class LazySuite extends FunSuite {
     var cell2: Cell[theKey.type, Int] = null
     var cell3: Cell[theKey.type, Int] = null
 
-    cell1 = pool.mkCell[theKey.type, Int](theKey, _ => {
-      cell1.whenComplete(cell2, _ => {
+    cell1 = pool.mkCell[theKey.type, Int](theKey, c => {
+      c.whenComplete(cell2, _ => {
         NextOutcome(-111)
       })
       NextOutcome(11)
     })
 
-    cell2 = pool.mkCell[theKey.type, Int](theKey, _ => {
-      cell2.whenComplete(cell1, _ => {
+    cell2 = pool.mkCell[theKey.type, Int](theKey, c => {
+      c.whenComplete(cell1, _ => {
         NextOutcome(-222)
       })
       NextOutcome(22)
@@ -231,8 +231,8 @@ class LazySuite extends FunSuite {
 
     latch2.await()
 
-    cell3 = pool.mkCell[theKey.type, Int](theKey, _ => {
-      cell3.whenComplete(cell1, _ => {
+    cell3 = pool.mkCell[theKey.type, Int](theKey, c => {
+      c.whenComplete(cell1, _ => {
         FinalOutcome(333)
       })
       NextOutcome(-3)

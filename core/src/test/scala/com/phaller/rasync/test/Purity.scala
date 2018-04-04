@@ -1,7 +1,7 @@
 package com.phaller.rasync
 package test
 
-import lattice.{ MonotonicUpdater, Key, Lattice, NotMonotonicException }
+import lattice._
 
 object PurityKey extends Key[Purity] {
 
@@ -22,7 +22,7 @@ case object Pure extends Purity
 case object Impure extends Purity
 
 object Purity {
-  implicit object PurityUpdater extends MonotonicUpdater[Purity] {
+  implicit object PurityOrdering extends PartialOrderingWithBottom[Purity] {
     override def lteq(v1: Purity, v2: Purity): Boolean = {
       if (v1 == UnknownPurity) true
       else if (v1 == v2) true
@@ -31,4 +31,14 @@ object Purity {
 
     override val bottom: Purity = UnknownPurity
   }
+
+  //  implicit object PurityUpdater extends MonotonicUpdater[Purity] {
+  //    override def lteq(v1: Purity, v2: Purity): Boolean = {
+  //      if (v1 == UnknownPurity) true
+  //      else if (v1 == v2) true
+  //      else false
+  //    }
+  //
+  //    override val bottom: Purity = UnknownPurity
+  //  }
 }

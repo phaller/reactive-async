@@ -15,5 +15,5 @@ class NaturalNumberLattice extends Lattice[Int] {
   override def gt(v1: Int, v2: Int): Boolean = v1 > v2
   override def tryCompare(x: Int, y: Int): Option[Int] = Some(x - y)
 
-  override def bottom: Int = 0
+  override val bottom: Int = 0
 }

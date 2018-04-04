@@ -16,13 +16,13 @@ trait PartialOrderingWithBottom[V] extends PartialOrdering[V] {
     else if (equiv(x, y)) Some(0)
     else None
 
-  def bottom: V
+  val bottom: V
 }
 
 object PartialOrderingWithBottom {
   def trivial[T >: Null]: PartialOrderingWithBottom[T] = {
     new PartialOrderingWithBottom[T] {
-      override def bottom: T = null
+      override val bottom: T = null
       override def lteq(v1: T, v2: T): Boolean =
         (v1 == bottom) || (v1 == v2)
     }
@@ -50,7 +50,7 @@ object Lattice {
     new Lattice[(T, T)] {
       def join(v1: (T, T), v2: (T, T)): (T, T) =
         (lattice.join(v1._1, v2._1), lattice.join(v1._2, v2._2))
-      def bottom: (T, T) =
+      val bottom: (T, T) =
         (lattice.bottom, lattice.bottom)
       override def lteq(v1: (T, T), v2: (T, T)): Boolean =
         lattice.lteq(v1._1, v2._1) && lattice.lteq(v1._2, v2._2)

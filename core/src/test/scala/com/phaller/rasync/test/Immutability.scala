@@ -41,21 +41,21 @@ object Immutability {
         (lhs == ConditionallyImmutable && rhs != Immutable)
     }
 
-    override def bottom: Immutability = Immutable
+    override val bottom: Immutability = Immutable
   }
 
-  implicit object ImmutabilityUpdater extends MonotonicUpdater[Immutability] {
-    override def update(v1: Immutability, v2: Immutability): Immutability = {
-      if (lteq(v2, v1)) v1
-      else v2
-    }
-
-    def lteq(lhs: Immutability, rhs: Immutability): Boolean = {
-      lhs == rhs || lhs == Immutable ||
-        (lhs == ConditionallyImmutable && rhs != Immutable)
-    }
-
-    override def bottom: Immutability = Immutable
-  }
+  //  implicit object ImmutabilityUpdater extends MonotonicUpdater[Immutability] {
+  //    override def update(v1: Immutability, v2: Immutability): Immutability = {
+  //      if (lteq(v2, v1)) v1
+  //      else v2
+  //    }
+  //
+  //    def lteq(lhs: Immutability, rhs: Immutability): Boolean = {
+  //      lhs == rhs || lhs == Immutable ||
+  //        (lhs == ConditionallyImmutable && rhs != Immutable)
+  //    }
+  //
+  //    override val bottom: Immutability = Immutable
+  //  }
 
 }
