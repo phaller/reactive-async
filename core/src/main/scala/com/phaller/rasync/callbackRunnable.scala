@@ -88,8 +88,7 @@ private[rasync] abstract class CompleteCallbackRunnable[K <: Key[V], V](
 }
 
 private[rasync] class CompleteConcurrentCallbackRunnable[K <: Key[V], V](override val pool: HandlerPool, override val dependentCell: Cell[K, V], override val otherCell: Cell[K, V], override val callback: Try[V] => Any)
-  extends CompleteCallbackRunnable[K, V](pool, dependentCell, otherCell, callback) with ConcurrentCallbackRunnable[K, V] {
-}
+  extends CompleteCallbackRunnable[K, V](pool, dependentCell, otherCell, callback) with ConcurrentCallbackRunnable[K, V]
 
 /**
  * Dependency between `dependentCompleter` and `otherCell`.
@@ -181,8 +180,7 @@ private[rasync] class NextConcurrentCallbackRunnable[K <: Key[V], V](
   override val dependentCell: Cell[K, V],
   override val otherCell: Cell[K, V],
   override val callback: Try[V] => Any)
-  extends NextCallbackRunnable[K, V](pool, dependentCell, otherCell, callback) with ConcurrentCallbackRunnable[K, V] {
-}
+  extends NextCallbackRunnable[K, V](pool, dependentCell, otherCell, callback) with ConcurrentCallbackRunnable[K, V]
 
 /**
  * Dependency between `dependentCompleter` and `otherCell`.
@@ -227,8 +225,7 @@ private[rasync] class NextConcurrentDepRunnable[K <: Key[V], V](
   override val pool: HandlerPool,
   override val dependentCompleter: CellCompleter[K, V],
   override val otherCell: Cell[K, V],
-  override val valueCallback: V => Outcome[V]) extends NextDepRunnable[K, V](pool, dependentCompleter, otherCell, valueCallback) with ConcurrentCallbackRunnable[K, V] {
-}
+  override val valueCallback: V => Outcome[V]) extends NextDepRunnable[K, V](pool, dependentCompleter, otherCell, valueCallback) with ConcurrentCallbackRunnable[K, V]
 
 /**
  * Dependency between `dependentCompleter` and `otherCell`.
@@ -242,5 +239,4 @@ private[rasync] class NextSequentialDepRunnable[K <: Key[V], V](
   override val pool: HandlerPool,
   override val dependentCompleter: CellCompleter[K, V],
   override val otherCell: Cell[K, V],
-  override val valueCallback: V => Outcome[V]) extends NextDepRunnable[K, V](pool, dependentCompleter, otherCell, valueCallback) with SequentialCallbackRunnable[K, V] {
-}
+  override val valueCallback: V => Outcome[V]) extends NextDepRunnable[K, V](pool, dependentCompleter, otherCell, valueCallback) with SequentialCallbackRunnable[K, V]

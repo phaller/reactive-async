@@ -1344,7 +1344,7 @@ class BaseSuite extends FunSuite {
     cell2.whenComplete(cell1, x => if (x == 1) FinalOutcome(1) else NoOutcome)
     val incompleteFut = pool.quiescentIncompleteCells
     val cells = Await.result(incompleteFut, 2.seconds)
-    assert(cells.map(_.key).toString == "List(key1, key2)")
+    assert(cells.map(_.key).toList.toString == "List(key1, key2)")
   }
 
   test("quiescent resolve cycle") {

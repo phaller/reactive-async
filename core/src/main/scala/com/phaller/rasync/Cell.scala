@@ -3,9 +3,10 @@ package com.phaller.rasync
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{ CountDownLatch, ExecutionException }
 
+import com.phaller.rasync.lattice.{ Key, NotMonotonicException, DefaultKey, Updater, PartialOrderingWithBottom }
+
 import scala.annotation.tailrec
 import scala.util.{ Failure, Success, Try }
-import lattice.{ DefaultKey, Key, Updater, NotMonotonicException, PartialOrderingWithBottom }
 
 trait Cell[K <: Key[V], V] {
   private[rasync] val completer: CellCompleter[K, V]
@@ -524,9 +525,6 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
           nextDepsCells.foreach(_.removeNextCallbacks(this))
 
         true
-    }
-    if (res) {
-      pool.deregister(this)
     }
     res
   }
