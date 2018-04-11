@@ -13,6 +13,11 @@ import org.opalj.graphs._
 
 import scala.collection.immutable.Queue
 
+/**
+ *
+ * @param handlers A list of callbacks to be called on quiescence.
+ * @param submittedTasks Number of submitted tasks.
+ */
 /* Need to have reference equality for CAS.
  */
 private class PoolState(val handlers: List[() => Unit] = List(), val submittedTasks: Int = 0) {
@@ -22,6 +27,10 @@ private class PoolState(val handlers: List[() => Unit] = List(), val submittedTa
 
 class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => Unit = _.printStackTrace()) {
 
+  /*
+   * All tasks submitted to or created by this HandlerPool are eventually passed to `pool`
+   * that actually executes the tasks.
+   */
   private val pool: ForkJoinPool = new ForkJoinPool(parallelism)
 
   private val poolState = new AtomicReference[PoolState](new PoolState)
@@ -57,6 +66,13 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     CellCompleter.completed(result)(updater, this).cell
   }
 
+  /**
+   * Register a quiescence handler.
+   *
+   * The handler is only called once, even if the pool reaches quiescence a repeatedly.
+   *
+   * @param handler A handler that is called, when quiescence is reached.
+   */
   @tailrec
   final def onQuiescent(handler: () => Unit): Unit = {
     val state = poolState.get()
@@ -79,6 +95,7 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
     var success = false
     while (!success) {
       val registered = cellsNotDone.get()
+      // The queue of stored sequential callbacks is initially empty
       val newRegistered = registered + (cell -> Queue())
       success = cellsNotDone.compareAndSet(registered, newRegistered)
     }
@@ -115,14 +132,14 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   }
 
   def whileQuiescentResolveCell[K <: Key[V], V]: Unit = {
-    while (!cellsNotDone.get().isEmpty) {
+    while (cellsNotDone.get().nonEmpty) {
       val fut = this.quiescentResolveCell
       Await.ready(fut, 15.minutes)
     }
   }
 
   def whileQuiescentResolveDefault[K <: Key[V], V]: Unit = {
-    while (!cellsNotDone.get().isEmpty) {
+    while (cellsNotDone.get().nonEmpty) {
       val fut = this.quiescentResolveDefaults
       Await.ready(fut, 15.minutes)
     }
@@ -138,13 +155,17 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   def quiescentResolveCycles[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
-      // Find one closed strongly connected component (cell)
-      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
-      if (registered.nonEmpty) {
-        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
+      // Find all active cells. (Cells that have not been triggered should not be resolved)
+      val activeCells = this.cellsNotDone.get().keys
+        .filter(_.tasksActive())
+        .asInstanceOf[Iterable[Cell[K, V]]].toSeq
+
+      if (activeCells.nonEmpty) {
+        // Find closed strongly connected components (cells) and resolve them according to their key.
+        val cSCCs = closedSCCs(activeCells, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
 
-        // Wait again for quiescent state. It's possible that other tasks where scheduled while
+        // Wait again for quiescent state. It's possible that other tasks were scheduled while
         // resolving the cells.
         if (cSCCs.nonEmpty) {
           p.completeWith(quiescentResolveCycles)
@@ -171,14 +192,14 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   def quiescentResolveDefaults[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
-      // Finds the rest of the unresolved cells (that have been triggered)
+      // Find all active cells. (Cells that have not been triggered should not be resolved)
       val rest = this.cellsNotDone.get().keys
         .filter(_.tasksActive())
         .asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (rest.nonEmpty) {
         resolveDefault(rest)
 
-        // Wait again for quiescent state. It's possible that other tasks where scheduled while
+        // Wait again for quiescent state. It's possible that other tasks were scheduled while
         // resolving the cells.
         p.completeWith(quiescentResolveDefaults)
       } else {
@@ -202,7 +223,11 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   def quiescentResolveCell[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
-      val activeCells = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      // Find all active cells. (Cells that have not been triggered should not be resolved)
+      val activeCells = this.cellsNotDone.get().keys
+        .filter(_.tasksActive())
+        .asInstanceOf[Iterable[Cell[K, V]]].toSeq
+
       var resolvedCycles = false
 
       val independent = activeCells.filter(_.isIndependent())
@@ -212,7 +237,11 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
       } else {
         // Otherwise, find and resolve closed strongly connected components and resolve them.
 
-        // Find closed strongly connected component (cell)
+        // We use `else` here to not start cycle resolution concurrently to `independent` resolution,
+        // as a cycle might be able to make progress after an independent cell has been resolved.
+        // Cycles are eventually resolved, when quiescence is reached again.
+
+        // Find closed strongly connected components (cells)
         if (activeCells.nonEmpty) {
           val cSCCs = closedSCCs(activeCells, (cell: Cell[K, V]) => cell.totalCellDependencies)
           cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
@@ -275,19 +304,25 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
    * Change the PoolState accordingly.
    */
   private def decSubmittedTasks(i: Int = 1): Unit = {
+    // `success` stores, if a compareAndSet has been successful to ensure atomicity of this operation.
     var success = false
     var handlersToRun: Option[List[() => Unit]] = None
+
     while (!success) {
       val state = poolState.get()
       if (state.submittedTasks > i) {
+        // There will be tasks left after this decrement. We only set the number of submitted tasks.
         handlersToRun = None
         val newState = new PoolState(state.handlers, state.submittedTasks - i)
         success = poolState.compareAndSet(state, newState)
-      } else if (state.submittedTasks == 1) {
+      } else if (state.submittedTasks == i) {
+        // There will be no tasks left after this decrement.
+        // We need to call quiescence handlers after setting the number of submitted tasks.
         handlersToRun = Some(state.handlers)
         val newState = new PoolState()
         success = poolState.compareAndSet(state, newState)
       } else {
+        // We should never substract more tasks than we added.
         throw new Exception("BOOM")
       }
     }
