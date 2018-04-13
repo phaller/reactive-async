@@ -106,6 +106,7 @@ trait Cell[K <: Key[V], V] {
   private[rasync] def addCompleteCallback(callback: CompleteCallbackRunnable[K, V], cell: Cell[K, V]): Unit
   private[rasync] def addNextCallback(callback: NextCallbackRunnable[K, V], cell: Cell[K, V]): Unit
 
+  private[rasync] def resolveWithValue(value: V, removeCallbacks: Iterable[Cell[K, V]]): Unit
   private[rasync] def resolveWithValue(value: V): Unit
   def cellDependencies: Seq[Cell[K, V]]
   def totalCellDependencies: Seq[Cell[K, V]]
@@ -113,9 +114,6 @@ trait Cell[K <: Key[V], V] {
 
   def removeCompleteCallbacks(cell: Cell[K, V]): Unit
   def removeNextCallbacks(cell: Cell[K, V]): Unit
-
-  private[rasync] def removeAllCallbacks(cell: Cell[K, V]): Unit
-  private[rasync] def removeAllCallbacks(cells: Iterable[Cell[K, V]]): Unit
 
   def isADependee(): Boolean
 }
@@ -329,6 +327,12 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     }
   }
 
+  override private[rasync] def resolveWithValue(value: V, dontCall: Iterable[Cell[K, V]]): Unit = {
+    val res = tryComplete(Success(value), Some(dontCall))
+    if (!res)
+      throw new IllegalStateException("Cell already completed.")
+  }
+
   override private[rasync] def resolveWithValue(value: V): Unit = {
     this.putFinal(value)
   }
@@ -491,10 +495,9 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     }
   }
 
-  override def tryComplete(value: Try[V]): Boolean = {
+  override def tryComplete(value: Try[V], removeCallbacks: Option[Iterable[Cell[K, V]]] = None): Boolean = {
     val resolved: Try[V] = resolveTry(value)
 
-    // the only call to `tryCompleteAndGetState`
     val res = tryCompleteAndGetState(resolved) match {
       case finalRes: Try[_] => // was already complete
         val finalResult = finalRes.asInstanceOf[Try[V]].get
@@ -503,9 +506,14 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
         res
 
       case pre: State[K, V] =>
-        val nextCallbacks = pre.nextCallbacks
-        val completeCallbacks = pre.completeCallbacks
+        // calculate the list of callbacks to be called, i.e.
+        // all callbacks minus the callbacks that should be skipped by `removeCallback` parameter.
+        val (nextCallbacks, completeCallbacks) =
+          if (removeCallbacks.nonEmpty)
+            (pre.nextCallbacks -- removeCallbacks.get, pre.completeCallbacks -- removeCallbacks.get)
+          else (pre.nextCallbacks, pre.completeCallbacks)
 
+        // call all valid callbacks
         if (nextCallbacks.nonEmpty)
           nextCallbacks.values.foreach { callbacks =>
             callbacks.foreach(callback => callback.execute())
@@ -515,6 +523,8 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
             callbacks.foreach(callback => callback.execute())
           }
 
+        // `this` cell is completed, so it does not need to be informed about
+        // changes in other cells.
         val depsCells = pre.completeDeps
         val nextDepsCells = pre.nextDeps
 
@@ -589,36 +599,6 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
         val newState = new State(current.res, current.tasksActive, current.completeDeps, current.completeCallbacks, current.nextDeps, newNextCallbacks)
         if (!state.compareAndSet(current, newState))
           removeNextCallbacks(cell)
-      case _ => /* do nothing */
-    }
-  }
-
-  @tailrec
-  override private[rasync] final def removeAllCallbacks(cell: Cell[K, V]): Unit = {
-    state.get() match {
-      case pre: State[_, _] =>
-        val current = pre.asInstanceOf[State[K, V]]
-        val newNextCallbacks = current.nextCallbacks - cell
-        val newCompleteCallbacks = current.completeCallbacks - cell
-
-        val newState = new State(current.res, current.tasksActive, current.completeDeps, newCompleteCallbacks, current.nextDeps, newNextCallbacks)
-        if (!state.compareAndSet(current, newState))
-          removeAllCallbacks(cell)
-      case _ => /* do nothing */
-    }
-  }
-
-  @tailrec
-  override private[rasync] final def removeAllCallbacks(cells: Iterable[Cell[K, V]]): Unit = {
-    state.get() match {
-      case pre: State[_, _] =>
-        val current = pre.asInstanceOf[State[K, V]]
-        val newNextCallbacks = current.nextCallbacks -- cells
-        val newCompleteCallbacks = current.completeCallbacks -- cells
-
-        val newState = new State(current.res, current.tasksActive, current.completeDeps, newCompleteCallbacks, current.nextDeps, newNextCallbacks)
-        if (!state.compareAndSet(current, newState))
-          removeAllCallbacks(cells)
       case _ => /* do nothing */
     }
   }
