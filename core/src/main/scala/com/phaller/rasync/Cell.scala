@@ -532,6 +532,24 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   }
 
   @tailrec
+  override private[rasync] final def removeAllDeps(cell: Cell[K, V]): Unit = {
+    state.get() match {
+      case pre: State[_, _] =>
+        val current = pre.asInstanceOf[State[K, V]]
+        val newDeps = current.completeDeps - cell
+        val newNextDeps = current.nextDeps - cell
+
+        val newState = new State(current.res, current.tasksActive, newDeps, current.completeCallbacks, newNextDeps, current.nextCallbacks)
+        if (!state.compareAndSet(current, newState))
+          removeAllDeps(cell)
+        else if (newDeps.isEmpty)
+          nodepslatch.countDown()
+
+      case _ => /* do nothing */
+    }
+  }
+
+  @tailrec
   override private[rasync] final def removeDep(cell: Cell[K, V]): Unit = {
     state.get() match {
       case pre: State[_, _] =>
