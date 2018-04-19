@@ -2,6 +2,7 @@ import Dependencies._ // see project/Dependencies.scala
 import Util._         // see project/Util.scala
 
 val buildVersion = "0.2.0-SNAPSHOT"
+organization in ThisBuild := "com.phaller"
 
 def commonSettings = Seq(
   version in ThisBuild := buildVersion,
