@@ -76,11 +76,11 @@ class PsSuite extends FunSuite {
   }
 
   class ReactivePropertyStoreKey extends Key[Int] {
-    override def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+    override def resolve[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
       cells.map((_, 42))
     }
 
-    override def fallback[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+    override def fallback[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
       cells.map(cell ⇒ (cell, cell.getResult()))
     }
 
