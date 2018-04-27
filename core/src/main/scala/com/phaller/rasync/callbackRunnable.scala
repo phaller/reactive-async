@@ -1,5 +1,7 @@
 package com.phaller.rasync
 
+import java.util.concurrent.atomic.AtomicReference
+
 import lattice.Key
 
 import scala.concurrent.OnCompleteRunnable
@@ -25,6 +27,22 @@ private[rasync] trait CallbackRunnable[K <: Key[V], V] extends Runnable with OnC
 
   /** Essentially, call the callback. */
   override def run(): Unit
+
+  private val lastPropagatedValue: AtomicReference[Option[V]] = new AtomicReference[Option[V]](None)
+
+  /** Returns TRUE, if `otherCell`'s value has changed since the last invocation. */
+  private[rasync] def compareAndSetPropagatedValue(): Boolean = {
+    // Use CAS to store (anapproximation of) the value that will be propagated.
+    // (otherCell.getResult() might change in the meantime, but then this method
+    // returns TRUE anyway, so the callback is going to be called.
+    var oldV: Option[V] = null // we could use bottom here, if otherCell.updater was accessible.
+    do {
+      oldV = lastPropagatedValue.get()
+    } while (!lastPropagatedValue.compareAndSet(oldV, Some(otherCell.getResult())))
+
+    // Is the value that would be propagated an improvement?
+    !oldV.contains(otherCell.getResult())
+  }
 }
 
 /**
@@ -34,8 +52,9 @@ private[rasync] trait CallbackRunnable[K <: Key[V], V] extends Runnable with OnC
 private[rasync] trait ConcurrentCallbackRunnable[K <: Key[V], V] extends CallbackRunnable[K, V] {
   /** Add this CallbackRunnable to its handler pool such that it is run concurrently. */
   def execute(): Unit =
-    try pool.execute(this)
-    catch { case NonFatal(t) => pool reportFailure t }
+    if (compareAndSetPropagatedValue())
+      try pool.execute(this)
+      catch { case NonFatal(t) => pool reportFailure t }
 }
 
 /**

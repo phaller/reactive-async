@@ -380,32 +380,40 @@ class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => 
   }
 
   private def callSequentialCallback[K <: Key[V], V](dependentCell: Cell[K, V]): Unit = {
-    pool.execute(() => {
-      val registered = cellsNotDone.get()
+    val registered = cellsNotDone.get()
 
-      // only call the callback, if the cell has not been completed
-      if (registered.contains(dependentCell)) {
-        val tasks = registered(dependentCell)
-        /*
-          Pop an element from the queue only if it is completely done!
-          That way, one can always start running sequential callbacks, if the list has been empty.
-         */
-        val task = tasks.head // The queue must not be empty! Caller has to assert this.
+    // only call the callback, if the cell has not been completed
+    if (registered.contains(dependentCell)) {
+      val tasks = registered(dependentCell)
+      /*
+        Pop an element from the queue only if it is completely done!
+        That way, one can always start running sequential callbacks, if the list has been empty.
+       */
+      val task = tasks.head // The queue must not be empty! Caller has to assert this.
 
-        try {
-          task.run()
-        } catch {
-          case NonFatal(e) =>
-            unhandledExceptionHandler(e)
-        } finally {
-          decSubmittedTasks()
+      if (task.compareAndSetPropagatedValue())
+        pool.execute(() => {
+          try {
+            task.run()
+          } catch {
+            case NonFatal(e) =>
+              unhandledExceptionHandler(e)
+          } finally {
+            decSubmittedTasks()
 
-          // The task has been run. Remove it. If the new list is not empty, callSequentialCallback(cell)
-          if (dequeueSequentialCallback(dependentCell).nonEmpty)
-            callSequentialCallback(dependentCell)
-        }
+            // The task has been run. Remove it. If the new list is not empty, callSequentialCallback(cell)
+            if (dequeueSequentialCallback(dependentCell).nonEmpty)
+              callSequentialCallback(dependentCell)
+          }
+        })
+      else {
+        decSubmittedTasks()
+
+        // The task has been run. Remove it. If the new list is not empty, callSequentialCallback(cell)
+        if (dequeueSequentialCallback(dependentCell).nonEmpty)
+          callSequentialCallback(dependentCell)
       }
-    })
+    }
   }
 
   /**
