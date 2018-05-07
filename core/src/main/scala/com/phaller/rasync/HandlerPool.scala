@@ -1,6 +1,6 @@
 package com.phaller.rasync
 
-import java.util.concurrent.{ ConcurrentLinkedQueue, ForkJoinPool }
+import java.util.concurrent.{ CountDownLatch, ForkJoinPool }
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.tailrec
@@ -9,7 +9,8 @@ import scala.concurrent.{ Await, Future, Promise }
 import scala.concurrent.duration._
 import lattice.{ DefaultKey, Key, Updater }
 import org.opalj.graphs._
-import scala.collection.JavaConverters._
+
+import scala.collection.immutable.Queue
 
 /* Need to have reference equality for CAS.
  */
@@ -18,13 +19,16 @@ private class PoolState(val handlers: List[() => Unit] = List(), val submittedTa
     submittedTasks == 0
 }
 
-class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable => Unit = _.printStackTrace()) {
+class HandlerPool(parallelism: Int = 8, unhandledExceptionHandler: Throwable => Unit = _.printStackTrace()) {
 
   private val pool: ForkJoinPool = new ForkJoinPool(parallelism)
 
   private val poolState = new AtomicReference[PoolState](new PoolState)
 
-  private val cellsNotDone = new ConcurrentLinkedQueue[Cell[_, _]]()
+  private val cellsNotDone = new AtomicReference[Map[Cell[_, _], Queue[SequentialCallbackRunnable[_, _]]]](Map()) // use `values` to store all pending sequential triggers
+
+  private var interruptLatch = new CountDownLatch(1)
+  @volatile private var isInterrupted = false
 
   /**
    * Returns a new cell in this HandlerPool.
@@ -73,44 +77,54 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
    *
    * @param cell The cell.
    */
-  def register[K <: Key[V], V](cell: Cell[K, V]): Unit =
-    cellsNotDone.add(cell)
+  def register[K <: Key[V], V](cell: Cell[K, V]): Unit = {
+    var success = false
+    while (!success) {
+      val registered = cellsNotDone.get()
+      val newRegistered = registered + (cell -> Queue())
+      success = cellsNotDone.compareAndSet(registered, newRegistered)
+    }
+  }
 
   /**
    * Deregister a cell from this HandlerPool.
    *
    * @param cell The cell.
    */
-  def deregister[K <: Key[V], V](cell: Cell[K, V]): Unit =
-    cellsNotDone.remove(cell)
-
-  /**
-   * Remove all completed cells from cellsNotDone. Cells are not removed on deregister, but when the queue is
-   * queried.
-   */
-  private def deregisterCompletedCells(): Unit = {
-    cellsNotDone.removeIf(_.isComplete)
+  def deregister[K <: Key[V], V](cell: Cell[K, V]): Unit = {
+    val registered = cellsNotDone.get()
+    if (registered.contains(cell)) {
+      val newRegistered = registered - cell
+      if (cellsNotDone.compareAndSet(registered, newRegistered)) {
+        if (registered(cell).lengthCompare(1) > 0)
+          // Note that the first element of the queue is already running,
+          // so decSubmittedTasks(1) will be called, when this element
+          // has been completed. The following elements won't be executed
+          // any more, so we can call decSubmittedTasks for them.
+          decSubmittedTasks(registered(cell).size - 1)
+      } else deregister(cell) // try deregister again
+    }
   }
 
   /** Returns all non-completed cells, when quiescence is reached. */
-  def quiescentIncompleteCells: Future[Iterable[Cell[_, _]]] = {
-    val p = Promise[Iterable[Cell[_, _]]]
+  def quiescentIncompleteCells: Future[List[Cell[_, _]]] = {
+    val p = Promise[List[Cell[_, _]]]
     this.onQuiescent { () =>
-      deregisterCompletedCells()
-      p.success(cellsNotDone.asScala)
+      val registered = this.cellsNotDone.get()
+      p.success(registered.keys.toList)
     }
     p.future
   }
 
   def whileQuiescentResolveCell[K <: Key[V], V]: Unit = {
-    while (!cellsNotDone.isEmpty) {
+    while (!cellsNotDone.get().isEmpty) {
       val fut = this.quiescentResolveCell
       Await.ready(fut, 15.minutes)
     }
   }
 
   def whileQuiescentResolveDefault[K <: Key[V], V]: Unit = {
-    while (!cellsNotDone.isEmpty) {
+    while (!cellsNotDone.get().isEmpty) {
       val fut = this.quiescentResolveDefaults
       Await.ready(fut, 15.minutes)
     }
@@ -127,8 +141,7 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Find one closed strongly connected component (cell)
-      deregisterCompletedCells()
-      val registered: Seq[Cell[K, V]] = this.cellsNotDone.asScala.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (registered.nonEmpty) {
         val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
@@ -161,8 +174,7 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Finds the rest of the unresolved cells (that have been triggered)
-      deregisterCompletedCells()
-      val rest = this.cellsNotDone.asScala
+      val rest = this.cellsNotDone.get().keys
         .filter(_.tasksActive())
         .asInstanceOf[Iterable[Cell[K, V]]].toSeq
       if (rest.nonEmpty) {
@@ -192,8 +204,7 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
   def quiescentResolveCell[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
-      deregisterCompletedCells()
-      val activeCells = this.cellsNotDone.asScala.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      val activeCells = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
       var resolvedCycles = false
 
       val independent = activeCells.filter(_.isIndependent())
@@ -306,12 +317,97 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
     pool.execute(new Runnable {
       def run(): Unit = {
         try {
+          if (isInterrupted) {
+            interruptLatch.await()
+          }
           task.run()
         } catch {
           case NonFatal(e) =>
             unhandledExceptionHandler(e)
         } finally {
           decSubmittedTasks()
+        }
+      }
+    })
+  }
+
+  /**
+   * Adds sequential callback.
+   * The dependent cell is read from the NextDepRunnable object.
+   *
+   * @param callback The callback that should be run sequentially to all other sequential callbacks for the dependent cell.
+   */
+  private[rasync] def scheduleSequentialCallback[K <: Key[V], V](callback: SequentialCallbackRunnable[K, V]): Unit = {
+    val dependentCell = callback.dependentCell
+    var success = false
+    var startCallback = false
+    while (!success) {
+      val registered = cellsNotDone.get()
+      if (registered.contains(dependentCell)) {
+        val oldCallbackQueue = registered(dependentCell)
+        val newCallbackQueue = oldCallbackQueue.enqueue(callback)
+        val newRegistered = registered + (dependentCell -> newCallbackQueue)
+        success = cellsNotDone.compareAndSet(registered, newRegistered)
+        if (success) incSubmittedTasks() // note that decSubmitted Tasks is called in callSequentialCallback
+        startCallback = oldCallbackQueue.isEmpty
+      } else {
+        success = true
+      }
+    }
+
+    // If the list has been empty, then start execution the scheduled tasks. (Otherwise, some task is already running
+    // and the newly added task will eventually run.
+    if (startCallback)
+      callSequentialCallback(dependentCell)
+  }
+
+  /**
+   * Returns the the queue of yet to be run callbacks.
+   * Called by callSequentialCallback after one callback has been run.
+   * If the returned list is not empty, a next callback must be run.
+   */
+  @tailrec
+  private def dequeueSequentialCallback[K <: Key[V], V](cell: Cell[K, V]): Queue[SequentialCallbackRunnable[_, _]] = {
+    val registered = cellsNotDone.get()
+    if (registered.contains(cell)) {
+      // remove the task that has just been finished
+      val oldCallbackQueue = registered(cell)
+      val (_, newCallbackQueue) = oldCallbackQueue.dequeue
+      val newRegistered = registered + (cell -> newCallbackQueue)
+
+      // store the new list of tasks
+      if (cellsNotDone.compareAndSet(registered, newRegistered)) newCallbackQueue
+      else dequeueSequentialCallback(cell) // try again
+    } else {
+      // cell has already been completed by now. No callbacks need to be run any more
+      Queue.empty
+    }
+  }
+
+  private def callSequentialCallback[K <: Key[V], V](dependentCell: Cell[K, V]): Unit = {
+    pool.execute(() => {
+      val registered = cellsNotDone.get()
+
+      // only call the callback, if the cell has not been completed
+      if (registered.contains(dependentCell)) {
+        val tasks = registered(dependentCell)
+        /*
+          Pop an element from the queue only if it is completely done!
+          That way, one can always start running sequential callbacks, if the list has been empty.
+         */
+        val task = tasks.head // The queue must not be empty! Caller has to assert this.
+
+        try {
+          task.run()
+        } catch {
+          case NonFatal(e) =>
+            unhandledExceptionHandler(e)
+        } finally {
+          decSubmittedTasks()
+
+          // The task has been run. Remove it. If the new list is not empty, callSequentialCallback(cell)
+          if (dequeueSequentialCallback(dependentCell).nonEmpty)
+            callSequentialCallback(dependentCell)
         }
       }
     })
@@ -353,4 +449,20 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
 
   def reportFailure(t: Throwable): Unit =
     t.printStackTrace()
+
+  /**
+   * Interrupt the computation of cells. It can be resumed using the `resume` method.
+   */
+  def interrupt(): Unit = {
+    isInterrupted = true
+  }
+
+  /**
+   * Resume the computation if the execution was interrupted. Don't do anything if the execution was not interrupted.
+   */
+  def resume(): Unit = {
+    isInterrupted = false
+    interruptLatch.countDown()
+    interruptLatch = new CountDownLatch(1)
+  }
 }

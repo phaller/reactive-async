@@ -103,4 +103,29 @@ class PsSuite extends FunSuite {
     Await.ready(fut, 2.seconds)
   }
 
+  test("HandlerPool must be able to interrupt") {
+    implicit val pool = new HandlerPool(parallelism = 8)
+    val completer1 = CellCompleter[ReactivePropertyStoreKey, Int](new ReactivePropertyStoreKey())
+    val completer2 = CellCompleter[ReactivePropertyStoreKey, Int](new ReactivePropertyStoreKey())
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+
+    cell2.whenNextSequential(cell1, v => {
+      NextOutcome(v)
+    })
+
+    pool.interrupt()
+    Thread.sleep(200)
+    completer1.putNext(10)
+
+    assert(cell2.getResult() == 0)
+
+    pool.resume()
+
+    val fut = pool.quiescentResolveDefaults
+    Await.ready(fut, 2.seconds)
+
+    assert(cell2.getResult() == 10)
+  }
+
 }
