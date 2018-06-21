@@ -11,12 +11,28 @@ trait CellCompleter[K <: Key[V], V] {
   /**
    * The cell associated with this completer.
    */
-  def cell: Cell[K, V]
+  val cell: Cell[K, V]
 
-  private[rasync] def init: (Cell[K, V]) => Outcome[V]
+  /** A method to call */
+  private[rasync] val init: (Cell[K, V]) => Outcome[V]
 
+  /**
+   * Update `this` cells value with `x` and freeze it.
+   * The new value of `this` cell is determined by its updater.
+   */
   def putFinal(x: V): Unit
+
+  /**
+   * Update `this` cells value with `x`.
+   * The new value of `this` cell is determined by its updater.
+   */
   def putNext(x: V): Unit
+
+  /**
+   * Update `this` cells value with `x`. If `isFinal` is `true`, the
+   * cell will be frozen.
+   * The new value of `this` cell is determined by its updater.
+   */
   def put(x: V, isFinal: Boolean): Unit
 
   private[rasync] def tryNewState(value: V): Boolean
@@ -25,6 +41,10 @@ trait CellCompleter[K <: Key[V], V] {
   private[rasync] def removeCompleteDepentCell(cell: Cell[K, V]): Unit
   private[rasync] def removeNextDepentCell(cell: Cell[K, V]): Unit
 
+  /**
+   * Run code for `this` cell sequentially.
+   * @return The result of `f`.
+   */
   def sequential[T](f: => T): T
 }
 

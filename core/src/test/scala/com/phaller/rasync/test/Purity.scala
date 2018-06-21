@@ -31,14 +31,4 @@ object Purity {
 
     override val bottom: Purity = UnknownPurity
   }
-
-  //  implicit object PurityUpdater extends MonotonicUpdater[Purity] {
-  //    override def lteq(v1: Purity, v2: Purity): Boolean = {
-  //      if (v1 == UnknownPurity) true
-  //      else if (v1 == v2) true
-  //      else false
-  //    }
-  //
-  //    override val bottom: Purity = UnknownPurity
-  //  }
 }

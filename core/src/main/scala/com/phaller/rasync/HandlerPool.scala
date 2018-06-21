@@ -1,6 +1,6 @@
 package com.phaller.rasync
 
-import java.util.concurrent.{ ConcurrentLinkedQueue, CountDownLatch, ForkJoinPool }
+import java.util.concurrent.{ ConcurrentLinkedQueue, CountDownLatch, ForkJoinPool, RejectedExecutionException }
 import java.util.concurrent.atomic.{ AtomicLong, AtomicReference }
 
 import scala.annotation.tailrec
@@ -20,7 +20,9 @@ private class PoolState(val handlers: List[() => Unit] = List(), val submittedTa
     submittedTasks == 0
 }
 
-class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable => Unit = _.printStackTrace()) {
+class HandlerPool(
+  val parallelism: Int = Runtime.getRuntime.availableProcessors(),
+  unhandledExceptionHandler: Throwable => Unit = _.printStackTrace()) {
 
   private val pool: ForkJoinPool = new ForkJoinPool(parallelism)
 
@@ -62,6 +64,12 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
     CellCompleter.completed(result)(updater, this).cell
   }
 
+  /**
+   * Add an event handler that is called, when the pool reaches quiescence.
+   *
+   * The `handler` is called once after the pool reaches quiescence the first time
+   * after it has been added.
+   */
   @tailrec
   final def onQuiescent(handler: () => Unit): Unit = {
     val state = poolState.get()
@@ -133,9 +141,13 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
   def quiescentResolveCycles[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
-      // Find one closed strongly connected component (cell)
       deregisterCompletedCells()
-      val registered = this.cellsNotDone.asScala.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]]
+
+      // Find closed strongly connected components (cells)
+      val registered = this.cellsNotDone.asScala
+        .filter(_.tasksActive())
+        .asInstanceOf[Iterable[Cell[K, V]]]
+
       if (registered.nonEmpty) {
         val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
         cSCCs.foreach(resolveCycle)
@@ -167,11 +179,13 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
   def quiescentResolveDefaults[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
-      // Finds the rest of the unresolved cells (that have been triggered)
       deregisterCompletedCells()
+
+      // Finds the rest of the unresolved cells (that have been triggered)
       val rest = this.cellsNotDone.asScala
         .filter(_.tasksActive())
         .asInstanceOf[Iterable[Cell[K, V]]]
+
       if (rest.nonEmpty) {
         resolveDefault(rest)
 
@@ -200,7 +214,11 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       deregisterCompletedCells()
-      val activeCells = this.cellsNotDone.asScala.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]]
+
+      val activeCells = this.cellsNotDone.asScala
+        .filter(_.tasksActive())
+        .asInstanceOf[Iterable[Cell[K, V]]]
+
       var resolvedCycles = false
 
       val independent = activeCells.filter(_.isIndependent())
@@ -276,20 +294,25 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
   private def decSubmittedTasks(i: Int = 1): Unit = {
     var success = false
     var handlersToRun: Option[List[() => Unit]] = None
-    while (!success) {
+
+    while (!success) { // reapeat until compareAndSet succeeded
       val state = poolState.get()
       if (state.submittedTasks > i) {
+        // we can simply decrease the counter
         handlersToRun = None
         val newState = new PoolState(state.handlers, state.submittedTasks - i)
         success = poolState.compareAndSet(state, newState)
-      } else if (state.submittedTasks == 1) {
+      } else if (state.submittedTasks == i) {
+        // counter will drop to zero, so we need to call quiescent handlers later
         handlersToRun = Some(state.handlers)
+        // a fresh state without any quiescent handler attached – those get called at most once!
         val newState = new PoolState()
         success = poolState.compareAndSet(state, newState)
       } else {
         throw new Exception("BOOM")
       }
     }
+    // run all handler that have been attached at the time quiescence was reached
     if (handlersToRun.nonEmpty) {
       handlersToRun.get.foreach { handler =>
         execute(new Runnable {
@@ -330,7 +353,9 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
     } catch {
       // If pool.execute() failed, we need to count down now.
       // (Normally, decSubmittedTasks is called after task.run())
-      case _: Exception => decSubmittedTasks()
+      case e: Exception =>
+        decSubmittedTasks()
+        throw e
     }
   }
 
@@ -344,9 +369,10 @@ class HandlerPool(val parallelism: Int = 8, unhandledExceptionHandler: Throwable
    */
   private[rasync] def triggerExecution[K <: Key[V], V](cell: Cell[K, V]): Unit = {
     if (cell.setTasksActive())
+      // if the cell's state has successfully been changed, schedule further computations
       execute(() => {
         val completer = cell.completer
-        val outcome = completer.init(cell)
+        val outcome = completer.init(cell) // call the init method
         outcome match {
           case Outcome(v, isFinal) => completer.put(v, isFinal)
           case NoOutcome => /* don't do anything */
