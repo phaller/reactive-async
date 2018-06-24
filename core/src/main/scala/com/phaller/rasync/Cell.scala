@@ -415,7 +415,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
         true
       case pre: IntermediateState[_, _] => // not completed
         val current = pre.asInstanceOf[IntermediateState[K, V]]
-        current.combinedCallbacks.isEmpty && current.combinedCallbacks.isEmpty && current.nextCallbacks.isEmpty
+        current.combinedCallbacks.isEmpty && current.completeCallbacks.isEmpty && current.nextCallbacks.isEmpty
     }
   }
 
