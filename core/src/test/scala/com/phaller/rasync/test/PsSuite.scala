@@ -1,6 +1,7 @@
 package com.phaller.rasync
 package test
 
+import com.phaller.rasync.lattice.{ Key, Updater }
 import lattice._
 import org.scalatest.FunSuite
 

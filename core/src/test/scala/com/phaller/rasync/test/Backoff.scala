@@ -1,4 +1,4 @@
-package com.phaller.rasync
+package com.phaller.rasync.test
 
 // Exponential backoff
 // Taken, and adapted from ChemistrySet, see: https://github.com/aturon/ChemistrySet

@@ -1,5 +1,7 @@
-package com.phaller.rasync
-package lattice
+package com.phaller.rasync.test.lattice
+
+import com.phaller.rasync.Cell
+import com.phaller.rasync.lattice.{ Key, PartialOrderingWithBottom, Updater }
 
 import scala.language.implicitConversions
 

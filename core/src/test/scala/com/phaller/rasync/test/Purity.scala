@@ -1,7 +1,7 @@
 package com.phaller.rasync
 package test
 
-import lattice._
+import com.phaller.rasync.lattice._
 
 object PurityKey extends Key[Purity] {
 

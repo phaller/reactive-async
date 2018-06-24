@@ -3,7 +3,7 @@ package test
 
 import org.scalatest.FunSuite
 
-import lattice.{ Lattice, NotMonotonicException, Key }
+import com.phaller.rasync.lattice.Lattice
 
 object Util {
 

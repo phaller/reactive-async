@@ -3,7 +3,8 @@ package test
 
 import java.util.concurrent.CountDownLatch
 
-import lattice.{ DefaultKey, Lattice, StringIntKey, StringIntUpdater, Updater }
+import com.phaller.rasync.lattice.{ DefaultKey, Updater }
+import com.phaller.rasync.test.lattice.{ StringIntKey, StringIntUpdater }
 import org.scalatest.FunSuite
 
 import scala.concurrent.Await

@@ -8,11 +8,6 @@ import org.opalj.br.analyses.Project
 
 import java.io.File
 
-import scala.concurrent.{ Await, Promise }
-import scala.concurrent.duration._
-
-import lattice.NotMonotonicException
-
 class OPALSuite extends FunSuite {
 
   test("purity analysis with Demo.java: pure methods") {
