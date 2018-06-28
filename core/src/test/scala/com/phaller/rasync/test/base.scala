@@ -778,14 +778,20 @@ class BaseSuite extends FunSuite {
       val cell1 = completer1.cell
       cell1.trigger()
 
-      pool.execute(() => cell1.whenComplete(completer2.cell, x => {
-        NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenComplete(completer2.cell, x => {
+          NoOutcome
+        })
+        ()
+      })
 
-      pool.execute(() => cell1.whenNext(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenNext(completer2.cell, x => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        ()
+      })
       pool.execute(() => completer2.putFinal(Mutable))
 
       val fut = pool.quiescentResolveCell
@@ -808,14 +814,20 @@ class BaseSuite extends FunSuite {
 
       val cell1 = completer1.cell
 
-      pool.execute(() => cell1.whenCompleteSequential(completer2.cell, x => {
-        NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenCompleteSequential(completer2.cell, x => {
+          NoOutcome
+        })
+        ()
+      })
 
-      pool.execute(() => cell1.whenNextSequential(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenNextSequential(completer2.cell, x => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        ()
+      })
       pool.execute(() => completer2.putFinal(Mutable))
 
       val fut = pool.quiescentResolveCycles
@@ -864,10 +876,13 @@ class BaseSuite extends FunSuite {
 
       val cell1 = completer1.cell
 
-      pool.execute(() => cell1.whenNext(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() => {
+        cell1.whenNext(completer2.cell, x => {
+          if (x == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+        ()
+      })
       pool.execute(() => completer2.putNext(Mutable))
 
       val fut = pool.quiescentResolveDefaults
@@ -1225,7 +1240,7 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.isComplete)
 
-    pool.shutdown()
+    pool.onQuiescenceShutdown()
   }
 
   test("put: isFinal == true") {
@@ -1626,10 +1641,51 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
+  //  test("whenNext: 2-cSCC with constant resolution") {
+  //    val latch = new CountDownLatch(4)
+  //
+  //    implicit val pool = new HandlerPool(1)
+  //
+  //    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
+  //    val cell1 = completer1.cell
+  //    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
+  //    val cell2 = completer2.cell
+  //
+  //
+  //
+  //    // create a cSCC, assert that none of the callbacks get called again.
+  //    cell1.whenNext(cell2, v => if (v != 10) { assert(false); NextOutcome(20) } else NoOutcome)
+  //    cell2.whenNext(cell1, v => if (v != 10) { assert(false); NextOutcome(20) } else NoOutcome)
+  //
+  //    // set unwanted values:
+  //    completer1.putNext(10)
+  //    completer2.putNext(10)
+  //
+  //    for (c <- List(cell1, cell2))
+  //      c.onComplete {
+  //        case Success(v) =>
+  //          assert(v === 0)
+  //          assert(c.numNextDependencies === 0)
+  //          latch.countDown()
+  //        case Failure(e) =>
+  //          assert(false)
+  //          latch.countDown()
+  //      }
+  //
+  //    pool.triggerExecution(cell1)
+  //
+  //    // resolve cells
+  //    val fut = pool.quiescentResolveCell
+  //    Await.result(fut, 2.seconds)
+  //    latch.await()
+  //
+  //    pool.shutdown()
+  //  }
+
   test("whenNext: cSCC with constant resolution") {
     val latch = new CountDownLatch(4)
 
-    implicit val pool = new HandlerPool
+    implicit val pool = new HandlerPool(1)
 
     val completer1 = CellCompleter[StringIntKey, Int]("somekey1")
     val cell1 = completer1.cell
@@ -1761,7 +1817,6 @@ class BaseSuite extends FunSuite {
       }
 
     // resolve cells
-    pool.whileQuiescentResolveDefault
     val fut = pool.quiescentResolveDefaults
     Await.result(fut, 2.second)
     latch.await()
