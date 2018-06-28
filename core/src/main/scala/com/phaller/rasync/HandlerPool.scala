@@ -141,10 +141,10 @@ class HandlerPool(
     val p = Promise[Boolean]
     this.onQuiescent { () =>
       // Find one closed strongly connected component (cell)
-      val registered: Seq[Cell[K, V]] = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      val registered = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]]
       if (registered.nonEmpty) {
         val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
-        cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
+        cSCCs.foreach(resolveCycle)
 
         // Wait again for quiescent state. It's possible that other tasks where scheduled while
         // resolving the cells.
@@ -176,7 +176,7 @@ class HandlerPool(
       // Finds the rest of the unresolved cells (that have been triggered)
       val rest = this.cellsNotDone.get().keys
         .filter(_.tasksActive())
-        .asInstanceOf[Iterable[Cell[K, V]]].toSeq
+        .asInstanceOf[Iterable[Cell[K, V]]]
       if (rest.nonEmpty) {
         resolveDefault(rest)
 
@@ -204,20 +204,20 @@ class HandlerPool(
   def quiescentResolveCell[K <: Key[V], V]: Future[Boolean] = {
     val p = Promise[Boolean]
     this.onQuiescent { () =>
-      val activeCells = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]].toSeq
+      val activeCells = this.cellsNotDone.get().keys.filter(_.tasksActive()).asInstanceOf[Iterable[Cell[K, V]]]
       var resolvedCycles = false
 
       val independent = activeCells.filter(_.isIndependent())
       if (independent.nonEmpty) {
         // Resolve independent cells with fallback values
-        resolveDefault(independent)
+        resolveIndepdent(independent)
       } else {
         // Otherwise, find and resolve closed strongly connected components and resolve them.
 
         // Find closed strongly connected component (cell)
         if (activeCells.nonEmpty) {
           val cSCCs = closedSCCs(activeCells, (cell: Cell[K, V]) => cell.totalCellDependencies)
-          cSCCs.foreach(cSCC => resolveCycle(cSCC.asInstanceOf[Seq[Cell[K, V]]]))
+          cSCCs.foreach(resolveCycle)
           resolvedCycles = cSCCs.nonEmpty
         }
       }
@@ -236,26 +236,49 @@ class HandlerPool(
   /**
    * Resolves a cycle of unfinished cells via the key's `resolve` method.
    */
-  private def resolveCycle[K <: Key[V], V](cells: Seq[Cell[K, V]]): Unit =
-    resolve(cells.head.key.resolve(cells))
+  private def resolveCycle[K <: Key[V], V](cells: Iterable[Cell[K, V]]): Unit = {
+    val results = cells.head.key.resolve(cells)
+    val removeCallbacks = results.map(_._1)
+    resolve(results, removeCallbacks)
+  }
+
+  /**
+    * Resolves a cell with default value with the key's `fallback` method.
+    */
+  private def resolveIndepdent[K <: Key[V], V](cells: Iterable[Cell[K, V]]): Unit = {
+    val results = cells.head.key.fallback(cells)
+    resolve(results)
+  }
+
 
   /**
    * Resolves a cell with default value with the key's `fallback` method.
    */
-  private def resolveDefault[K <: Key[V], V](cells: Seq[Cell[K, V]]): Unit =
-    resolve(cells.head.key.fallback(cells))
+  private def resolveDefault[K <: Key[V], V](cells: Iterable[Cell[K, V]]): Unit = {
+    val results = cells.head.key.fallback(cells)
+    val removeCallbacks = results.map(_._1)
+    resolve(results, removeCallbacks)
+  }
 
   /** Resolve all cells with the associated value. */
-  private def resolve[K <: Key[V], V](results: Seq[(Cell[K, V], V)]): Unit = {
+  private def resolve[K <: Key[V], V](results: Iterable[(Cell[K, V], V)], removeCallbacks: Iterable[Cell[K, V]]): Unit = {
     for ((c, v) <- results)
       execute(new Runnable {
-        override def run(): Unit = {
-          // Remove all callbacks that target other cells of this set.
-          // The result of those cells is explicitely given in `results`.
-          c.removeAllCallbacks(results.map(_._1))
-          // we can now safely put a final value
+        override def run(): Unit =
+          // Put a final value, but do not propagate that value to other
+          // cells of the same cycle to avoid infinite loops.
+          c.resolveWithValue(v, removeCallbacks)
+      })
+  }
+
+  /** Resolve all cells with the associated value. */
+  private def resolve[K <: Key[V], V](results: Iterable[(Cell[K, V], V)]): Unit = {
+    for ((c, v) <- results)
+      execute(new Runnable {
+        override def run(): Unit =
+        // Put a final value, but do not propagate that value to other
+        // cells of the same cycle to avoid infinite loops.
           c.resolveWithValue(v)
-        }
       })
   }
 

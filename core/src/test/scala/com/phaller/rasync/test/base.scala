@@ -1896,7 +1896,7 @@ class BaseSuite extends FunSuite {
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, OK))
       }
     }
@@ -1936,7 +1936,7 @@ class BaseSuite extends FunSuite {
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, OK))
       }
     }
@@ -1978,10 +1978,10 @@ class BaseSuite extends FunSuite {
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
@@ -2027,10 +2027,10 @@ class BaseSuite extends FunSuite {
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
@@ -2076,10 +2076,10 @@ class BaseSuite extends FunSuite {
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
@@ -2125,10 +2125,10 @@ class BaseSuite extends FunSuite {
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         Seq()
       }
     }
@@ -2171,10 +2171,10 @@ class BaseSuite extends FunSuite {
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         Seq()
       }
     }
@@ -2466,11 +2466,11 @@ class BaseSuite extends FunSuite {
 
   test("cell dependency on itself") {
     class ReactivePropertyStoreKey extends Key[Int] {
-      override def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+      override def resolve[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
         Seq((cells.head, 42))
       }
 
-      override def fallback[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+      override def fallback[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
         cells.map(cell ⇒ (cell, cell.getResult()))
       }
 
@@ -2659,13 +2659,11 @@ class BaseSuite extends FunSuite {
   }
 
   class RecursiveQuiescentTestKey extends Key[Int] {
-    override def resolve[K <: Key[Int]](
-      cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+    override def resolve[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
       Seq((cells.head, 42))
     }
 
-    override def fallback[K <: Key[Int]](
-      cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+    override def fallback[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
       cells.map(cell ⇒ (cell, 43))
     }
   }

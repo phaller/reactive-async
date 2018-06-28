@@ -20,7 +20,17 @@ trait CellCompleter[K <: Key[V], V] {
   def put(x: V, isFinal: Boolean): Unit
 
   private[rasync] def tryNewState(value: V): Boolean
-  def tryComplete(value: Try[V]): Boolean
+
+  /**
+   * Put a final value but do not call callbacks targeting cells in `removeCallback` list.
+   * This is list used, if cycles get resolved and no value should be propagated inside the cycle.
+   *
+   * @param value The value to put.
+   * @param removeCallbacks A list of cells that do not get called.
+   * @return true, iff the operation succeeded.
+   */
+  /* This method could be private[rasync] but is used in a benchmark. */
+  def tryComplete(value: Try[V], removeCallbacks: Option[Iterable[Cell[K, V]]] = None): Boolean
 
   private[rasync] def removeDep(cell: Cell[K, V]): Unit
   private[rasync] def removeNextDep(cell: Cell[K, V]): Unit
