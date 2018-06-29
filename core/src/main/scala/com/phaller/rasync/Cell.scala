@@ -343,6 +343,13 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     else putNext(x)
   }
 
+  override final def freeze(): Unit = state.get() match {
+    case raw: IntermediateState[_, _] =>
+      val current = raw.asInstanceOf[IntermediateState[K, V]]
+      tryComplete(Success(current.res), None) // freeze with current result (while still joining concurrently put values)
+    case _ => /* already completed (aka frozen) */
+  }
+
   def zipFinal(that: Cell[K, V]): Cell[DefaultKey[(V, V)], (V, V)] = {
     implicit val theUpdater: Updater[V] = updater
     val completer =
