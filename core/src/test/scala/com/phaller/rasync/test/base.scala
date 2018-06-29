@@ -1571,43 +1571,6 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  //  test("New ImmutabilityLattice: successful joins") {
-  //    val lattice = Immutability.ImmutabilityUpdater
-  //
-  //    val mutability1 = lattice.update(Immutable, ConditionallyImmutable)
-  //    assert(mutability1 == ConditionallyImmutable)
-  //
-  //    val mutability2 = lattice.update(ConditionallyImmutable, Mutable)
-  //    assert(mutability2 == Mutable)
-  //
-  //    val mutability3 = lattice.update(Immutable, Mutable)
-  //    assert(mutability3 == Mutable)
-  //
-  //    try {
-  //    val mutability4 = lattice.update(ConditionallyImmutable, Immutable)
-  //      fail()
-  //    } catch {
-  //      case _: NotMonotonicException[_] => assert(true)
-  //      case _: Exception => fail()
-  //    }
-  //
-  //    try {
-  //    val mutability5 = lattice.update(Mutable, ConditionallyImmutable)
-  //      fail()
-  //    } catch {
-  //      case _: NotMonotonicException[_] => assert(true)
-  //      case _: Exception => fail()
-  //    }
-  //
-  //    try {
-  //    val mutability6 = lattice.update(Mutable, Immutable)
-  //      fail()
-  //    } catch {
-  //      case _: NotMonotonicException[_] => assert(true)
-  //      case _: Exception => fail()
-  //    }
-  //  }
-
   test("if exception-throwing tasks should still run quiescent handlers") {
     implicit val intMaxLattice: Lattice[Int] = new Lattice[Int] {
       override def join(v1: Int, v2: Int): Int = Math.max(v1, v2)
