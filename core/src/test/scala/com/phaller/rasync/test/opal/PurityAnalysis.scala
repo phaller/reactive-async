@@ -4,10 +4,11 @@ package opal
 
 import java.net.URL
 
+import com.phaller.rasync.lattice.Updater
+
 import scala.collection.JavaConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
 import org.opalj.Success
 import org.opalj.br.{ ClassFile, Method, MethodWithBody, PC }
 import org.opalj.br.analyses.{ BasicReport, DefaultOneStepAnalysis, Project }
@@ -63,7 +64,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     } {
       val cell = pool.mkCell[PurityKey.type, Purity](PurityKey, _ => {
         analyze(project, methodToCell, classFile, method)
-      })
+      })(Updater.partialOrderingToUpdater)
       methodToCell = methodToCell + ((method, cell))
     }
 

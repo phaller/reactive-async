@@ -1,6 +1,7 @@
 package com.phaller.rasync
 package test
 
+import com.phaller.rasync.lattice.{ Key, Updater }
 import lattice._
 import org.scalatest.FunSuite
 
@@ -76,11 +77,11 @@ class PsSuite extends FunSuite {
   }
 
   class ReactivePropertyStoreKey extends Key[Int] {
-    override def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+    override def resolve[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
       cells.map((_, 42))
     }
 
-    override def fallback[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+    override def fallback[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
       cells.map(cell ⇒ (cell, cell.getResult()))
     }
 
@@ -101,6 +102,31 @@ class PsSuite extends FunSuite {
 
     val fut = pool.quiescentResolveDefaults
     Await.ready(fut, 2.seconds)
+  }
+
+  test("HandlerPool must be able to interrupt") {
+    implicit val pool = new HandlerPool(parallelism = 8)
+    val completer1 = CellCompleter[ReactivePropertyStoreKey, Int](new ReactivePropertyStoreKey())
+    val completer2 = CellCompleter[ReactivePropertyStoreKey, Int](new ReactivePropertyStoreKey())
+    val cell1 = completer1.cell
+    val cell2 = completer2.cell
+
+    cell2.whenNextSequential(cell1, v => {
+      NextOutcome(v)
+    })
+
+    pool.interrupt()
+    Thread.sleep(200)
+    completer1.putNext(10)
+
+    assert(cell2.getResult() == 0)
+
+    pool.resume()
+
+    val fut = pool.quiescentResolveDefaults
+    Await.ready(fut, 2.seconds)
+
+    assert(cell2.getResult() == 10)
   }
 
 }

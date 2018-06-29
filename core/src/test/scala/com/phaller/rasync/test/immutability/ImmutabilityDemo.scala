@@ -1,4 +1,4 @@
-package com.phaller.rasync.immutability;
+package com.phaller.rasync.test.immutability;
 
 // The following mutabilities are defined w.r.t. the case that the class hierarchy is closed.
 

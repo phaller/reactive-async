@@ -7,7 +7,8 @@ import org.scalatest.FunSuite
 
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
-import lattice.{ Lattice, StringIntKey, StringIntUpdater, Updater }
+import com.phaller.rasync.lattice.Updater
+import com.phaller.rasync.test.lattice.{ StringIntKey, StringIntUpdater }
 
 class PoolSuite extends FunSuite {
   test("onQuiescent") {

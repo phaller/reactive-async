@@ -2,15 +2,14 @@ package com.phaller.rasync
 package test
 
 import org.scalatest.FunSuite
-
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.util.{ Failure, Success }
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
-
-import lattice.{ DefaultKey, Key, Lattice, MonotonicUpdater, NaturalNumberLattice, NotMonotonicException, StringIntKey, StringIntUpdater, Updater }
+import com.phaller.rasync.lattice._
+import com.phaller.rasync.test.lattice.{ StringIntKey, StringIntUpdater }
 
 class BaseSuite extends FunSuite {
 
@@ -66,24 +65,6 @@ class BaseSuite extends FunSuite {
       assert(true)
     } catch {
       case ise: IllegalStateException => assert(false)
-      case e: Exception => assert(false)
-    }
-
-    pool.onQuiescenceShutdown()
-  }
-
-  test("putFinal: putFinal on complete cell adding new information") {
-    implicit val pool = new HandlerPool
-    val completer = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
-    val cell = completer.cell
-
-    completer.putFinal(ConditionallyImmutable)
-
-    try {
-      completer.putFinal(Mutable)
-      assert(false)
-    } catch {
-      case ise: IllegalStateException => assert(true)
       case e: Exception => assert(false)
     }
 
@@ -300,7 +281,7 @@ class BaseSuite extends FunSuite {
     completer1.cell.whenComplete(completer2.cell, (imm) => if (imm == Mutable) FinalOutcome(Mutable) else NoOutcome)
 
     completer1.putFinal(Immutable)
-    assert(completer2.cell.numCompleteCallbacks == 0)
+    assert(completer2.cell.numCompleteDependentCells == 0)
     completer2.putFinal(Mutable)
 
     assert(completer1.cell.getResult() == Immutable)
@@ -318,7 +299,7 @@ class BaseSuite extends FunSuite {
     completer1.cell.whenCompleteSequential(completer2.cell, (imm) => if (imm == Mutable) FinalOutcome(Mutable) else NoOutcome)
 
     completer1.putFinal(Immutable)
-    assert(completer2.cell.numCompleteCallbacks == 0)
+    assert(completer2.cell.numCompleteDependentCells == 0)
     completer2.putFinal(Mutable)
 
     assert(completer1.cell.getResult() == Immutable)
@@ -472,6 +453,7 @@ class BaseSuite extends FunSuite {
   }
 
   test("whenNext: dependency 2") {
+
     val latch = new CountDownLatch(2)
 
     implicit val pool = new HandlerPool
@@ -479,16 +461,20 @@ class BaseSuite extends FunSuite {
     val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
 
     val cell1 = completer1.cell
-    cell1.whenNext(completer2.cell, (x: Int) => {
+    cell1.whenNext(completer2.cell, x => {
       if (x == 10) NextOutcome(20)
       else NoOutcome
     })
-    cell1.whenComplete(completer2.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+    cell1.whenComplete(completer2.cell, x => {
+      if (x == 10) FinalOutcome(20)
+      else NoOutcome
+    })
 
     assert(cell1.numNextDependencies == 1)
 
     cell1.onComplete {
       case Success(x) =>
+
         assert(x === 20)
         latch.countDown()
       case Failure(e) =>
@@ -497,6 +483,7 @@ class BaseSuite extends FunSuite {
     }
     cell1.onNext {
       case Success(x) =>
+
         assert(x === 20)
         latch.countDown()
       case Failure(e) =>
@@ -524,7 +511,7 @@ class BaseSuite extends FunSuite {
       if (x == 10) NextOutcome(20)
       else NoOutcome
     })
-    cell1.whenComplete(completer2.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
+    cell1.whenCompleteSequential(completer2.cell, x => if (x == 10) FinalOutcome(20) else NoOutcome)
 
     assert(cell1.numNextDependencies == 1)
 
@@ -667,7 +654,7 @@ class BaseSuite extends FunSuite {
     })
 
     completer1.putFinal(Immutable)
-    assert(completer2.cell.numNextCallbacks == 0)
+    assert(completer2.cell.numNextDependentCells == 0)
     completer2.putNext(Mutable)
 
     assert(completer1.cell.getResult() == Immutable)
@@ -783,7 +770,7 @@ class BaseSuite extends FunSuite {
       }))
 
       pool.execute(() => cell1.whenNext(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
+        if (x == Mutable) FinalOutcome(Mutable)
         else NoOutcome
       }))
       pool.execute(() => completer2.putFinal(Mutable))
@@ -813,7 +800,7 @@ class BaseSuite extends FunSuite {
       }))
 
       pool.execute(() => cell1.whenNextSequential(completer2.cell, x => {
-        if (x == Mutable) NextOutcome(Mutable)
+        if (x == Mutable) FinalOutcome(Mutable)
         else NoOutcome
       }))
       pool.execute(() => completer2.putFinal(Mutable))
@@ -910,7 +897,7 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNext: complete dependent cell") {
+  test("whenNext: complete dependent cell - ignored update") {
     val latch = new CountDownLatch(1)
 
     implicit val pool = new HandlerPool
@@ -937,19 +924,19 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    // cell1 should be completed, so putNext(5) should not succeed
+    // the invocation of putNext is ignored, because cell1 is already completed
+    // note that the implicitly used StringIntUpdater has ignoreIfFinal==true
     try {
-      completer1.putNext(5)
-      assert(false)
+      completer1.putNext(50)
     } catch {
-      case ise: IllegalStateException => assert(true)
+      case ise: IllegalStateException => assert(false)
       case e: Exception => assert(false)
     }
 
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNextSequential: complete dependent cell") {
+  test("whenNextSequential: complete dependent cell - ignored update") {
     val latch = new CountDownLatch(1)
 
     implicit val pool = new HandlerPool
@@ -976,12 +963,12 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    // cell1 should be completed, so putNext(5) should not succeed
+    // the invocation of putNext is ignored, because cell1 is already completed
+    // note that the implicitly used StringIntUpdater has ignoreIfFinal==true
     try {
-      completer1.putNext(5)
-      assert(false)
+      completer1.putNext(50)
     } catch {
-      case ise: IllegalStateException => assert(true)
+      case ise: IllegalStateException => assert(false)
       case e: Exception => assert(false)
     }
 
@@ -1145,8 +1132,6 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 1)
     assert(cell1.numTotalDependencies == 1)
-    assert(completer2.cell.numNextCallbacks == 1)
-    assert(completer2.cell.numCompleteCallbacks == 1)
 
     cell1.onNext {
       case Success(x) =>
@@ -1194,8 +1179,8 @@ class BaseSuite extends FunSuite {
 
     assert(cell1.numNextDependencies == 1)
     assert(cell1.numTotalDependencies == 1)
-    assert(completer2.cell.numNextCallbacks == 1)
-    assert(completer2.cell.numCompleteCallbacks == 1)
+    assert(completer2.cell.numNextDependentCells == 1)
+    assert(completer2.cell.numCompleteDependentCells == 1)
 
     cell1.onNext {
       case Success(x) =>
@@ -1271,9 +1256,9 @@ class BaseSuite extends FunSuite {
 
     implicit val setLattice = new Lattice[Set[Int]] {
       def join(curr: Set[Int], v2: Set[Int]): Set[Int] = curr ++ v2
-      def bottom = Set.empty[Int]
+      val bottom = Set.empty[Int]
     }
-    val key = new lattice.DefaultKey[Set[Int]]
+    val key = new DefaultKey[Set[Int]]
 
     implicit val pool = new HandlerPool
     val completer = CellCompleter[key.type, Set[Int]](key)
@@ -1298,9 +1283,9 @@ class BaseSuite extends FunSuite {
 
     implicit val setLattice = new Lattice[Set[Int]] {
       def join(curr: Set[Int], v2: Set[Int]): Set[Int] = curr ++ v2
-      def bottom = Set.empty[Int]
+      val bottom = Set.empty[Int]
     }
-    val key = new lattice.DefaultKey[Set[Int]]
+    val key = new DefaultKey[Set[Int]]
 
     implicit val pool = new HandlerPool
     val completer = CellCompleter[key.type, Set[Int]](key)
@@ -1318,6 +1303,34 @@ class BaseSuite extends FunSuite {
 
     latch.await()
     pool.onQuiescenceShutdown()
+  }
+
+  test("DefaultKey.resolve") {
+    implicit val pool = new HandlerPool
+    val k = new DefaultKey[Int]
+    val completer1 = CellCompleter[DefaultKey[Int], Int](k)
+    val completer2 = CellCompleter[DefaultKey[Int], Int](k)
+    completer1.cell.whenNext(completer2.cell, NextOutcome(_))
+    completer2.cell.whenNext(completer1.cell, NextOutcome(_))
+    completer1.putNext(5)
+    Await.ready(pool.quiescentResolveCycles, 2.seconds)
+    assert(completer1.cell.isComplete)
+    assert(completer2.cell.isComplete)
+    assert(completer1.cell.getResult() == 5)
+    assert(completer2.cell.getResult() == 5)
+    pool.shutdown()
+  }
+
+  test("DefaultKey.fallback") {
+    implicit val pool = new HandlerPool
+    val k = new DefaultKey[Int]
+    val completer1 = CellCompleter[DefaultKey[Int], Int](k)
+    completer1.cell.trigger()
+    completer1.putNext(5)
+    Await.ready(pool.quiescentResolveCell, 2.seconds)
+    assert(completer1.cell.isComplete)
+    assert(completer1.cell.getResult() == 5)
+    pool.shutdown()
   }
 
   test("handler pool") {
@@ -1344,7 +1357,7 @@ class BaseSuite extends FunSuite {
     cell2.whenComplete(cell1, x => if (x == 1) FinalOutcome(1) else NoOutcome)
     val incompleteFut = pool.quiescentIncompleteCells
     val cells = Await.result(incompleteFut, 2.seconds)
-    assert(cells.map(_.key).toString == "List(key1, key2)")
+    assert(cells.map(_.key).toList.toString == "List(key1, key2)")
   }
 
   test("quiescent resolve cycle") {
@@ -1396,21 +1409,21 @@ class BaseSuite extends FunSuite {
     assert(res == ConditionallyImmutable)
   }
 
-  test("PurityUpdate: successful updated") {
-    val lattice = Purity.PurityUpdater
+  test("PurityUpdater: successful updated") {
+    val updater = Updater.partialOrderingToUpdater(Purity.PurityOrdering)
 
-    val purity = lattice.update(UnknownPurity, Pure)
+    val purity = updater.update(UnknownPurity, Pure)
     assert(purity == Pure)
 
-    val newPurity = lattice.update(purity, Pure)
+    val newPurity = updater.update(purity, Pure)
     assert(newPurity == Pure)
   }
 
   test("PurityUpdater: failed updates") {
-    val lattice = Purity.PurityUpdater
+    val updater = Updater.partialOrderingToUpdater(Purity.PurityOrdering)
 
     try {
-      val newPurity = lattice.update(Impure, Pure)
+      val newPurity = updater.update(Impure, Pure)
       assert(false)
     } catch {
       case lve: NotMonotonicException[_] => assert(true)
@@ -1418,7 +1431,7 @@ class BaseSuite extends FunSuite {
     }
 
     try {
-      val newPurity = lattice.update(Pure, Impure)
+      val newPurity = updater.update(Pure, Impure)
       assert(false)
     } catch {
       case lve: NotMonotonicException[_] => assert(true)
@@ -1449,27 +1462,6 @@ class BaseSuite extends FunSuite {
     // Even though cell is completed, this should be allowed because it wont add any new information
     completer.putNext(Immutable)
     assert(cell.getResult() == ConditionallyImmutable)
-
-    pool.onQuiescenceShutdown()
-  }
-
-  test("putNext: Failed, using ImmutabilityLattce") {
-    implicit val pool = new HandlerPool
-
-    val completer2 = CellCompleter[ImmutabilityKey.type, Immutability](ImmutabilityKey)
-    val cell2 = completer2.cell
-
-    completer2.putFinal(Immutable)
-
-    // Should fail putNext with IllegalStateException because of adding new information
-    // to an already complete cell
-    try {
-      completer2.putNext(ConditionallyImmutable)
-      assert(false)
-    } catch {
-      case ise: IllegalStateException => assert(true)
-      case e: Exception => assert(false)
-    }
 
     pool.onQuiescenceShutdown()
   }
@@ -1579,34 +1571,12 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("New ImmutabilityLattice: successful joins") {
-    val lattice = Immutability.ImmutabilityLattice
-
-    val mutability1 = lattice.join(Immutable, ConditionallyImmutable)
-    assert(mutability1 == ConditionallyImmutable)
-
-    val mutability2 = lattice.join(ConditionallyImmutable, Mutable)
-    assert(mutability2 == Mutable)
-
-    val mutability3 = lattice.join(Immutable, Mutable)
-    assert(mutability3 == Mutable)
-
-    val mutability4 = lattice.join(ConditionallyImmutable, Immutable)
-    assert(mutability4 == ConditionallyImmutable)
-
-    val mutability5 = lattice.join(Mutable, ConditionallyImmutable)
-    assert(mutability5 == Mutable)
-
-    val mutability6 = lattice.join(Mutable, Immutable)
-    assert(mutability6 == Mutable)
-  }
-
   test("if exception-throwing tasks should still run quiescent handlers") {
     implicit val intMaxLattice: Lattice[Int] = new Lattice[Int] {
       override def join(v1: Int, v2: Int): Int = Math.max(v1, v2)
-      def bottom = 0
+      val bottom = 0
     }
-    val key = new lattice.DefaultKey[Int]
+    val key = new DefaultKey[Int]
 
     implicit val pool = new HandlerPool(unhandledExceptionHandler = { t => /* do nothing */ })
     val completer = CellCompleter[key.type, Int](key)
@@ -1821,11 +1791,9 @@ class BaseSuite extends FunSuite {
     case object Bottom extends Value
     case object ShouldNotHappen extends Value
 
-    object Value {
-      implicit object ValueUpdater extends MonotonicUpdater[Value] {
-        override def lteq(v1: Value, v2: Value): Boolean = true
-        override val bottom: Value = Bottom
-      }
+    implicit object ValueUpdater extends Updater[Value] {
+      override def update(v1: Value, v2: Value): Value = v2
+      override val initial: Value = Bottom
     }
 
     implicit val pool = new HandlerPool
@@ -1854,11 +1822,9 @@ class BaseSuite extends FunSuite {
     case object Bottom extends Value
     case object ShouldNotHappen extends Value
 
-    object Value {
-      implicit object ValueUpdater extends MonotonicUpdater[Value] {
-        override def lteq(v1: Value, v2: Value): Boolean = true
-        override val bottom: Value = Bottom
-      }
+    implicit object ValueUpdater extends Updater[Value] {
+      override def update(v1: Value, v2: Value): Value = v2
+      override val initial: Value = Bottom
     }
 
     implicit val pool = new HandlerPool
@@ -1888,15 +1854,13 @@ class BaseSuite extends FunSuite {
     case object OK extends Value
     case object ShouldNotHappen extends Value
 
-    object Value {
-      implicit object ValueUpdater extends MonotonicUpdater[Value] {
-        override def lteq(v1: Value, v2: Value): Boolean = v1 == bottom
-        override val bottom: Value = Bottom
-      }
+    implicit object ValueUpdater extends Updater[Value] {
+      override def update(v1: Value, v2: Value): Value = if (v1 == Bottom) v2 else v1 // TODO or throw?
+      override val initial: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, OK))
       }
     }
@@ -1928,15 +1892,13 @@ class BaseSuite extends FunSuite {
     case object OK extends Value
     case object ShouldNotHappen extends Value
 
-    object Value {
-      implicit object ValueUpdater extends MonotonicUpdater[Value] {
-        override def lteq(v1: Value, v2: Value): Boolean = v1 == bottom
-        override val bottom: Value = Bottom
-      }
+    implicit object ValueUpdater extends Updater[Value] {
+      override def update(v1: Value, v2: Value): Value = v2
+      override val initial: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, OK))
       }
     }
@@ -1970,18 +1932,16 @@ class BaseSuite extends FunSuite {
     case object OK extends Value
     case object ShouldNotHappen extends Value
 
-    object Value {
-      implicit object ValueUpdater extends MonotonicUpdater[Value] {
-        override def lteq(v1: Value, v2: Value): Boolean = true
-        override val bottom: Value = Bottom
-      }
+    implicit object ValueUpdater extends Updater[Value] {
+      override def update(v1: Value, v2: Value): Value = v2
+      override val initial: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
@@ -2019,18 +1979,16 @@ class BaseSuite extends FunSuite {
     case object OK extends Value
     case object ShouldNotHappen extends Value
 
-    object Value {
-      implicit object ValueUpdater extends MonotonicUpdater[Value] {
-        override def lteq(v1: Value, v2: Value): Boolean = true
-        override val bottom: Value = Bottom
-      }
+    implicit object ValueUpdater extends Updater[Value] {
+      override def update(v1: Value, v2: Value): Value = v2
+      override val initial: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
@@ -2068,18 +2026,16 @@ class BaseSuite extends FunSuite {
     case object OK extends Value
     case object ShouldNotHappen extends Value
 
-    object Value {
-      implicit object ValueUpdater extends MonotonicUpdater[Value] {
-        override def lteq(v1: Value, v2: Value): Boolean = true
-        override val bottom: Value = Bottom
-      }
+    implicit object ValueUpdater extends Updater[Value] {
+      override def update(v1: Value, v2: Value): Value = v2
+      override val initial: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
@@ -2117,18 +2073,16 @@ class BaseSuite extends FunSuite {
     case object OK extends Value
     case object ShouldNotHappen extends Value
 
-    object Value {
-      implicit object ValueUpdater extends MonotonicUpdater[Value] {
-        override def lteq(v1: Value, v2: Value): Boolean = true
-        override val bottom: Value = Bottom
-      }
+    implicit object ValueUpdater extends Updater[Value] {
+      override def update(v1: Value, v2: Value): Value = v2
+      override val initial: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         Seq()
       }
     }
@@ -2163,18 +2117,16 @@ class BaseSuite extends FunSuite {
     case object OK extends Value
     case object ShouldNotHappen extends Value
 
-    object Value {
-      implicit object ValueUpdater extends MonotonicUpdater[Value] {
-        override def lteq(v1: Value, v2: Value): Boolean = true
-        override val bottom: Value = Bottom
-      }
+    implicit object ValueUpdater extends Updater[Value] {
+      override def update(v1: Value, v2: Value): Value = v2
+      override val initial: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
-      override def resolve[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def resolve[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback[K <: Key[Value]](cells: Seq[Cell[K, Value]]): Seq[(Cell[K, Value], Value)] = {
+      override def fallback[K <: Key[Value]](cells: Iterable[Cell[K, Value]]): Iterable[(Cell[K, Value], Value)] = {
         Seq()
       }
     }
@@ -2209,22 +2161,14 @@ class BaseSuite extends FunSuite {
     val random = new scala.util.Random()
 
     implicit val pool = new HandlerPool
-    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
-
-    var otherLatches: Set[CountDownLatch] = Set.empty
+    val completer1 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)
 
     val cell1 = completer1.cell
-    for (i <- 1 to n) {
-      val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
-      val latch2 = new CountDownLatch(1)
+    for (i <- 1 to n) { // create n predecessors
+      val tmpCompleter = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)
 
-      otherLatches = otherLatches + latch2
-
-      completer2.cell.onComplete(_ => {
-        latch2.countDown()
-      })
-
-      cell1.whenCompleteSequential(completer2.cell, (x: Int) => {
+      // let cell1 depend on the predecessor tmpCompleter
+      cell1.whenCompleteSequential(tmpCompleter.cell, (x: Int) => {
         assert(runningCallbacks.incrementAndGet() == 1)
         Thread.`yield`()
         try {
@@ -2240,12 +2184,10 @@ class BaseSuite extends FunSuite {
         latch.countDown()
       })
 
-      pool.execute(() =>
-        completer2.putFinal(i))
+      pool.execute(() => tmpCompleter.putFinal(i))
     }
 
-    latch.await()
-    otherLatches.foreach(_.await())
+    assert(latch.await(10, TimeUnit.SECONDS))
 
     assert(cell1.getResult() == n * n)
 
@@ -2260,8 +2202,8 @@ class BaseSuite extends FunSuite {
     val random = new scala.util.Random()
 
     implicit val pool = new HandlerPool
-    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
-    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
+    val completer1 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
+    val completer2 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
 
     val cell1 = completer1.cell
     cell1.whenNextSequential(completer2.cell, (x: Int) => {
@@ -2291,22 +2233,20 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
-  test("whenNextSequential: state") {
+  test("whenSequential: calling sequentially") {
     val n = 1000
-    var count = 0
 
     val runningCallbacks = new AtomicInteger(0)
     val latch = new CountDownLatch(1)
     val random = new scala.util.Random()
 
     implicit val pool = new HandlerPool
-    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
-    val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
+    val completer1 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
+    val completer2 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)(Updater.latticeToUpdater(new NaturalNumberLattice), pool)
 
     val cell1 = completer1.cell
-    cell1.whenNextSequential(completer2.cell, (x: Int) => {
+    cell1.whenSequential(completer2.cell, (x: Int, _) => {
       assert(runningCallbacks.incrementAndGet() == 1)
-      count += 1
       Thread.`yield`()
       try {
         Thread.sleep(random.nextInt(3))
@@ -2314,7 +2254,7 @@ class BaseSuite extends FunSuite {
         case _: InterruptedException => /* ignore */
       }
       assert(runningCallbacks.decrementAndGet() == 0)
-      Outcome(count, count == n)
+      Outcome(x * n, x == n)
     })
 
     cell1.onComplete(_ => {
@@ -2326,59 +2266,8 @@ class BaseSuite extends FunSuite {
 
     latch.await()
 
-    assert(cell1.getResult() == n)
-
-    pool.onQuiescenceShutdown()
-  }
-
-  test("whenCompleteSequential: state") {
-    val n = 1000
-    var count = 0
-
-    val runningCallbacks = new AtomicInteger(0)
-    val latch = new CountDownLatch(1)
-    var otherLatches: Set[CountDownLatch] = Set.empty
-    val random = new scala.util.Random()
-
-    implicit val pool = new HandlerPool
-    val completer1 = CellCompleter[StringIntKey, Int]("somekey")
-    val cell1 = completer1.cell
-
-    for (i <- 1 to n) {
-      val completer2 = CellCompleter[StringIntKey, Int]("someotherkey")
-
-      val latch2 = new CountDownLatch(1)
-      otherLatches = otherLatches + latch2
-
-      completer2.cell.onComplete(_ => {
-        latch2.countDown()
-      })
-
-      cell1.whenNextSequential(completer2.cell, (x: Int) => {
-        assert(runningCallbacks.incrementAndGet() == 1)
-        count += 1
-        Thread.`yield`()
-        try {
-          Thread.sleep(random.nextInt(3))
-        } catch {
-          case _: InterruptedException => /* ignore */
-        }
-        assert(runningCallbacks.decrementAndGet() == 0)
-        Outcome(count, count == n)
-      })
-
-      cell1.onComplete(_ => {
-        latch.countDown()
-      })
-
-      pool.execute(() => completer2.putFinal(i))
-
-    }
-
-    latch.await()
-    otherLatches.foreach(_.await())
-
-    assert(cell1.getResult() == n)
+    assert(cell1.getResult() == n * n)
+    assert(completer2.cell.getResult() == n)
 
     pool.onQuiescenceShutdown()
   }
@@ -2386,9 +2275,9 @@ class BaseSuite extends FunSuite {
   test("whenComplete: called at most once") {
     implicit val intMaxLattice: Lattice[Int] = new Lattice[Int] {
       override def join(x: Int, y: Int): Int = Math.max(x, y)
-      def bottom = 0
+      val bottom = 0
     }
-    val key = new lattice.DefaultKey[Int]
+    val key = new DefaultKey[Int]
 
     implicit val pool = new HandlerPool
 
@@ -2430,6 +2319,165 @@ class BaseSuite extends FunSuite {
     pool.onQuiescenceShutdown()
   }
 
+  test("whenNextSequential: state") {
+    // cell1 has deps to 1000 cells. All callbacks
+    // share a counter (i.e. state) that must not be
+    // incremented concurrently
+    val n = 1000
+    var count = Set[Int]()
+
+    class PowerSetLattice[T] extends Lattice[Set[T]] {
+
+      def join(left: Set[T], right: Set[T]): Set[T] =
+        left ++ right
+
+      val bottom: Set[T] =
+        Set[T]()
+
+    }
+
+    val theUpdater = Updater.latticeToUpdater(new PowerSetLattice[Int])
+
+    val latch = new CountDownLatch(1)
+    val random = new scala.util.Random()
+
+    implicit val pool = new HandlerPool
+    val theKey = new DefaultKey[Set[Int]]
+    val completer1 = CellCompleter[DefaultKey[Set[Int]], Set[Int]](theKey)(theUpdater, pool)
+    val cell1 = completer1.cell
+
+    cell1.onComplete(_ => {
+      latch.countDown()
+    })
+
+    for (i <- 1 to n) {
+      val completer2 = CellCompleter[DefaultKey[Set[Int]], Set[Int]](theKey)(theUpdater, pool)
+      cell1.whenNextSequential(completer2.cell, _ => {
+        count = count ++ Set(count.size)
+        Thread.`yield`()
+        try {
+          Thread.sleep(random.nextInt(3))
+        } catch {
+          case _: InterruptedException => /* ignore */
+        }
+        Outcome(count, count.size == n)
+      })
+      pool.execute(() => completer2.putNext(Set(i)))
+    }
+
+    latch.await()
+
+    assert(cell1.getResult().size == n)
+
+    pool.onQuiescenceShutdown()
+  }
+
+  test("whenCompleteSequential: state") {
+    // cell1 has deps to 1000 cells. All callbacks
+    // share a counter (i.e. state) that must not be
+    // incremented concurrently
+    val n = 1000
+    var count = Set[Int]()
+
+    class PowerSetLattice[T] extends Lattice[Set[T]] {
+
+      def join(left: Set[T], right: Set[T]): Set[T] =
+        left ++ right
+
+      val bottom: Set[T] =
+        Set[T]()
+
+    }
+
+    val theUpdater = Updater.latticeToUpdater(new PowerSetLattice[Int])
+
+    val latch = new CountDownLatch(1)
+    val random = new scala.util.Random()
+
+    implicit val pool = new HandlerPool
+    val theKey = new DefaultKey[Set[Int]]
+    val completer1 = CellCompleter[DefaultKey[Set[Int]], Set[Int]](theKey)(theUpdater, pool)
+    val cell1 = completer1.cell
+
+    cell1.onComplete(_ => {
+      latch.countDown()
+    })
+
+    for (i <- 1 to n) {
+      val completer2 = CellCompleter[DefaultKey[Set[Int]], Set[Int]](theKey)(theUpdater, pool)
+      cell1.whenCompleteSequential(completer2.cell, _ => {
+        count = count ++ Set(count.size)
+        Thread.`yield`()
+        try {
+          Thread.sleep(random.nextInt(3))
+        } catch {
+          case _: InterruptedException => /* ignore */
+        }
+        Outcome(count, count.size == n)
+      })
+      pool.execute(() => completer2.putFinal(Set(i)))
+    }
+
+    latch.await()
+
+    assert(cell1.getResult().size == n)
+
+    pool.onQuiescenceShutdown()
+  }
+
+  test("whenSequential: state") {
+    // cell1 has deps to 1000 cells. All callbacks
+    // share a counter (i.e. state) that must not be
+    // incremented concurrently
+    val n = 1000
+    var count = Set[Int]()
+
+    class PowerSetLattice[T] extends Lattice[Set[T]] {
+
+      def join(left: Set[T], right: Set[T]): Set[T] =
+        left ++ right
+
+      val bottom: Set[T] =
+        Set[T]()
+
+    }
+
+    val theUpdater = Updater.latticeToUpdater(new PowerSetLattice[Int])
+
+    val latch = new CountDownLatch(1)
+    val random = new scala.util.Random()
+
+    implicit val pool = new HandlerPool
+    val theKey = new DefaultKey[Set[Int]]
+    val completer1 = CellCompleter[DefaultKey[Set[Int]], Set[Int]](theKey)(theUpdater, pool)
+    val cell1 = completer1.cell
+
+    cell1.onComplete(_ => {
+      latch.countDown()
+    })
+
+    for (i <- 1 to n) {
+      val completer2 = CellCompleter[DefaultKey[Set[Int]], Set[Int]](theKey)(theUpdater, pool)
+      cell1.whenSequential(completer2.cell, (_, _) => {
+        count = count ++ Set(count.size)
+        Thread.`yield`()
+        try {
+          Thread.sleep(random.nextInt(3))
+        } catch {
+          case _: InterruptedException => /* ignore */
+        }
+        Outcome(count, count.size == n)
+      })
+      pool.execute(() => completer2.putNext(Set(i)))
+    }
+
+    latch.await()
+
+    assert(cell1.getResult().size == n)
+
+    pool.onQuiescenceShutdown()
+  }
+
   test("whenNextSequential: discard callbacks on completion") {
     val latch1 = new CountDownLatch(1)
     val latch2 = new CountDownLatch(1)
@@ -2437,8 +2485,8 @@ class BaseSuite extends FunSuite {
     val n = 10000
 
     implicit val pool = new HandlerPool
-    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
-    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
+    val completer1 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)
+    val completer2 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     cell1.trigger()
@@ -2466,11 +2514,11 @@ class BaseSuite extends FunSuite {
 
   test("cell dependency on itself") {
     class ReactivePropertyStoreKey extends Key[Int] {
-      override def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+      override def resolve[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
         Seq((cells.head, 42))
       }
 
-      override def fallback[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+      override def fallback[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
         cells.map(cell ⇒ (cell, cell.getResult()))
       }
 
@@ -2530,9 +2578,9 @@ class BaseSuite extends FunSuite {
 
     implicit val pool = new HandlerPool
 
-    val completer1 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
-    val completer2 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
-    val completer3 = CellCompleter[lattice.NaturalNumberKey.type, Int](lattice.NaturalNumberKey)
+    val completer1 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)
+    val completer2 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)
+    val completer3 = CellCompleter[NaturalNumberKey.type, Int](NaturalNumberKey)
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     val cell3 = completer3.cell
@@ -2659,13 +2707,11 @@ class BaseSuite extends FunSuite {
   }
 
   class RecursiveQuiescentTestKey extends Key[Int] {
-    override def resolve[K <: Key[Int]](
-      cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+    override def resolve[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
       Seq((cells.head, 42))
     }
 
-    override def fallback[K <: Key[Int]](
-      cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+    override def fallback[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
       cells.map(cell ⇒ (cell, 43))
     }
   }

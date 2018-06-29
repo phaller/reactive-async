@@ -1,15 +1,15 @@
 package com.phaller.rasync
 package test
 
-import lattice.{ MonotonicUpdater, Key, Lattice, NotMonotonicException }
+import com.phaller.rasync.lattice._
 
 object PurityKey extends Key[Purity] {
 
-  def resolve[K <: Key[Purity]](cells: Seq[Cell[K, Purity]]): Seq[(Cell[K, Purity], Purity)] = {
+  def resolve[K <: Key[Purity]](cells: Iterable[Cell[K, Purity]]): Iterable[(Cell[K, Purity], Purity)] = {
     cells.map(cell => (cell, Pure))
   }
 
-  def fallback[K <: Key[Purity]](cells: Seq[Cell[K, Purity]]): Seq[(Cell[K, Purity], Purity)] = {
+  def fallback[K <: Key[Purity]](cells: Iterable[Cell[K, Purity]]): Iterable[(Cell[K, Purity], Purity)] = {
     cells.map(cell => (cell, Pure))
   }
 
@@ -22,7 +22,7 @@ case object Pure extends Purity
 case object Impure extends Purity
 
 object Purity {
-  implicit object PurityUpdater extends MonotonicUpdater[Purity] {
+  implicit object PurityOrdering extends PartialOrderingWithBottom[Purity] {
     override def lteq(v1: Purity, v2: Purity): Boolean = {
       if (v1 == UnknownPurity) true
       else if (v1 == v2) true

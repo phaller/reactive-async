@@ -1,14 +1,16 @@
-package com.phaller.rasync
-package lattice
+package com.phaller.rasync.test.lattice
+
+import com.phaller.rasync.Cell
+import com.phaller.rasync.lattice.{ Key, PartialOrderingWithBottom, Updater }
 
 import scala.language.implicitConversions
 
 class StringIntKey(s: String) extends Key[Int] {
-  def resolve[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+  def resolve[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
     cells.map((cell: Cell[K, Int]) => (cell, 0))
   }
 
-  def fallback[K <: Key[Int]](cells: Seq[Cell[K, Int]]): Seq[(Cell[K, Int], Int)] = {
+  def fallback[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
     cells.map((cell: Cell[K, Int]) => (cell, 1))
   }
 
@@ -20,13 +22,11 @@ object StringIntKey {
     new StringIntKey(s)
 }
 
-class StringIntUpdater extends Updater[Int] with PartialOrderingWithBottom[Int] {
+class StringIntUpdater extends Updater[Int] {
   override def update(v1: Int, v2: Int): Int =
     if (v1 != v2) v2
     else v1
 
-  override def bottom: Int = 0
-
-  override def lteq(x: Int, y: Int): Boolean = x <= y
+  override val initial: Int = 0
 }
 
