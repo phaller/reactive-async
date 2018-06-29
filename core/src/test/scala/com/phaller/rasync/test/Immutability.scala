@@ -13,11 +13,7 @@ object ImmutabilityKey extends Key[Immutability] {
       cells.map(cell => (cell, Immutable))
   }
   def fallback[K <: Key[Immutability]](cells: Iterable[Cell[K, Immutability]]): Iterable[(Cell[K, Immutability], Immutability)] = {
-    val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
-    if (conditionallyImmutableCells.nonEmpty)
-      conditionallyImmutableCells.map(cell => (cell, cell.getResult()))
-    else
-      cells.map(cell => (cell, Immutable))
+    cells.map(cell => (cell, Immutable))
   }
 
   override def toString = "Immutability"

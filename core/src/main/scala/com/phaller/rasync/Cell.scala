@@ -267,7 +267,6 @@ private object IntermediateState {
 private class FinalState[K <: Key[V], V](
   /** The final result of this cell.*/
   val res: Try[V],
-  /** A list of cells that `this` cell depends on mapped to the callbacks to call, if those cells change. */
   /*
   * When a cell is completed, all `completeDependentCells` are copied from the IntermediateState
   * to the FinalState. That way, we know that the dependentCell may poll a staged value (at most) one
@@ -275,7 +274,6 @@ private class FinalState[K <: Key[V], V](
   * from `completeDependentCells`. Repeated polls will return in NoOutcome.
   */
   val completeDependentCells: TrieMap[Cell[K, V], Unit],
-  /** A list of cells that `this` cell depends on mapped to the callbacks to call, if those cells change. */
   val nextDependentCells: TrieMap[Cell[K, V], Unit])
   extends State[V]
 
