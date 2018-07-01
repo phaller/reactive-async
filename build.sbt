@@ -3,6 +3,7 @@ import Util._         // see project/Util.scala
 
 val buildVersion = "0.2.0-SNAPSHOT"
 organization in ThisBuild := "com.phaller"
+licenses in ThisBuild += ("BSD 2-Clause", url("http://opensource.org/licenses/BSD-2-Clause"))
 
 def commonSettings = Seq(
   version in ThisBuild := buildVersion,
@@ -31,7 +32,8 @@ lazy val npv: Project = (project in file("monte-carlo-npv")).
   settings(commonSettings: _*).
   settings(
     name := "reactive-async-npv",
-    scalacOptions += "-feature"
+    scalacOptions += "-feature",
+    skip in publish := true
   ).
   dependsOn(core)
 
@@ -45,7 +47,8 @@ lazy val bench: Project = (project in file("bench")).
     libraryDependencies += opalCommon,
     libraryDependencies += opalAI % Test,
     libraryDependencies += scalaMeter,
-    testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework")
+    testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework"),
+    skip in publish := true
   ).configs(
     Benchmark
   ).settings(
