@@ -36,7 +36,7 @@ trait Lattice[V] extends PartialOrderingWithBottom[V] {
    */
   def join(v1: V, v2: V): V
 
-  def lteq(v1: V, v2: V): Boolean = {
+  override def lteq(v1: V, v2: V): Boolean = {
     join(v1, v2) == v2
   }
 
