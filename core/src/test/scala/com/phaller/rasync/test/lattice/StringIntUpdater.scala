@@ -27,6 +27,6 @@ class StringIntUpdater extends Updater[Int] {
     if (v1 != v2) v2
     else v1
 
-  override val initial: Int = 0
+  override val bottom: Int = 0
 }
 

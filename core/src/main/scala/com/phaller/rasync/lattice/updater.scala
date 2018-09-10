@@ -9,7 +9,7 @@ package lattice
  * An updater also defines, what the initial value of a cell is.
  */
 trait Updater[V] {
-  val initial: V
+  val bottom: V
   def update(current: V, next: V): V
 }
 
@@ -21,7 +21,7 @@ trait Updater[V] {
  * The initial value is the bottom value of the lattice.
  */
 class AggregationUpdater[V](val lattice: Lattice[V]) extends Updater[V] {
-  override val initial: V = lattice.bottom
+  override val bottom: V = lattice.bottom
   override def update(current: V, next: V): V = lattice.join(current, next)
 }
 
@@ -33,7 +33,7 @@ class AggregationUpdater[V](val lattice: Lattice[V]) extends Updater[V] {
  * The initial value is the bottom value of the partial ordering.
  */
 class MonotonicUpdater[V](val partialOrderingWithBottom: PartialOrderingWithBottom[V]) extends Updater[V] {
-  override val initial: V = partialOrderingWithBottom.bottom
+  override val bottom: V = partialOrderingWithBottom.bottom
 
   override def update(current: V, next: V): V =
     if (partialOrderingWithBottom.lteq(current, next)) next
@@ -54,7 +54,7 @@ object Updater {
     override def update(current: (T, T), next: (T, T)): (T, T) =
       (updater.update(current._1, next._1), updater.update(current._2, next._2))
 
-    override val initial: (T, T) =
+    override val bottom: (T, T) =
       (updater.asInstanceOf[PartialOrderingWithBottom[T]].bottom, updater.asInstanceOf[PartialOrderingWithBottom[T]].bottom)
   }
 }
