@@ -1731,7 +1731,6 @@ class BaseSuite extends FunSuite {
       }
 
     // resolve cells
-    pool.whileQuiescentResolveDefault
     val fut = pool.quiescentResolveDefaults
     Await.result(fut, 2.second)
     latch.await()
@@ -1778,7 +1777,6 @@ class BaseSuite extends FunSuite {
       }
 
     // resolve cells
-    pool.whileQuiescentResolveDefault
     val fut = pool.quiescentResolveDefaults
     Await.result(fut, 2.second)
     latch.await()
