@@ -9,7 +9,8 @@ import scala.util.{ Failure, Success }
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
 import com.phaller.rasync.lattice._
-import com.phaller.rasync.test.lattice.{ StringIntKey, StringIntUpdater }
+import com.phaller.rasync.lattice.lattices.{ NaturalNumberKey, NaturalNumberLattice }
+import com.phaller.rasync.test.lattice._
 
 class BaseSuite extends FunSuite {
 

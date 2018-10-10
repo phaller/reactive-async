@@ -1,5 +1,6 @@
-package com.phaller.rasync
-package lattice
+package com.phaller.rasync.lattice.lattices
+
+import com.phaller.rasync.lattice.{ DefaultKey, Lattice }
 
 object NaturalNumberKey extends DefaultKey[Int]
 

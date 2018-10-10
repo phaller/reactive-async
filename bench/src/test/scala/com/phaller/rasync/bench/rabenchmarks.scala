@@ -1,8 +1,8 @@
 package com.phaller.rasync
 package bench
 
-import lattice.{ Lattice, NaturalNumberLattice, NaturalNumberKey }
-
+import com.phaller.rasync.lattice.lattices.{ NaturalNumberKey, NaturalNumberLattice }
+import lattice.Lattice
 import org.scalameter.api._
 import org.scalameter.picklers.noPickler._
 

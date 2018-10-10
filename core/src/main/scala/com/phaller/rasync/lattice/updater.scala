@@ -60,4 +60,4 @@ object Updater {
 }
 
 final case class NotMonotonicException[D](current: D, next: D) extends IllegalStateException(
-  s"Violation of lattice with current $current and next $next!")
+  s"Violation of ordering with current $current and next $next!")

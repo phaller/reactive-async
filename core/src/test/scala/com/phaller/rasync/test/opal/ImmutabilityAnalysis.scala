@@ -4,14 +4,13 @@ package opal
 
 import java.net.URL
 
+import com.phaller.rasync.test.lattice._
 import org.opalj.fpcf._
 
 import scala.collection.JavaConverters._
-
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
-import org.opalj.br.{ Field, ClassFile, ObjectType }
+import org.opalj.br.{ ClassFile, Field, ObjectType }
 import org.opalj.br.analyses.{ BasicReport, DefaultOneStepAnalysis, Project, PropertyStoreKey }
 import org.opalj.br.analyses.TypeExtensibilityKey
 import org.opalj.fpcf.analyses.FieldMutabilityAnalysis
