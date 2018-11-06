@@ -6,7 +6,7 @@ package lattice
  * Given a `current` value of the cell a a `next` value, the `update` method
  * returns the new value of the cell of a "combination" of `current` and `next`.
  *
- * An updater also defines, what the initial value of a cell is.
+ * The `bottom` value  of an updater defines, what the initial value of a cell is.
  */
 trait Updater[V] {
   val bottom: V

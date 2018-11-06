@@ -4,14 +4,14 @@ package opal
 
 import java.net.URL
 
+import com.phaller.rasync.cell._
 import com.phaller.rasync.lattice.Updater
-import com.phaller.rasync.test.lattice._
+import com.phaller.rasync.pool.{ HandlerPool, SchedulingStrategy }
 
-import scala.collection.JavaConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import org.opalj.Success
-import org.opalj.br.{ ClassFile, Method, MethodWithBody, PC }
+import org.opalj.br.{ ClassFile, Method }
 import org.opalj.br.analyses.{ BasicReport, DefaultOneStepAnalysis, Project }
 import org.opalj.br.instructions.GETFIELD
 import org.opalj.br.instructions.GETSTATIC
@@ -47,8 +47,34 @@ import org.opalj.br.instructions.INVOKEVIRTUAL
 import org.opalj.br.instructions.INVOKEINTERFACE
 import org.opalj.br.instructions.MethodInvocationInstruction
 import org.opalj.br.instructions.NonVirtualMethodInvocationInstruction
+import org.opalj.bytecode.JRELibraryFolder
+
+import scala.util.Try
+
+// A strategy tailored to PurityAnalysis
+object PurityStrategy extends SchedulingStrategy {
+  override def calcPriority[Purity](dependentCell: Cell[Purity], other: Cell[Purity], value: Try[ValueOutcome[Purity]]): Int = value match {
+    case scala.util.Success(FinalOutcome(Impure)) => -1
+    case _ => 1
+  }
+
+  override def calcPriority[Purity](dependentCell: Cell[Purity], value: Try[Purity]): Int = value match {
+    case scala.util.Success(Pure) => 0
+    case _ => -1
+  }
+}
 
 object PurityAnalysis extends DefaultOneStepAnalysis {
+
+  override def main(args: Array[String]): Unit = {
+    val lib = Project(new java.io.File(JRELibraryFolder.getAbsolutePath))
+
+    for (_ ← 1 to 1) {
+      val p = lib.recreate()
+      val report = PurityAnalysis.doAnalyze(p, List.empty, () => false)
+      println(report.toConsoleString.split("\n").slice(0, 2).mkString("\n"))
+    }
+  }
 
   override def doAnalyze(
     project: Project[URL],
@@ -57,13 +83,13 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
     val startTime = System.currentTimeMillis // Used for measuring execution time
     // 1. Initialization of key data structures (one cell(completer) per method)
-    implicit val pool = new HandlerPool()
-    var methodToCell = Map.empty[Method, Cell[PurityKey.type, Purity]]
+    implicit val pool: HandlerPool[Purity] = new HandlerPool(key = PurityKey, schedulingStrategy = PurityStrategy)
+    var methodToCell = Map.empty[Method, Cell[Purity]]
     for {
       classFile <- project.allProjectClassFiles
       method <- classFile.methods
     } {
-      val cell = pool.mkCell[PurityKey.type, Purity](PurityKey, _ => {
+      val cell = pool.mkCell(_ => {
         analyze(project, methodToCell, classFile, method)
       })(Updater.partialOrderingToUpdater)
       methodToCell = methodToCell + ((method, cell))
@@ -88,14 +114,14 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     val analysisTime = endTime - middleTime
     val combinedTime = endTime - startTime
 
-    val pureMethods = methodToCell.filter(_._2.getResult match {
+    val pureMethods = methodToCell.filter(_._2.getResult() match {
       case Pure => true
       case _ => false
-    }).map(_._1)
+    }).keys
 
     val pureMethodsInfo = pureMethods.map(m => m.toJava).toList.sorted
 
-    BasicReport("pure methods analysis:\n" + pureMethodsInfo.mkString("\n") +
+    BasicReport(s"pure methods analysis:\nPURE=${pureMethods.size}\n\n" + pureMethodsInfo.mkString("\n") +
       s"\nSETUP TIME: $setupTime" +
       s"\nANALYIS TIME: $analysisTime" +
       s"\nCOMBINED TIME: $combinedTime")
@@ -106,7 +132,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
    */
   def analyze(
     project: Project[URL],
-    methodToCell: Map[Method, Cell[PurityKey.type, Purity]],
+    methodToCell: Map[Method, Cell[Purity]],
     classFile: ClassFile,
     method: Method): Outcome[Purity] = {
     import project.nonVirtualCall
@@ -121,7 +147,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       return FinalOutcome(Impure)
     }
 
-    var hasDependencies = false
+    val dependencies = scala.collection.mutable.Set.empty[Method]
     val declaringClassType = classFile.thisType
     val methodDescriptor = method.descriptor
     val methodName = method.name
@@ -158,14 +184,11 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
           case mii: NonVirtualMethodInvocationInstruction ⇒
 
-            nonVirtualCall(mii) match {
+            nonVirtualCall(method.classFile.thisType, mii) match {
 
               case Success(callee) ⇒
                 /* Recall that self-recursive calls are handled earlier! */
-
-                val targetCell = methodToCell(callee)
-                hasDependencies = true
-                cell.whenComplete(targetCell, p => if (p == Impure) FinalOutcome(Impure) else NoOutcome)
+                dependencies.add(callee)
 
               case _ /* Empty or Failure */ ⇒
 
@@ -199,12 +222,24 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
       currentPC = body.pcOfNextInstruction(currentPC)
     }
 
-    // Every method that is not identified as being impure is (conditionally)pure.
-    if (!hasDependencies) {
+    // Every method that is not identified as being impure is (conditionally) pure.
+    if (dependencies.isEmpty) {
       FinalOutcome(Pure)
-      //println("Immediately Pure Method: "+method.toJava(classFile))
     } else {
+      cell.when(dependencies.map(methodToCell).toSeq: _*)(c)
       NextOutcome(UnknownPurity) // == NoOutcome
     }
+  }
+
+  def c(v: Iterable[(Cell[Purity], Try[ValueOutcome[Purity]])]): Outcome[Purity] = {
+    // If any dependee is Impure, the dependent Cell is impure.
+    // Otherwise, we do not know anything new.
+    // Exception will be rethrown.
+    if (v.collectFirst({
+      case (_, scala.util.Success(FinalOutcome(Impure))) => true
+      case (_, scala.util.Failure(_)) => true
+    }).isDefined)
+      FinalOutcome(Impure)
+    else NoOutcome
   }
 }
