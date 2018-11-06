@@ -1,4 +1,4 @@
-package com.phaller.rasync
+package com.phaller.rasync.cell
 
 /**
  * Use this trait in callbacks to return the new value of a cell.
@@ -6,17 +6,30 @@ package com.phaller.rasync
  * the cell; in the latter case the cell is completed.
  * Use `NoOutcome` to indicate that no progress is possible.
  */
+// Note that we do not use this as parameter for dependency callbacks,
+// as those arguments might be Failures
 sealed trait Outcome[+V]
-final case class NextOutcome[+V](value: V) extends Outcome[V]
-final case class FinalOutcome[+V](value: V) extends Outcome[V]
-case object NoOutcome extends Outcome[Nothing]
+sealed trait FreezeOutcome[+V] extends Outcome[V]
+sealed trait IntermediateOutcome[+V] extends Outcome[V]
+sealed trait ValueOutcome[+V] extends Outcome[V] {
+  val value: V
+}
+final case class NextOutcome[+V](override val value: V) extends ValueOutcome[V] with IntermediateOutcome[V]
+final case class FinalOutcome[+V](override val value: V) extends ValueOutcome[V] with FreezeOutcome[V]
+case object NoOutcome extends IntermediateOutcome[Nothing]
+case object FreezeOutcome extends FreezeOutcome[Nothing]
 
 object Outcome {
 
   /** Returns a `NextOutcome(value)` or `FinalOutcome(value)` object, depending on `isFinal`. */
-  def apply[V](value: V, isFinal: Boolean): Outcome[V] =
+  def apply[V](value: V, isFinal: Boolean): ValueOutcome[V] =
     if (isFinal) FinalOutcome(value)
     else NextOutcome(value)
+
+  /** Returns a `NextOutcome(value)` or `FinalOutcome(value)` object, depending on `isFinal`. */
+  def apply[V](e: (V, Boolean)): ValueOutcome[V] =
+    if (e._2) FinalOutcome(e._1)
+    else NextOutcome(e._1)
 
   /**
    * Returns a `NextOutcome`, `FinalOutcome`, or `NoOutcome` object.
@@ -36,5 +49,11 @@ object Outcome {
     case FinalOutcome(v) => Some(v, true)
     case NextOutcome(v) => Some(v, false)
     case _ => None
+  }
+
+  /** Match non-empty outcomes. */
+  def unapply[V](outcome: ValueOutcome[V]): (V, Boolean) = outcome match {
+    case FinalOutcome(v) => (v, true)
+    case NextOutcome(v) => (v, false)
   }
 }

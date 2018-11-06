@@ -1,17 +1,17 @@
 package com.phaller.rasync
+package pool
 
-import java.util.concurrent.{ ConcurrentLinkedQueue, CountDownLatch, ForkJoinPool, RejectedExecutionException }
-import java.util.concurrent.atomic.{ AtomicLong, AtomicReference }
+import java.util.concurrent._
+import java.util.concurrent.atomic.AtomicReference
 
-import scala.annotation.tailrec
-import scala.util.control.NonFatal
-import scala.concurrent.{ Await, Future, Promise }
-import scala.concurrent.duration._
+import cell.{ Cell, CellCompleter, NoOutcome, Outcome }
 import lattice.{ DefaultKey, Key, Updater }
 import org.opalj.graphs._
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Queue
+import scala.concurrent.{ Future, Promise }
+import scala.util.control.NonFatal
 
 /* Need to have reference equality for CAS.
  */
@@ -20,20 +20,31 @@ private class PoolState(val handlers: List[() => Unit] = List(), val submittedTa
     submittedTasks == 0
 }
 
-class HandlerPool(
+class HandlerPool[V](
+  val key: Key[V] = new DefaultKey[V],
   val parallelism: Int = Runtime.getRuntime.availableProcessors(),
-  unhandledExceptionHandler: Throwable => Unit = _.printStackTrace()) {
+  unhandledExceptionHandler: Throwable => Unit = _.printStackTrace(),
+  val schedulingStrategy: SchedulingStrategy = DefaultScheduling) {
 
-  private val pool: ForkJoinPool = new ForkJoinPool(parallelism)
+  private val pool: AbstractExecutorService =
+    if (schedulingStrategy == DefaultScheduling)
+      new ForkJoinPool(parallelism)
+    else
+      new ThreadPoolExecutor(parallelism, parallelism, Int.MaxValue, TimeUnit.NANOSECONDS, new PriorityBlockingQueue[Runnable]())
 
   private val poolState = new AtomicReference[PoolState](new PoolState)
 
-  private val cellsNotDone = new ConcurrentLinkedQueue[Cell[_, _]]()
+  private val cellsNotDone = new ConcurrentLinkedQueue[Cell[_]]()
 
-  private var interruptLatch = new CountDownLatch(1)
-  @volatile private var isInterrupted = false
-
-  def remainingTasks(): Int = poolState.get.submittedTasks
+  abstract class PriorityRunnable(val priority: Int) extends Runnable with Comparable[Runnable] {
+    override def compareTo(t: Runnable): Int = {
+      val p = t match {
+        case runnable: PriorityRunnable => runnable.priority
+        case _ => 1
+      }
+      priority - p
+    }
+  }
 
   /**
    * Returns a new cell in this HandlerPool.
@@ -43,13 +54,15 @@ class HandlerPool(
    * It gets called, when the cell is awaited, either directly by the triggerExecution method
    * of the HandlerPool or if a cell that depends on this cell is awaited.
    *
-   * @param key The key to resolve this cell if in a cycle or no result computed.
    * @param init A callback to return the initial value for this cell and to set up dependencies.
    * @param updater The updater used to update the value of this cell.
    * @return Returns a cell.
    */
-  def mkCell[K <: Key[V], V](key: K, init: (Cell[K, V]) => Outcome[V])(implicit updater: Updater[V]): Cell[K, V] = {
-    CellCompleter(key, init)(updater, this).cell
+  def mkCell(init: (Cell[V]) => Outcome[V])(implicit updater: Updater[V]): Cell[V] = {
+    CellCompleter(init)(updater, this).cell
+  }
+  def mkSequentialCell(init: (Cell[V]) => Outcome[V])(implicit updater: Updater[V]): Cell[V] = {
+    CellCompleter(init, sequential = true)(updater, this).cell
   }
 
   /**
@@ -60,7 +73,7 @@ class HandlerPool(
    * @param updater The updater used to update the value of this cell.
    * @return Returns a cell with value `v`.
    */
-  def mkCompletedCell[V](result: V)(implicit updater: Updater[V]): Cell[DefaultKey[V], V] = {
+  def mkCompletedCell(result: V)(implicit updater: Updater[V]): Cell[V] = {
     CellCompleter.completed(result)(updater, this).cell
   }
 
@@ -74,7 +87,7 @@ class HandlerPool(
   final def onQuiescent(handler: () => Unit): Unit = {
     val state = poolState.get()
     if (state.isQuiescent) {
-      execute(new Runnable { def run(): Unit = handler() })
+      execute(new Runnable { def run(): Unit = handler() }, 0)
     } else {
       val newState = new PoolState(handler :: state.handlers, state.submittedTasks)
       val success = poolState.compareAndSet(state, newState)
@@ -88,7 +101,7 @@ class HandlerPool(
    *
    * @param cell The cell.
    */
-  def register[K <: Key[V], V](cell: Cell[K, V]): Unit =
+  def register(cell: Cell[V]): Unit =
     cellsNotDone.add(cell)
 
   /**
@@ -96,7 +109,7 @@ class HandlerPool(
    *
    * @param cell The cell.
    */
-  def deregister[K <: Key[V], V](cell: Cell[K, V]): Unit =
+  def deregister(cell: Cell[V]): Unit =
     cellsNotDone.remove(cell)
 
   /**
@@ -108,93 +121,11 @@ class HandlerPool(
   }
 
   /** Returns all non-completed cells, when quiescence is reached. */
-  def quiescentIncompleteCells: Future[Iterable[Cell[_, _]]] = {
-    val p = Promise[Iterable[Cell[_, _]]]
+  def quiescentIncompleteCells: Future[Iterable[Cell[_]]] = {
+    val p = Promise[Iterable[Cell[_]]]
     this.onQuiescent { () =>
       deregisterCompletedCells()
       p.success(cellsNotDone.asScala)
-    }
-    p.future
-  }
-
-  def whileQuiescentResolveCell[K <: Key[V], V]: Unit = {
-    while (!cellsNotDone.isEmpty) {
-      val fut = this.quiescentResolveCell
-      Await.ready(fut, 15.minutes)
-    }
-  }
-
-  def whileQuiescentResolveDefault[K <: Key[V], V]: Unit = {
-    while (!cellsNotDone.isEmpty) {
-      val fut = this.quiescentResolveDefaults
-      Await.ready(fut, 15.minutes)
-    }
-  }
-
-  /**
-   * Wait for a quiescent state when no more tasks are being executed. Afterwards, it will resolve
-   * unfinished cycles (cSCCs) of cells using the keys resolve function and recursively wait for resolution.
-   *
-   * @return The future will be set once the resolve is finished and the quiescent state is reached.
-   *         The boolean parameter indicates if cycles where resolved or not.
-   */
-  def quiescentResolveCycles[K <: Key[V], V]: Future[Boolean] = {
-    val p = Promise[Boolean]
-    this.onQuiescent { () =>
-      deregisterCompletedCells()
-
-      // Find closed strongly connected components (cells)
-      val registered = this.cellsNotDone.asScala
-        .filter(_.tasksActive())
-        .asInstanceOf[Iterable[Cell[K, V]]]
-
-      if (registered.nonEmpty) {
-        val cSCCs = closedSCCs(registered, (cell: Cell[K, V]) => cell.totalCellDependencies)
-        cSCCs.foreach(resolveCycle)
-
-        // Wait again for quiescent state. It's possible that other tasks where scheduled while
-        // resolving the cells.
-        if (cSCCs.nonEmpty) {
-          p.completeWith(quiescentResolveCycles)
-        } else {
-          p.success(false)
-        }
-      } else {
-        p.success(false)
-      }
-    }
-    p.future
-  }
-
-  /**
-   * Wait for a quiescent state when no more tasks are being executed. Afterwards, it will resolve
-   * unfinished cells using the keys fallback function and recursively wait for resolution.
-   *
-   * Note that this also resolves cells that have dependencies on other cells – in contrast to
-   * quiescentResolveCell()
-   *
-   * @return The future will be set once the resolve is finished and the quiescent state is reached.
-   *         The boolean parameter indicates if cycles where resolved or not.
-   */
-  def quiescentResolveDefaults[K <: Key[V], V]: Future[Boolean] = {
-    val p = Promise[Boolean]
-    this.onQuiescent { () =>
-      deregisterCompletedCells()
-
-      // Finds the rest of the unresolved cells (that have been triggered)
-      val rest = this.cellsNotDone.asScala
-        .filter(_.tasksActive())
-        .asInstanceOf[Iterable[Cell[K, V]]]
-
-      if (rest.nonEmpty) {
-        resolveDefault(rest)
-
-        // Wait again for quiescent state. It's possible that other tasks where scheduled while
-        // resolving the cells.
-        p.completeWith(quiescentResolveDefaults)
-      } else {
-        p.success(false)
-      }
     }
     p.future
   }
@@ -210,38 +141,40 @@ class HandlerPool(
    * @return The future is set once the resolve is finished and the quiescent state is reached.
    *         The boolean parameter indicates if cycles have been resolved or not.
    */
-  def quiescentResolveCell[K <: Key[V], V]: Future[Boolean] = {
-    val p = Promise[Boolean]
+  def quiescentResolveCell: Future[Unit] = {
+    val p = Promise[Unit]
     this.onQuiescent { () =>
       deregisterCompletedCells()
 
       val activeCells = this.cellsNotDone.asScala
         .filter(_.tasksActive())
-        .asInstanceOf[Iterable[Cell[K, V]]]
-
-      var resolvedCycles = false
+        .asInstanceOf[Iterable[Cell[V]]]
 
       val independent = activeCells.filter(_.isIndependent())
-      if (independent.nonEmpty) {
-        // Resolve independent cells with fallback values
-        resolveDefault(independent)
-      } else {
-        // Otherwise, find and resolve closed strongly connected components and resolve them.
+      val waitAgain: Boolean =
+        if (independent.nonEmpty) {
+          // Resolve independent cells with fallback values
+          resolveDefault(independent)
+        } else {
+          // Otherwise, find and resolve closed strongly connected components and resolve them.
 
-        // Find closed strongly connected component (cell)
-        if (activeCells.nonEmpty) {
-          val cSCCs = closedSCCs(activeCells, (cell: Cell[K, V]) => cell.totalCellDependencies)
-          cSCCs.foreach(resolveCycle)
-          resolvedCycles = cSCCs.nonEmpty
+          // Find closed strongly connected component (cell)
+          if (activeCells.isEmpty) {
+            false
+          } else {
+            val cSCCs = closedSCCs[Cell[V]](activeCells, (cell: Cell[V]) => cell.cellDependencies)
+            cSCCs
+              .map(resolveCycle) // resolve all cSCCs
+              .exists(b => b) // return if any resolution took place
+          }
         }
-      }
 
       // Wait again for quiescent state. It's possible that other tasks where scheduled while
       // resolving the cells.
-      if (resolvedCycles || independent.nonEmpty) {
+      if (waitAgain) {
         p.completeWith(quiescentResolveCell)
       } else {
-        p.success(false)
+        p.success(())
       }
     }
     p.future
@@ -250,18 +183,18 @@ class HandlerPool(
   /**
    * Resolves a cycle of unfinished cells via the key's `resolve` method.
    */
-  private def resolveCycle[K <: Key[V], V](cells: Iterable[Cell[K, V]]): Unit =
-    resolve(cells.head.key.resolve(cells))
+  private def resolveCycle(cells: Iterable[Cell[V]]): Boolean =
+    resolve(key.resolve(cells))
 
   /**
    * Resolves a cell with default value with the key's `fallback` method.
    */
-  private def resolveDefault[K <: Key[V], V](cells: Iterable[Cell[K, V]]): Unit =
-    resolve(cells.head.key.fallback(cells))
+  private def resolveDefault(cells: Iterable[Cell[V]]): Boolean =
+    resolve(key.fallback(cells))
 
   /** Resolve all cells with the associated value. */
-  private def resolve[K <: Key[V], V](results: Iterable[(Cell[K, V], V)]): Unit = {
-    val cells = results.map(_._1).toSeq
+  private def resolve(results: Iterable[(Cell[V], V)]): Boolean = {
+    val cells = results.map(_._1.completer).toSeq
     for ((c, v) <- results)
       execute(new Runnable {
         override def run(): Unit = {
@@ -271,7 +204,8 @@ class HandlerPool(
           // we can now safely put a final value
           c.resolveWithValue(v, cells)
         }
-      })
+      }, schedulingStrategy.calcPriority(c))
+    results.nonEmpty
   }
 
   /**
@@ -317,7 +251,7 @@ class HandlerPool(
       handlersToRun.get.foreach { handler =>
         execute(new Runnable {
           def run(): Unit = handler()
-        })
+        }, 0) // TODO set a priority
       }
     }
   }
@@ -326,21 +260,18 @@ class HandlerPool(
   //def execute(f : => Unit) : Unit =
   //  execute(new Runnable{def run() : Unit = f})
 
-  def execute(fun: () => Unit): Unit =
-    execute(new Runnable { def run(): Unit = fun() })
+  def execute(fun: () => Unit, priority: Int): Unit =
+    execute(new Runnable { def run(): Unit = fun() }, priority)
 
-  def execute(task: Runnable): Unit = {
+  def execute(task: Runnable, priority: Int = 0): Unit = {
     // Submit task to the pool
     incSubmittedTasks()
 
     // Run the task
     try {
-      pool.execute(new Runnable {
+      pool.execute(new PriorityRunnable(priority) {
         def run(): Unit = {
           try {
-            if (isInterrupted) {
-              interruptLatch.await()
-            }
             task.run()
           } catch {
             case NonFatal(e) =>
@@ -367,7 +298,7 @@ class HandlerPool(
    *
    * @param cell The cell that is triggered.
    */
-  private[rasync] def triggerExecution[K <: Key[V], V](cell: Cell[K, V]): Unit = {
+  private[rasync] def triggerExecution(cell: Cell[V], priority: Int = 0): Unit = {
     if (cell.setTasksActive())
       // if the cell's state has successfully been changed, schedule further computations
       execute(() => {
@@ -377,7 +308,7 @@ class HandlerPool(
           case Outcome(v, isFinal) => completer.put(v, isFinal)
           case NoOutcome => /* don't do anything */
         }
-      })
+      }, priority)
   }
 
   /**
@@ -397,19 +328,4 @@ class HandlerPool(
   def reportFailure(t: Throwable): Unit =
     t.printStackTrace()
 
-  /**
-   * Interrupt the computation of cells. It can be resumed using the `resume` method.
-   */
-  def interrupt(): Unit = {
-    isInterrupted = true
-  }
-
-  /**
-   * Resume the computation if the execution was interrupted. Don't do anything if the execution was not interrupted.
-   */
-  def resume(): Unit = {
-    isInterrupted = false
-    interruptLatch.countDown()
-    interruptLatch = new CountDownLatch(1)
-  }
 }

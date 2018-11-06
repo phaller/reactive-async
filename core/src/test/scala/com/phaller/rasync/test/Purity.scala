@@ -1,15 +1,16 @@
 package com.phaller.rasync
 package test
 
+import com.phaller.rasync.cell.Cell
 import com.phaller.rasync.lattice._
 
 object PurityKey extends Key[Purity] {
 
-  def resolve[K <: Key[Purity]](cells: Iterable[Cell[K, Purity]]): Iterable[(Cell[K, Purity], Purity)] = {
+  def resolve(cells: Iterable[Cell[Purity]]): Iterable[(Cell[Purity], Purity)] = {
     cells.map(cell => (cell, Pure))
   }
 
-  def fallback[K <: Key[Purity]](cells: Iterable[Cell[K, Purity]]): Iterable[(Cell[K, Purity], Purity)] = {
+  def fallback(cells: Iterable[Cell[Purity]]): Iterable[(Cell[Purity], Purity)] = {
     cells.map(cell => (cell, Pure))
   }
 

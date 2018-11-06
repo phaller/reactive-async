@@ -1,39 +1,43 @@
 package com.phaller.rasync
 package test
 
-import org.scalatest.FunSuite
+import cell.{ CellCompleter, FinalOutcome, NoOutcome }
 import com.phaller.rasync.lattice.Updater
-import lattice.{ StringIntKey, StringIntUpdater }
+import org.scalatest.FunSuite
+import pool.HandlerPool
+import lattice.IntUpdater
 
 class InternalBaseSuite extends FunSuite {
 
-  implicit val stringIntUpdater: Updater[Int] = new StringIntUpdater
+  implicit val stringIntUpdater: Updater[Int] = new IntUpdater
 
   test("cellDependencies: By adding dependencies") {
-    implicit val pool = new HandlerPool
-    val completer1 = CellCompleter[StringIntKey, Int]("key1")
-    val completer2 = CellCompleter[StringIntKey, Int]("key2")
+    implicit val pool = new HandlerPool[Int]
+    val completer1 = CellCompleter[Int]()
+    val completer2 = CellCompleter[Int]()
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)
-    cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)
+    cell1.when((_, x) => if (x.get.value == 0) FinalOutcome(0) else NoOutcome, cell2)
+    cell1.when((_, x) => if (x.get.value == 0) FinalOutcome(0) else NoOutcome, cell2)
 
-    assert(cell1.numCompleteDependencies == 1)
-    assert(cell2.numCompleteDependencies == 0)
+    assert(cell1.numDependencies == 1)
+    assert(cell2.numDependencies == 0)
   }
 
   test("cellDependencies: By removing dependencies") {
-    implicit val pool = new HandlerPool
-    val completer1 = CellCompleter[StringIntKey, Int]("key1")
-    val completer2 = CellCompleter[StringIntKey, Int]("key2")
+    implicit val pool = new HandlerPool[Int]
+    val completer1 = CellCompleter[Int]()
+    val completer2 = CellCompleter[Int]()
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)
-    cell1.whenComplete(cell2, x => if (x == 0) FinalOutcome(0) else NoOutcome)
+    cell1.when((_, x) => if (x.get.value == 0) FinalOutcome(0) else NoOutcome, cell2)
+    cell1.when((_, x) => if (x.get.value == 0) FinalOutcome(0) else NoOutcome, cell2)
 
     completer1.putFinal(0)
 
-    assert(cell1.numCompleteDependencies == 0)
-    assert(cell2.numCompleteDependencies == 0)
+    pool.onQuiescent(() => {
+      assert(cell1.numDependencies == 0)
+      assert(cell2.numDependencies == 0)
+    })
   }
 }

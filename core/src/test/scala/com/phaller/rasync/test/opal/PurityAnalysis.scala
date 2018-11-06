@@ -4,7 +4,9 @@ package opal
 
 import java.net.URL
 
+import com.phaller.rasync.cell._
 import com.phaller.rasync.lattice.Updater
+import com.phaller.rasync.pool.HandlerPool
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Await
@@ -47,6 +49,8 @@ import org.opalj.br.instructions.INVOKEINTERFACE
 import org.opalj.br.instructions.MethodInvocationInstruction
 import org.opalj.br.instructions.NonVirtualMethodInvocationInstruction
 
+import scala.util.Try
+
 object PurityAnalysis extends DefaultOneStepAnalysis {
 
   override def doAnalyze(
@@ -56,13 +60,13 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
     val startTime = System.currentTimeMillis // Used for measuring execution time
     // 1. Initialization of key data structures (one cell(completer) per method)
-    implicit val pool = new HandlerPool()
-    var methodToCell = Map.empty[Method, Cell[PurityKey.type, Purity]]
+    implicit val pool = new HandlerPool(PurityKey)
+    var methodToCell = Map.empty[Method, Cell[Purity]]
     for {
       classFile <- project.allProjectClassFiles
       method <- classFile.methods
     } {
-      val cell = pool.mkCell[PurityKey.type, Purity](PurityKey, _ => {
+      val cell = pool.mkCell(_ => {
         analyze(project, methodToCell, classFile, method)
       })(Updater.partialOrderingToUpdater)
       methodToCell = methodToCell + ((method, cell))
@@ -105,7 +109,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
    */
   def analyze(
     project: Project[URL],
-    methodToCell: Map[Method, Cell[PurityKey.type, Purity]],
+    methodToCell: Map[Method, Cell[Purity]],
     classFile: ClassFile,
     method: Method): Outcome[Purity] = {
     import project.nonVirtualCall
@@ -164,7 +168,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
                 val targetCell = methodToCell(callee)
                 hasDependencies = true
-                cell.whenComplete(targetCell, p => if (p == Impure) FinalOutcome(Impure) else NoOutcome)
+                cell.when(c, targetCell)
 
               case _ /* Empty or Failure */ ⇒
 
@@ -205,5 +209,9 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     } else {
       NextOutcome(UnknownPurity) // == NoOutcome
     }
+  }
+
+  def c(cell: Cell[Purity], v: Try[ValueOutcome[Purity]]): Outcome[Purity] = {
+    if (v.get.value == Impure) FinalOutcome(Impure) else NoOutcome
   }
 }
