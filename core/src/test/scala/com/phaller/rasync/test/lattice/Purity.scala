@@ -1,6 +1,6 @@
-package com.phaller.rasync
-package test
+package com.phaller.rasync.test.lattice
 
+import com.phaller.rasync.Cell
 import com.phaller.rasync.lattice._
 
 object PurityKey extends Key[Purity] {

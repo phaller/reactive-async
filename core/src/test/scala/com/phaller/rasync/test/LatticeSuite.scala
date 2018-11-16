@@ -1,8 +1,8 @@
 package com.phaller.rasync
 package test
 
-import com.phaller.rasync.lattice.{ Lattice, NaturalNumberLattice, PartialOrderingWithBottom }
-
+import com.phaller.rasync.lattice.lattices.NaturalNumberLattice
+import com.phaller.rasync.lattice.{ Lattice, PartialOrderingWithBottom }
 import org.scalatest.FunSuite
 
 class LatticeSuite extends FunSuite {

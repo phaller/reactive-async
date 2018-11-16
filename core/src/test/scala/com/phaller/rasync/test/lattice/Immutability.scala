@@ -1,7 +1,7 @@
-package com.phaller.rasync
-package test
+package com.phaller.rasync.test.lattice
 
-import com.phaller.rasync.lattice.{ MonotonicUpdater, Key, Lattice }
+import com.phaller.rasync.Cell
+import com.phaller.rasync.lattice.{ Key, Lattice }
 
 object ImmutabilityKey extends Key[Immutability] {
 

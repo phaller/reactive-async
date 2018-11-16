@@ -2,8 +2,8 @@ package com.phaller.rasync
 package test
 
 import org.scalatest.FunSuite
-
 import com.phaller.rasync.lattice.Lattice
+import com.phaller.rasync.lattice.lattices.PowerSetLattice
 
 object Util {
 
@@ -22,24 +22,10 @@ object Util {
 
 }
 
-class PowerSetLattice[T] extends Lattice[Set[T]] {
-
-  def join(left: Set[T], right: Set[T]): Set[T] =
-    left ++ right
-
-  val bottom: Set[T] =
-    Set[T]()
-
-}
-
-object PowerSetLattice {
+class PowerSetLatticeSuite extends FunSuite {
 
   implicit def mkLattice[T]: PowerSetLattice[T] =
     new PowerSetLattice[T]
-
-}
-
-class PowerSetLatticeSuite extends FunSuite {
 
   test("join using lattice") {
     val powerSetLattice = new PowerSetLattice[Int]
@@ -58,7 +44,6 @@ class PowerSetLatticeSuite extends FunSuite {
   }
 
   test("join using implicit lattice 2") {
-    import PowerSetLattice._ // imported: implicit def mkLattice[T]: PowerSetLattice[T]
     // type checker knows: PowerSetLattice[T] <: Lattice[Set[T]]
     // type checker knows: calling mkLattice[Int] returns PowerSetLattice[Int] <: Lattice[Set[Int]]
     val elem1 = Set(1, 2)
@@ -68,7 +53,6 @@ class PowerSetLatticeSuite extends FunSuite {
   }
 
   test("join using implicit lattice 3") {
-    import PowerSetLattice._ // imported: implicit def mkLattice[T]: PowerSetLattice[T]
     // type checker knows: PowerSetLattice[T] <: Lattice[Set[T]]
     // type checker knows: calling mkLattice[Int] returns PowerSetLattice[Int] <: Lattice[Set[Int]]
     val elem1 = Set(1, 2)

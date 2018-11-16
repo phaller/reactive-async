@@ -603,8 +603,9 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
 
           // create "staging" for dependent cells.
           // To avoid multiple compareAndSets, this is not moved to a different method
+          val staged = Some(newVal)
           val newNextDeps = current.nextDependentCells.map {
-            case (c, _) => (c, Some(newVal))
+            case (c, _) => (c, staged)
           }
 
           val newState = new IntermediateState(newVal, current.tasksActive, current.completeDependentCells, current.completeCallbacks, newNextDeps, current.nextCallbacks, current.combinedCallbacks)

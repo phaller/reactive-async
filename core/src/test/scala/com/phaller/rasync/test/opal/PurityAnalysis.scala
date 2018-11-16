@@ -5,6 +5,7 @@ package opal
 import java.net.URL
 
 import com.phaller.rasync.lattice.Updater
+import com.phaller.rasync.test.lattice._
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Await

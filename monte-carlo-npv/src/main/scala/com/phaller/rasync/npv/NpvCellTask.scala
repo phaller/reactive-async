@@ -1,6 +1,6 @@
 package com.phaller.rasync.npv
 
-import com.phaller.rasync.lattice.{ DefaultKey, Lattice, NotMonotonicException, NaturalNumberLattice, NaturalNumberKey }
+import com.phaller.rasync.lattice.{ DefaultKey, Lattice, NotMonotonicException }
 import com.phaller.rasync.{ Cell, CellCompleter, HandlerPool }
 
 import scala.util.{ Success, Failure }
