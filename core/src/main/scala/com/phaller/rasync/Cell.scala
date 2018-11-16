@@ -260,7 +260,7 @@ private class IntermediateState[K <: Key[V], V](
   /** A list of cells that `this` cell depends on mapped to the callbacks to call, if those cells change. */
   val nextCallbacks: Map[Cell[K, V], NextCallbackRunnable[K, V]],
   /** A list of cells that `this` cell depends on mapped to the callbacks to call, if those cells change. */
-  val combinedCallbacks: Map[Cell[K, V], CombinedCallbackRunnable[K, V]]) extends State[V]
+  val combinedCallbacks: Map[Cell[K, V], CallbackRunnable[K, V]]) extends State[V]
 
 private object IntermediateState {
   def empty[K <: Key[V], V](updater: Updater[V]): IntermediateState[K, V] =
@@ -491,7 +491,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
     whenMulti(other, valueCallback, false)
 
 
-  override def whenMulti(other: List[Cell[K, V]], valueCallback: () => Outcome[V], sequential: Boolean): Unit = {
+  private def whenMulti(other: List[Cell[K, V]], valueCallback: () => Outcome[V], sequential: Boolean): Unit = {
     var success = false
     while (!success) { // repeat until compareAndSet succeeded (or the dependency is outdated)
       state.get() match {
@@ -510,11 +510,11 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
               if (sequential) new MultiSequentialCallbackRunnable(pool, this, other, valueCallback)
               else new MultiConcurrentCallbackRunnable(pool, this, other, valueCallback)
 
-            val newState = new IntermediateState(current.res, current.tasksActive, current.completeDependentCells, current.completeCallbacks, current.nextDependentCells, current.nextCallbacks, current.combinedCallbacks + (other -> newCallback))
+            val newState = new IntermediateState(current.res, current.tasksActive, current.completeDependentCells, current.completeCallbacks, current.nextDependentCells, current.nextCallbacks, current.combinedCallbacks ++ other.map((_, newCallback)))
             if (state.compareAndSet(current, newState)) {
               success = true
               // Inform `other` that this cell depends on its updates.
-              other.addCombinedDependentCell(this)
+              other.foreach(_.addCombinedDependentCell(this))
               // start calculations on `other` so that we eventually get its updates.
               other.foreach(pool.triggerExecution)
             }
