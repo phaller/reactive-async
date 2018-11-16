@@ -462,23 +462,21 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
 
         case raw: IntermediateState[_, _] => // not completed
           val current = raw.asInstanceOf[IntermediateState[K, V]]
-          val depRegistered =
-            if (current.combinedCallbacks.contains(other))
-              true // another combined dependency has been registered already. Ignore the new (duplicate) one. // TODO maybe remove this case distinction. By only using the else part, "old" callbacks get replaced.
-            else {
-              val newCallback: CombinedCallbackRunnable[K, V] =
-                if (sequential) new CombinedSequentialCallbackRunnable(pool, this, other, valueCallback)
-                else new CombinedConcurrentCallbackRunnable(pool, this, other, valueCallback)
+          if (current.combinedCallbacks.contains(other))
+            success = true // another combined dependency has been registered already. Ignore the new (duplicate) one.
+          else {
+            val newCallback: CombinedCallbackRunnable[K, V] =
+              if (sequential) new CombinedSequentialCallbackRunnable(pool, this, other, valueCallback)
+              else new CombinedConcurrentCallbackRunnable(pool, this, other, valueCallback)
 
-              val newState = new IntermediateState(current.res, current.tasksActive, current.completeDependentCells, current.completeCallbacks, current.nextDependentCells, current.nextCallbacks, current.combinedCallbacks + (other -> newCallback))
-              state.compareAndSet(current, newState)
+            val newState = new IntermediateState(current.res, current.tasksActive, current.completeDependentCells, current.completeCallbacks, current.nextDependentCells, current.nextCallbacks, current.combinedCallbacks + (other -> newCallback))
+            if (state.compareAndSet(current, newState)) {
+              success = true
+              // Inform `other` that this cell depends on its updates.
+              other.addCombinedDependentCell(this)
+              // start calculations on `other` so that we eventually get its updates.
+              pool.triggerExecution(other)
             }
-          if (depRegistered) {
-            success = true
-            // Inform `other` that this cell depends on its updates.
-            other.addCombinedDependentCell(this)
-            // start calculations on `other` so that we eventually get its updates.
-            pool.triggerExecution(other)
           }
       }
     }
@@ -503,24 +501,24 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
 
         case raw: IntermediateState[_, _] => // not completed
           val current = raw.asInstanceOf[IntermediateState[K, V]]
-          val depRegistered =
-            if (current.nextCallbacks.contains(other))
-              true // another combined dependency has been registered already. Ignore the new (duplicate) one. // TODO maybe remove this case distinction. By only using the else part, "old" callbacks get replaced.
-            else {
-              val newCallback: NextCallbackRunnable[K, V] =
-                if (sequential) new NextSequentialCallbackRunnable(pool, this, other, valueCallback)
-                else new NextConcurrentCallbackRunnable(pool, this, other, valueCallback)
 
-              val newState = new IntermediateState(current.res, current.tasksActive, current.completeDependentCells, current.completeCallbacks, current.nextDependentCells, current.nextCallbacks + (other -> newCallback), current.combinedCallbacks)
-              state.compareAndSet(current, newState)
+          if (current.nextCallbacks.contains(other))
+            success = true // another combined dependency has been registered already. Ignore the new (duplicate) one.
+          else {
+            val newCallback: NextCallbackRunnable[K, V] =
+              if (sequential) new NextSequentialCallbackRunnable(pool, this, other, valueCallback)
+              else new NextConcurrentCallbackRunnable(pool, this, other, valueCallback)
+
+            val newState = new IntermediateState(current.res, current.tasksActive, current.completeDependentCells, current.completeCallbacks, current.nextDependentCells, current.nextCallbacks + (other -> newCallback), current.combinedCallbacks)
+            if (state.compareAndSet(current, newState)) {
+              success = true
+              // Inform `other` that this cell depends on its updates.
+              other.addNextDependentCell(this)
+              // start calculations on `other` so that we eventually get its updates.
+              pool.triggerExecution(other)
             }
-          if (depRegistered) {
-            success = true
-            // Inform `other` that this cell depends on its updates.
-            other.addNextDependentCell(this)
-            // start calculations on `other` so that we eventually get its updates.
-            pool.triggerExecution(other)
           }
+
       }
     }
   }
@@ -544,24 +542,23 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
 
         case raw: IntermediateState[_, _] => // not completed
           val current = raw.asInstanceOf[IntermediateState[K, V]]
-          val depRegistered =
-            if (current.completeCallbacks.contains(other)) true
-            else {
-              val newCallback: CompleteCallbackRunnable[K, V] =
-                if (sequential) new CompleteSequentialCallbackRunnable(pool, this, other, valueCallback)
-                else new CompleteConcurrentCallbackRunnable(pool, this, other, valueCallback)
-
-              val newState = new IntermediateState(current.res, current.tasksActive, current.completeDependentCells, current.completeCallbacks + (other -> newCallback), current.nextDependentCells, current.nextCallbacks, current.combinedCallbacks)
-              // TODO see whenNext
-              state.compareAndSet(current, newState)
-            }
-          if (depRegistered) {
+          if (current.completeCallbacks.contains(other))
             success = true
-            // Inform `other` that this cell depends on its updates.
-            other.addCompleteDependentCell(this)
-            // start calculations on `other` so that we eventually get its updates.
-            pool.triggerExecution(other)
+          else {
+            val newCallback: CompleteCallbackRunnable[K, V] =
+              if (sequential) new CompleteSequentialCallbackRunnable(pool, this, other, valueCallback)
+              else new CompleteConcurrentCallbackRunnable(pool, this, other, valueCallback)
+
+            val newState = new IntermediateState(current.res, current.tasksActive, current.completeDependentCells, current.completeCallbacks + (other -> newCallback), current.nextDependentCells, current.nextCallbacks, current.combinedCallbacks)
+            if (state.compareAndSet(current, newState)) {
+              success = true
+              // Inform `other` that this cell depends on its updates.
+              other.addCompleteDependentCell(this)
+              // start calculations on `other` so that we eventually get its updates.
+              pool.triggerExecution(other)
+            }
           }
+
       }
     }
   }
