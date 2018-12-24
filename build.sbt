@@ -24,7 +24,8 @@ lazy val core: Project = (project in file("core")).
     name := "reactive-async",
     libraryDependencies += scalaTest,
     libraryDependencies += opalCommon,
-    libraryDependencies += opalAI % Test,
+    libraryDependencies += opalAI,
+    libraryDependencies += opalBR,
     scalacOptions += "-feature"
   )
 
@@ -45,7 +46,7 @@ lazy val bench: Project = (project in file("bench")).
     name := "reactive-async-bench",
     libraryDependencies += scalaTest,
     libraryDependencies += opalCommon,
-    libraryDependencies += opalAI % Test,
+//    libraryDependencies += opalAI % Test,
     libraryDependencies += scalaMeter,
     testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework"),
     skip in publish := true

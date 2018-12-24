@@ -10,15 +10,16 @@ import org.opalj.br.ObjectType
 import org.opalj.br.Method
 import org.opalj.br.analyses.SomeProject
 import org.opalj.br.analyses.Project
-import org.opalj.fpcf.{PropertyKey, PropertyStore, PropertyStoreContext, PropertyStoreKey}
+import org.opalj.fpcf.{ PropertyKey, PropertyStore, PropertyStoreContext, PropertyStoreKey }
 import org.opalj.fpcf.analyses.AbstractIFDSAnalysis.V
 import org.opalj.fpcf.analyses.Statement
-import org.opalj.fpcf.properties.{IFDSProperty, IFDSPropertyMetaInformation}
+import org.opalj.fpcf.properties.{ IFDSProperty, IFDSPropertyMetaInformation }
 import org.opalj.fpcf.seq.PKESequentialPropertyStore
 import org.opalj.bytecode.JRELibraryFolder
 import org.opalj.log.LogContext
 import org.opalj.tac._
-import org.opalj.util.{Nanoseconds, PerformanceEvaluation}
+import org.opalj.util.{ Nanoseconds, PerformanceEvaluation }
+import org.scalatest.FunSuite
 
 import scala.collection.immutable.ListSet
 import scala.concurrent.Await
@@ -34,17 +35,15 @@ case class FlowFact(flow: ListSet[Method]) extends Fact {
 }
 
 /**
-  * A simple IFDS taint analysis.
-  *
-  * @author Dominik Helm
-  */
+ * A simple IFDS taint analysis.
+ *
+ * @author Dominik Helm
+ */
 class TestTaintAnalysis(
-                         parallelism: Int                = Runtime.getRuntime.availableProcessors(),
-                         scheduling:  SchedulingStrategy = DefaultScheduling
-                       )(
-                         implicit
-                         val project: SomeProject
-                       ) extends AbstractIFDSAnalysis[Fact](parallelism, scheduling) {
+  parallelism: Int = Runtime.getRuntime.availableProcessors(),
+  scheduling: SchedulingStrategy = DefaultScheduling)(
+  implicit
+  val project: SomeProject) extends AbstractIFDSAnalysis[Fact](parallelism, scheduling) {
 
   override val property: IFDSPropertyMetaInformation[Fact] = Taint
 
@@ -79,20 +78,20 @@ class TestTaintAnalysis(
     }
 
   /**
-    * Returns true if the expression contains a taint.
-    */
+   * Returns true if the expression contains a taint.
+   */
   def isTainted(expr: Expr[V], in: Set[Fact]): Boolean = {
     expr.isVar && in.exists {
-      case Variable(index)            ⇒ expr.asVar.definedBy.contains(index)
-      case ArrayElement(index, _)     ⇒ expr.asVar.definedBy.contains(index)
+      case Variable(index) ⇒ expr.asVar.definedBy.contains(index)
+      case ArrayElement(index, _) ⇒ expr.asVar.definedBy.contains(index)
       case InstanceField(index, _, _) ⇒ expr.asVar.definedBy.contains(index)
-      case _                          ⇒ false
+      case _ ⇒ false
     }
   }
 
   /**
-    * Returns the constant int value of an expression if it exists, None otherwise.
-    */
+   * Returns the constant int value of an expression if it exists, None otherwise.
+   */
   def getConstValue(expr: Expr[V], code: Array[Stmt[V]]): Option[Int] = {
     if (expr.isIntConst) Some(expr.asIntConst.value)
     else if (expr.isVar) {
@@ -132,7 +131,7 @@ class TestTaintAnalysis(
               (element.isEmpty || taintedIndex == element.get)
           // Or the whole array
           case Variable(index) ⇒ load.arrayRef.asVar.definedBy.contains(index)
-          case _               ⇒ false
+          case _ ⇒ false
         })
           in + Variable(stmt.index)
         else
@@ -141,10 +140,9 @@ class TestTaintAnalysis(
     }
 
   override def callFlow(
-                         stmt:   Statement,
-                         callee: DeclaredMethod,
-                         in:     Set[Fact]
-                       ): Set[Fact] = {
+    stmt: Statement,
+    callee: DeclaredMethod,
+    in: Set[Fact]): Set[Fact] = {
     val allParams = asCall(stmt.stmt).receiverOption ++ asCall(stmt.stmt).params
     if (callee.name == "sink") {
       if (in.exists {
@@ -183,23 +181,21 @@ class TestTaintAnalysis(
   }
 
   override def returnFlow(
-                           stmt:   Statement,
-                           callee: DeclaredMethod,
-                           exit:   Statement,
-                           succ:   Statement,
-                           in:     Set[Fact]
-                         ): Set[Fact] = {
+    stmt: Statement,
+    callee: DeclaredMethod,
+    exit: Statement,
+    succ: Statement,
+    in: Set[Fact]): Set[Fact] = {
 
     /**
-      * Checks whether the formal parameter is of a reference type, as primitive types are
-      * call-by-value.
-      */
+     * Checks whether the formal parameter is of a reference type, as primitive types are
+     * call-by-value.
+     */
     def isRefTypeParam(index: Int): Boolean =
       if (index == -1) true
       else {
         callee.descriptor.parameterType(
-          paramToIndex(index, includeThis = false)
-        ).isReferenceType
+          paramToIndex(index, includeThis = false)).isReferenceType
       }
 
     if (callee.name == "source" && stmt.stmt.astID == Assignment.ASTID)
@@ -258,8 +254,8 @@ class TestTaintAnalysis(
   }
 
   /**
-    * Converts a parameter origin to the index in the parameter seq (and vice-versa).
-    */
+   * Converts a parameter origin to the index in the parameter seq (and vice-versa).
+   */
   def paramToIndex(param: Int, includeThis: Boolean): Int =
     (if (includeThis) -1 else -2) - param
 
@@ -299,7 +295,7 @@ class TestTaintAnalysis(
     if (m.isPublic || m.isProtected) && (m.descriptor.returnType == ObjectType.Object || m.descriptor.returnType == ObjectType.Class)
     index ← m.descriptor.parameterTypes.zipWithIndex.collect { case (pType, index) if pType == ObjectType.String ⇒ index }
   } //yield (declaredMethods(m), null)
-    yield declaredMethods(m) → Variable(-2 - index)).toMap
+  yield declaredMethods(m) → Variable(-2 - index)).toMap
 }
 
 class Taint(val flows: Map[Statement, Set[Fact]]) extends IFDSProperty[Fact] {
@@ -314,11 +310,14 @@ object Taint extends IFDSPropertyMetaInformation[Fact] {
 
   val key: PropertyKey[Taint] = PropertyKey.create(
     "TestTaint",
-    new Taint(Map.empty)
-  )
+    new Taint(Map.empty))
 }
 
-object TestTaintAnalysisRunner {
+class TestTaintAnalysisRunner extends FunSuite {
+
+  test("main") {
+    main(null)
+  }
 
   def main(args: Array[String]): Unit = {
 
@@ -326,7 +325,7 @@ object TestTaintAnalysisRunner {
 
     for (
       scheduling <- List(DefaultScheduling, OthersWithManySuccessorsFirst, OthersWithManySuccessorsLast, CellsWithManyPredecessorsFirst, CellsWithManyPredecessorsLast, CellsWithManySuccessorsFirst, CellsWithManySuccessorsLast);
-      threads <- List(1,2,4,8,16,32)
+      threads <- List(1, 2, 4, 8, 16, 32)
     ) {
       var result = 0
       var lastAvg = 0L
@@ -342,8 +341,7 @@ object TestTaintAnalysisRunner {
             val ps = PKESequentialPropertyStore(context: _*)
             PropertyStore.updateDebug(false)
             ps
-          }
-        )
+          })
 
         // From now on, we may access ps for read operations only
         // We can now start TestTaintAnalysis using IFDS.

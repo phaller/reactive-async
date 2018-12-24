@@ -3,11 +3,11 @@ package com.phaller.rasync.test.opal.ifds
 
 import java.util.concurrent.ConcurrentHashMap
 
-import com.phaller.rasync.lattice.{Key, Lattice}
+import com.phaller.rasync.lattice.{ Key, Lattice }
 import com.phaller.rasync.cell._
-import com.phaller.rasync.pool.{HandlerPool, SchedulingStrategy}
+import com.phaller.rasync.pool.{ HandlerPool, SchedulingStrategy }
 
-import scala.collection.{Set => SomeSet}
+import scala.collection.{ Set => SomeSet }
 import org.opalj.br.DeclaredMethod
 import org.opalj.br.Method
 import org.opalj.br.ObjectType
@@ -47,13 +47,13 @@ import org.opalj.value.ValueInformation
 import scala.util.Try
 
 /**
-  * A framework for IFDS analyses.
-  *
-  * @tparam DataFlowFact The type of flow facts the concrete analysis wants to track
-  *
-  * @author Dominik Helm
-  * @author Jan Kölzer (adaption to Reactive Async)
-  */
+ * A framework for IFDS analyses.
+ *
+ * @tparam DataFlowFact The type of flow facts the concrete analysis wants to track
+ *
+ * @author Dominik Helm
+ * @author Jan Kölzer (adaption to Reactive Async)
+ */
 // The `scheduling` is only for testing. In production, one would create a HandlerPool with the best scheduling for IFDS
 abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.getRuntime.availableProcessors(), scheduling: SchedulingStrategy) extends FPCFAnalysis {
 
@@ -76,8 +76,6 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
     override def join(v1: IFDSProperty[DataFlowFact], v2: IFDSProperty[DataFlowFact]): IFDSProperty[DataFlowFact] =
       createProperty(mergeMaps(v1.flows, v2.flows))
 
-
-
     override val bottom: IFDSProperty[DataFlowFact] = createProperty(Map.empty)
   }
 
@@ -88,54 +86,53 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   private val mfToCell = TrieMap.empty[(DeclaredMethod, DataFlowFact), Cell[IFDSProperty[DataFlowFact]]]
 
   /**
-    * Provides the concrete property key (that must be unique for every distinct concrete analysis
-    * and the lower bound for the IFDSProperty.
-    */
+   * Provides the concrete property key (that must be unique for every distinct concrete analysis
+   * and the lower bound for the IFDSProperty.
+   */
   val property: IFDSPropertyMetaInformation[DataFlowFact]
 
   /** Creates the concrete IFDSProperty. */
   def createProperty(result: Map[Statement, Set[DataFlowFact]]): IFDSProperty[DataFlowFact]
 
   /**
-    * Computes the DataFlowFacts valid after statement `stmt` on the CFG edge to statement `succ`
-    * if the DataFlowFacts `in` held before `stmt`.
-    */
+   * Computes the DataFlowFacts valid after statement `stmt` on the CFG edge to statement `succ`
+   * if the DataFlowFacts `in` held before `stmt`.
+   */
   def normalFlow(stmt: Statement, succ: Statement, in: Set[DataFlowFact]): Set[DataFlowFact]
 
   /**
-    * Computes the DataFlowFacts valid on entry to method `callee` when it is called from statement
-    * `stmt` if the DataFlowFacts `in` held before `stmt`.
-    */
+   * Computes the DataFlowFacts valid on entry to method `callee` when it is called from statement
+   * `stmt` if the DataFlowFacts `in` held before `stmt`.
+   */
   def callFlow(stmt: Statement, callee: DeclaredMethod, in: Set[DataFlowFact]): Set[DataFlowFact]
 
   /**
-    * Computes the DataFlowFacts valid on the CFG edge from statement `stmt` to `succ` if `callee`
-    * was invoked by `stmt` and DataFlowFacts `in` held before the final statement `exit` of
-    * `callee`.
-    */
+   * Computes the DataFlowFacts valid on the CFG edge from statement `stmt` to `succ` if `callee`
+   * was invoked by `stmt` and DataFlowFacts `in` held before the final statement `exit` of
+   * `callee`.
+   */
   def returnFlow(stmt: Statement, callee: DeclaredMethod, exit: Statement, succ: Statement, in: Set[DataFlowFact]): Set[DataFlowFact]
 
   /**
-    * Computes the DataFlowFacts valid on the CFG edge from statement `stmt` to `succ` irrespective
-    * of the call in `stmt` if the DataFlowFacts `in` held before `stmt`.
-    */
+   * Computes the DataFlowFacts valid on the CFG edge from statement `stmt` to `succ` irrespective
+   * of the call in `stmt` if the DataFlowFacts `in` held before `stmt`.
+   */
   def callToReturnFlow(stmt: Statement, succ: Statement, in: Set[DataFlowFact]): Set[DataFlowFact]
 
   protected[this] val declaredMethods: DeclaredMethods = project.get(DeclaredMethodsKey)
 
   class State(
-               val declClass:     ObjectType,
-               val method:        Method,
-               val source:        (DeclaredMethod, DataFlowFact),
-               val code:          Array[Stmt[DUVar[ValueInformation]]],
-               val cfg:           CFG[Stmt[DUVar[ValueInformation]], TACStmts[DUVar[ValueInformation]]],
-               var ifdsData:      Map[(DeclaredMethod, DataFlowFact), Set[(BasicBlock, Int)]],
-               var ifdsDependees: Map[Cell[IFDSProperty[DataFlowFact]], Outcome[IFDSProperty[DataFlowFact]]] = Map.empty,
-               // DataFlowFacts known to be valid on entry to a basic block
-               var incoming: Map[BasicBlock, Set[DataFlowFact]] = Map.empty,
-               // DataFlowFacts known to be valid on exit from a basic block on the cfg edge to a specific successor
-               var outgoing: Map[BasicBlock, Map[CFGNode, Set[DataFlowFact]]] = Map.empty
-             )
+    val declClass: ObjectType,
+    val method: Method,
+    val source: (DeclaredMethod, DataFlowFact),
+    val code: Array[Stmt[DUVar[ValueInformation]]],
+    val cfg: CFG[Stmt[DUVar[ValueInformation]], TACStmts[DUVar[ValueInformation]]],
+    var ifdsData: Map[(DeclaredMethod, DataFlowFact), Set[(BasicBlock, Int)]],
+    var ifdsDependees: Map[Cell[IFDSProperty[DataFlowFact]], Outcome[IFDSProperty[DataFlowFact]]] = Map.empty,
+    // DataFlowFacts known to be valid on entry to a basic block
+    var incoming: Map[BasicBlock, Set[DataFlowFact]] = Map.empty,
+    // DataFlowFacts known to be valid on exit from a basic block on the cfg edge to a specific successor
+    var outgoing: Map[BasicBlock, Map[CFGNode, Set[DataFlowFact]]] = Map.empty)
 
   def waitForCompletion(d: Duration): Unit
 
@@ -157,8 +154,8 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
     cell(source).trigger()
 
   /**
-    * Performs IFDS analysis for one specific entity, i.e. one DeclaredMethod/DataFlowFact pair.
-    */
+   * Performs IFDS analysis for one specific entity, i.e. one DeclaredMethod/DataFlowFact pair.
+   */
   def performAnalysis(source: (DeclaredMethod, DataFlowFact)): Outcome[IFDSProperty[DataFlowFact]] = {
     val (declaredMethod, sourceFact) = source
 
@@ -191,11 +188,10 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   }
 
   /**
-    * Processes a queue of BasicBlocks where new DataFlowFacts are available.
-    */
+   * Processes a queue of BasicBlocks where new DataFlowFacts are available.
+   */
   def process(
-               initialWorklist: mutable.Queue[(BasicBlock, Set[DataFlowFact], Option[Int], Option[Set[Method]], Option[DataFlowFact])]
-             )(implicit state: State): Unit = {
+    initialWorklist: mutable.Queue[(BasicBlock, Set[DataFlowFact], Option[Int], Option[Set[Method]], Option[DataFlowFact])])(implicit state: State): Unit = {
     val worklist = initialWorklist
 
     while (worklist.nonEmpty) {
@@ -232,9 +228,9 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   }
 
   /**
-    * Merges two maps that have sets as values. The resulting map has the keys from both maps with
-    * the associated values being the union of the value from both input maps.
-    */
+   * Merges two maps that have sets as values. The resulting map has the keys from both maps with
+   * the associated values being the union of the value from both input maps.
+   */
   def mergeMaps[S, T](map1: Map[S, Set[T]], map2: Map[S, Set[T]]): Map[S, Set[T]] = {
     var result = map1
     for ((key, values) ← map2) {
@@ -244,9 +240,9 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   }
 
   /**
-    * Gets, for an ExitNode of the CFG, the DataFlowFacts valid on each CFG edge from a
-    * statement to that ExitNode.
-    */
+   * Gets, for an ExitNode of the CFG, the DataFlowFacts valid on each CFG edge from a
+   * statement to that ExitNode.
+   */
   def collectResult(node: CFGNode)(implicit state: State): Map[Statement, Set[DataFlowFact]] =
     node.predecessors.collect {
       case bb: BasicBlock if state.outgoing.contains(bb) && state.outgoing(bb).contains(node) ⇒
@@ -256,18 +252,16 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
           state.code(index),
           index,
           state.code,
-          state.cfg
-        ) → state.outgoing(bb)(node)
+          state.cfg) → state.outgoing(bb)(node)
     }.toMap
 
   /**
-    * Creates the analysis result from the current state.
-    */
+   * Creates the analysis result from the current state.
+   */
   def createResult()(implicit state: State): Outcome[IFDSProperty[DataFlowFact]] = {
     val result = mergeMaps(
       collectResult(state.cfg.normalReturnNode),
-      collectResult(state.cfg.abnormalReturnNode)
-    )
+      collectResult(state.cfg.abnormalReturnNode))
 
     val dependees = state.ifdsDependees // TAC is fixed, so don't add deps for TAC
 
@@ -291,34 +285,32 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   }
 
   /**
-    *  Computes for one BasicBlock `bb` the DataFlowFacts valid on each CFG edge leaving the
-    *  BasicBlock if the DataFlowFacts `sources` held on entry to the BasicBlock.
-    *  @param callIndex The index of a call where the information for one callee was updated or
-    *                   None if analyseBasicBlock was not called as the result of such update.
-    *  @param callee The callee that got its information updated or None if analyseBasicBlock
-    *                was not called as the result of such update.
-    *  @param fact The DataFlowFact that the callee was updated for or None if analyseBasicBlock
-    *              was not called as the result of such update.
-    */
+   *  Computes for one BasicBlock `bb` the DataFlowFacts valid on each CFG edge leaving the
+   *  BasicBlock if the DataFlowFacts `sources` held on entry to the BasicBlock.
+   *  @param callIndex The index of a call where the information for one callee was updated or
+   *                   None if analyseBasicBlock was not called as the result of such update.
+   *  @param callee The callee that got its information updated or None if analyseBasicBlock
+   *                was not called as the result of such update.
+   *  @param fact The DataFlowFact that the callee was updated for or None if analyseBasicBlock
+   *              was not called as the result of such update.
+   */
   def analyseBasicBlock(
-                         bb:        BasicBlock,
-                         sources:   Set[DataFlowFact],
-                         callIndex: Option[Int], //TODO IntOption
-                         callee:    Option[Set[Method]],
-                         fact:      Option[DataFlowFact]
-                       )(
-                         implicit
-                         state: State
-                       ): Map[CFGNode, Set[DataFlowFact]] = {
+    bb: BasicBlock,
+    sources: Set[DataFlowFact],
+    callIndex: Option[Int], //TODO IntOption
+    callee: Option[Set[Method]],
+    fact: Option[DataFlowFact])(
+    implicit
+    state: State): Map[CFGNode, Set[DataFlowFact]] = {
 
     var flows: Set[DataFlowFact] = sources
 
     /**
-      * Collects information about the TAC Stmt at `index`: The corresponding Statement object,
-      * the Set of relevant callees for that statement (None if the statement has no call) and
-      * the fact that was updated for the call if analyseBasicBlock was called because of an
-      * update.
-      */
+     * Collects information about the TAC Stmt at `index`: The corresponding Statement object,
+     * the Set of relevant callees for that statement (None if the statement has no call) and
+     * the fact that was updated for the call if analyseBasicBlock was called because of an
+     * update.
+     */
     def collectInformation(index: Int): (Statement, Option[SomeSet[Method]], Option[DataFlowFact]) = {
       val stmt = state.code(index)
       val statement = Statement(state.method, stmt, index, state.code, state.cfg)
@@ -367,13 +359,13 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   /** Gets the expression from an assingment/expr statement. */
   def expr(stmt: Stmt[V]): Expr[V] = stmt.astID match {
     case Assignment.ASTID ⇒ stmt.asAssignment.expr
-    case ExprStmt.ASTID   ⇒ stmt.asExprStmt.expr
-    case _                ⇒ throw new UnknownError("Unexpected statement")
+    case ExprStmt.ASTID ⇒ stmt.asExprStmt.expr
+    case _ ⇒ throw new UnknownError("Unexpected statement")
   }
 
   /**
-    * Gets the set of all methods possibly called by `stmt` or None if `stmt` contains no call.
-    */
+   * Gets the set of all methods possibly called by `stmt` or None if `stmt` contains no call.
+   */
   def getCallees(stmt: Stmt[V])(implicit state: State): Option[SomeSet[Method]] = {
     stmt.astID match {
       case StaticMethodCall.ASTID ⇒
@@ -393,8 +385,7 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
 
       case Assignment.ASTID if expr(stmt).astID == VirtualFunctionCall.ASTID ⇒
         Some(
-          stmt.asAssignment.expr.asVirtualFunctionCall.resolveCallTargets(state.declClass).filter(_.body.isDefined)
-        )
+          stmt.asAssignment.expr.asVirtualFunctionCall.resolveCallTargets(state.declClass).filter(_.body.isDefined))
 
       case ExprStmt.ASTID if expr(stmt).astID == StaticFunctionCall.ASTID ⇒
         Some(stmt.asExprStmt.expr.asStaticFunctionCall.resolveCallTarget.toSet.filter(_.body.isDefined))
@@ -404,17 +395,16 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
 
       case ExprStmt.ASTID if expr(stmt).astID == VirtualFunctionCall.ASTID ⇒
         Some(
-          stmt.asExprStmt.expr.asVirtualFunctionCall.resolveCallTargets(state.declClass).filter(_.body.isDefined)
-        )
+          stmt.asExprStmt.expr.asVirtualFunctionCall.resolveCallTargets(state.declClass).filter(_.body.isDefined))
 
       case _ ⇒ None
     }
   }
 
   /**
-    * Starts processing all BasicBlocks that have to be reevaluated because a callee they may
-    * invoke got updated.
-    */
+   * Starts processing all BasicBlocks that have to be reevaluated because a callee they may
+   * invoke got updated.
+   */
   def handleCallUpdate(e: (DeclaredMethod, DataFlowFact))(implicit state: State): Unit = {
     val blocks = state.ifdsData(e)
     val queue: mutable.Queue[(BasicBlock, Set[DataFlowFact], Option[Int], Option[Set[Method]], Option[DataFlowFact])] =
@@ -426,31 +416,27 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
           state.incoming(block),
           Some(callSite),
           Some(Set(e._1.definedMethod)),
-          Some(e._2)
-        )
-      )
+          Some(e._2)))
     process(queue)
   }
 
   /**
-    * Processes a statement with a call.
-    * @param callBB The block that contains the statement
-    * @param call The statement with the call
-    * @param callees The methods possibly invoked by the call.
-    * @param in The DataFlowFacts valid before the call statement.
-    * @param fact A single DataFlowFact valid before the call statement or None if handleCall is
-    *             not invoked because of an update to a callee.
-    */
+   * Processes a statement with a call.
+   * @param callBB The block that contains the statement
+   * @param call The statement with the call
+   * @param callees The methods possibly invoked by the call.
+   * @param in The DataFlowFacts valid before the call statement.
+   * @param fact A single DataFlowFact valid before the call statement or None if handleCall is
+   *             not invoked because of an update to a callee.
+   */
   def handleCall(
-                  callBB:  BasicBlock,
-                  call:    Statement,
-                  callees: SomeSet[Method],
-                  in:      Set[DataFlowFact],
-                  fact:    Option[DataFlowFact]
-                )(
-                  implicit
-                  state: State
-                ): Map[CFGNode, Set[DataFlowFact]] = {
+    callBB: BasicBlock,
+    call: Statement,
+    callees: SomeSet[Method],
+    in: Set[DataFlowFact],
+    fact: Option[DataFlowFact])(
+    implicit
+    state: State): Map[CFGNode, Set[DataFlowFact]] = {
     // DataFlowFacts valid on the CFG edge to each successor after the call
     var flows: Map[CFGNode, Set[DataFlowFact]] = Map.empty
 
@@ -477,13 +463,10 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
             fromCall,
             mergeMaps(
               collectResult(state.cfg.normalReturnNode),
-              collectResult(state.cfg.abnormalReturnNode)
-            )
-          )
+              collectResult(state.cfg.abnormalReturnNode)))
         } else {
           val e = (callee, fact)
           val c = cell(e)
-
 
           val callFlows =
             if (c.isComplete)
@@ -509,12 +492,10 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
               },
               if (oldState.isDefined)
                 oldState.get match {
-                  case NextOutcome(p) ⇒ p.flows
-                  case _              ⇒ Map.empty
-                }
-              else Map.empty
-            )
-          )
+                case NextOutcome(p) ⇒ p.flows
+                case _ ⇒ Map.empty
+              }
+              else Map.empty))
           if (oldState.isDefined && oldState.get != callFlows) {
             handleCallUpdate(e)
           }
@@ -534,8 +515,7 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
           callee,
           exit,
           successor,
-          fromCall.getOrElse(exit, Set.empty)
-        )
+          fromCall.getOrElse(exit, Set.empty))
         flows += node → (oldFlows ++ retFlow)
       }
     }
@@ -544,8 +524,8 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   }
 
   /**
-    * Removes all values that are in the second map from the corresponding keys in the first map.
-    */
+   * Removes all values that are in the second map from the corresponding keys in the first map.
+   */
   def mapDifference[S, T](map1: Map[S, Set[T]], map2: Map[S, Set[T]]): Map[S, Set[T]] = {
     var result = map1
     for ((key, values) ← map2) {
@@ -555,21 +535,21 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   }
 
   /**
-    * Gets the Call for a statement that contains a call (MethodCall Stmt or ExprStmt/Assigment
-    * with FunctionCall)
-    * @param stmt
-    * @return
-    */
+   * Gets the Call for a statement that contains a call (MethodCall Stmt or ExprStmt/Assigment
+   * with FunctionCall)
+   * @param stmt
+   * @return
+   */
   def asCall(stmt: Stmt[V]): Call[V] = stmt.astID match {
     case Assignment.ASTID ⇒ stmt.asAssignment.expr.asFunctionCall
-    case ExprStmt.ASTID   ⇒ stmt.asExprStmt.expr.asFunctionCall
-    case _                ⇒ stmt.asMethodCall
+    case ExprStmt.ASTID ⇒ stmt.asExprStmt.expr.asFunctionCall
+    case _ ⇒ stmt.asMethodCall
   }
 
   /**
-    * Gets the first statement of a BasicBlock or the first statement of the handler BasicBlock of
-    * a CatchNode.
-    */
+   * Gets the first statement of a BasicBlock or the first statement of the handler BasicBlock of
+   * a CatchNode.
+   */
   @tailrec
   private def firstStatement(node: CFGNode)(implicit state: State): Statement = {
     if (node.isBasicBlock) {
@@ -582,18 +562,17 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   }
 
   /**
-    * Memoizes results of getExits.
-    */
+   * Memoizes results of getExits.
+   */
   val exits: ConcurrentHashMap[Method, Set[Statement]] = new ConcurrentHashMap
 
   /**
-    * Finds all statements that may terminate the given method.
-    */
+   * Finds all statements that may terminate the given method.
+   */
   def getExits(
-                method:    Method,
-                callBB:    BasicBlock,
-                callIndex: Int
-              ): Set[Statement] = {
+    method: Method,
+    callBB: BasicBlock,
+    callIndex: Int): Set[Statement] = {
     val result = exits.get(method)
 
     if (result == null) {
@@ -614,9 +593,9 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int = Runtime.get
   }
 
   /**
-    * Retrieves and commits the methods result as calculated for its declaring class type for the
-    * current DefinedMethod that represents the non-overwritten method in a subtype.
-    */
+   * Retrieves and commits the methods result as calculated for its declaring class type for the
+   * current DefinedMethod that represents the non-overwritten method in a subtype.
+   */
   def baseMethodResult(source: (DeclaredMethod, DataFlowFact)): Outcome[IFDSProperty[DataFlowFact]] = {
     // set up a dependency and return that we do not have computed any information at this point.
     val (declaredMethod, sourceFact) = source
