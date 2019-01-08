@@ -35,6 +35,9 @@ trait CellCompleter[K <: Key[V], V] {
    */
   def put(x: V, isFinal: Boolean = false): Unit
 
+  /** Complete the cell without changing its value. */
+  def freeze(): Unit
+
   private[rasync] def tryNewState(value: V): Boolean
   def tryComplete(value: Try[V], dontCall: Option[Seq[Cell[K, V]]]): Boolean
 

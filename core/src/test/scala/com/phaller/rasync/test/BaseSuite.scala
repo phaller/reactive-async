@@ -5,7 +5,7 @@ import org.scalatest.FunSuite
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicInteger
 
-import scala.util.{ Failure, Success }
+import scala.util.{ Failure, Success, Try }
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._
 import com.phaller.rasync.lattice._
@@ -70,6 +70,77 @@ class BaseSuite extends FunSuite {
     }
 
     pool.onQuiescenceShutdown()
+  }
+
+  test("freeze") {
+    val latch = new CountDownLatch(1)
+
+    implicit val pool = new HandlerPool
+    val completer = CellCompleter[StringIntKey, Int]("somekey")
+    val cell = completer.cell
+    cell.onComplete {
+      case Success(v) =>
+        assert(v === 5)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+    completer.putNext(5)
+    completer.freeze()
+
+    latch.await()
+
+    pool.shutdown()
+  }
+
+  test("freeze completed cell") {
+    val latch = new CountDownLatch(1)
+
+    implicit val pool = new HandlerPool
+    val completer = CellCompleter[StringIntKey, Int]("somekey")
+    val cell = completer.cell
+    cell.onComplete {
+      case Success(v) =>
+        assert(v === 5)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+    completer.putFinal(5)
+    completer.freeze()
+    completer.freeze()
+
+    latch.await()
+
+    pool.shutdown()
+  }
+
+  test("freeze: subsequent puts fail") {
+    val latch = new CountDownLatch(1)
+
+    implicit val pool = new HandlerPool
+    val completer = CellCompleter[StringIntKey, Int]("somekey")
+    val cell = completer.cell
+    cell.onComplete {
+      case Success(v) =>
+        assert(v === 5)
+        latch.countDown()
+      case Failure(e) =>
+        assert(false)
+        latch.countDown()
+    }
+    completer.putNext(5)
+    completer.freeze()
+    latch.await()
+
+    Try(completer.putNext(10))
+    Try(completer.putFinal(20))
+
+    pool.shutdown()
+
+    assert(cell.getResult() === 5)
   }
 
   test("whenComplete") {
