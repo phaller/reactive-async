@@ -33,7 +33,7 @@ trait CellCompleter[K <: Key[V], V] {
    * cell will be frozen.
    * The new value of `this` cell is determined by its updater.
    */
-  def put(x: V, isFinal: Boolean): Unit
+  def put(x: V, isFinal: Boolean = false): Unit
 
   private[rasync] def tryNewState(value: V): Boolean
   def tryComplete(value: Try[V], dontCall: Option[Seq[Cell[K, V]]]): Boolean

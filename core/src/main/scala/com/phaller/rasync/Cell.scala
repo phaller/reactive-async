@@ -336,7 +336,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
       throw new IllegalStateException("Cell already completed.")
   }
 
-  override def put(x: V, isFinal: Boolean): Unit = {
+  override def put(x: V, isFinal: Boolean = false): Unit = {
     if (isFinal) putFinal(x)
     else putNext(x)
   }

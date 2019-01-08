@@ -17,7 +17,7 @@ case object NoOutcome extends Outcome[Nothing]
 object Outcome {
 
   /** Returns a `NextOutcome(value)` or `FinalOutcome(value)` object, depending on `isFinal`. */
-  def apply[V](value: V, isFinal: Boolean): ValueOutcome[V] =
+  def apply[V](value: V, isFinal: Boolean = false): ValueOutcome[V] =
     if (isFinal) FinalOutcome(value)
     else NextOutcome(value)
 
