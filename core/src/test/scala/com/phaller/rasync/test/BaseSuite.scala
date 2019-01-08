@@ -1794,7 +1794,7 @@ class BaseSuite extends FunSuite {
 
     implicit object ValueUpdater extends Updater[Value] {
       override def update(v1: Value, v2: Value): Value = v2
-      override val initial: Value = Bottom
+      override val bottom: Value = Bottom
     }
 
     implicit val pool = new HandlerPool
@@ -1825,7 +1825,7 @@ class BaseSuite extends FunSuite {
 
     implicit object ValueUpdater extends Updater[Value] {
       override def update(v1: Value, v2: Value): Value = v2
-      override val initial: Value = Bottom
+      override val bottom: Value = Bottom
     }
 
     implicit val pool = new HandlerPool
@@ -1857,7 +1857,7 @@ class BaseSuite extends FunSuite {
 
     implicit object ValueUpdater extends Updater[Value] {
       override def update(v1: Value, v2: Value): Value = if (v1 == Bottom) v2 else v1 // TODO or throw?
-      override val initial: Value = Bottom
+      override val bottom: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
@@ -1895,7 +1895,7 @@ class BaseSuite extends FunSuite {
 
     implicit object ValueUpdater extends Updater[Value] {
       override def update(v1: Value, v2: Value): Value = v2
-      override val initial: Value = Bottom
+      override val bottom: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
@@ -1935,7 +1935,7 @@ class BaseSuite extends FunSuite {
 
     implicit object ValueUpdater extends Updater[Value] {
       override def update(v1: Value, v2: Value): Value = v2
-      override val initial: Value = Bottom
+      override val bottom: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
@@ -1982,7 +1982,7 @@ class BaseSuite extends FunSuite {
 
     implicit object ValueUpdater extends Updater[Value] {
       override def update(v1: Value, v2: Value): Value = v2
-      override val initial: Value = Bottom
+      override val bottom: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
@@ -2029,7 +2029,7 @@ class BaseSuite extends FunSuite {
 
     implicit object ValueUpdater extends Updater[Value] {
       override def update(v1: Value, v2: Value): Value = v2
-      override val initial: Value = Bottom
+      override val bottom: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
@@ -2076,7 +2076,7 @@ class BaseSuite extends FunSuite {
 
     implicit object ValueUpdater extends Updater[Value] {
       override def update(v1: Value, v2: Value): Value = v2
-      override val initial: Value = Bottom
+      override val bottom: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {
@@ -2120,7 +2120,7 @@ class BaseSuite extends FunSuite {
 
     implicit object ValueUpdater extends Updater[Value] {
       override def update(v1: Value, v2: Value): Value = v2
-      override val initial: Value = Bottom
+      override val bottom: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value] {

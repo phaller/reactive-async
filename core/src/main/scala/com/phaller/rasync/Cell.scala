@@ -259,7 +259,7 @@ private class IntermediateState[K <: Key[V], V](
 
 private object IntermediateState {
   def empty[K <: Key[V], V](updater: Updater[V]): IntermediateState[K, V] =
-    new IntermediateState[K, V](updater.initial, false, List(), Map(), Map(), Map(), Map())
+    new IntermediateState[K, V](updater.bottom, false, List(), Map(), Map(), Map(), Map())
 }
 
 private class FinalState[K <: Key[V], V](
@@ -871,7 +871,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
   // Schedules execution of `callback` when next intermediate result is available.
   override private[rasync] def onNext[U](callback: Try[V] => U): Unit = state.get() match {
     case _: IntermediateState[_, _] =>
-      if (getResult() != updater.initial) callback(Success(getResult()))
+      if (getResult() != updater.bottom) callback(Success(getResult()))
       onNextHandler = callback :: onNextHandler
     case _ => callback(Success(getResult()))
   }
@@ -988,7 +988,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
         val current = pre.asInstanceOf[IntermediateState[K, V]]
 
         val staged =
-          if (current.res != updater.initial)
+          if (current.res != updater.bottom)
             Some(current.res) // If the value of this cell has already been changed before, we can immediately inform the dependent cell about this update.
           else
             None // No update yet
