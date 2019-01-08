@@ -1,17 +1,16 @@
 package com.phaller.rasync
 
-import java.util.concurrent.{ ConcurrentLinkedQueue, CountDownLatch, ForkJoinPool, RejectedExecutionException }
-import java.util.concurrent.atomic.{ AtomicLong, AtomicReference }
+import java.util.concurrent._
+import java.util.concurrent.atomic.AtomicReference
 
-import scala.annotation.tailrec
-import scala.util.control.NonFatal
-import scala.concurrent.{ Await, Future, Promise }
-import scala.concurrent.duration._
-import lattice.{ DefaultKey, Key, Updater }
+import com.phaller.rasync.lattice.{ DefaultKey, Key, Updater }
 import org.opalj.graphs._
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Queue
+import scala.concurrent.duration._
+import scala.concurrent.{ Await, Future, Promise }
+import scala.util.control.NonFatal
 
 /* Need to have reference equality for CAS.
  */
@@ -22,9 +21,14 @@ private class PoolState(val handlers: List[() => Unit] = List(), val submittedTa
 
 class HandlerPool(
   val parallelism: Int = Runtime.getRuntime.availableProcessors(),
-  unhandledExceptionHandler: Throwable => Unit = _.printStackTrace()) {
+  unhandledExceptionHandler: Throwable => Unit = _.printStackTrace(),
+  val schedulingStrategy: SchedulingStrategy = DefaultScheduling) {
 
-  private val pool: ForkJoinPool = new ForkJoinPool(parallelism)
+  private val pool: AbstractExecutorService =
+    if (schedulingStrategy == DefaultScheduling)
+      new ForkJoinPool(parallelism)
+    else
+      new ThreadPoolExecutor(parallelism, parallelism, Int.MaxValue, TimeUnit.NANOSECONDS, new PriorityBlockingQueue[Runnable]())
 
   private val poolState = new AtomicReference[PoolState](new PoolState)
 
@@ -32,6 +36,16 @@ class HandlerPool(
 
   private var interruptLatch = new CountDownLatch(1)
   @volatile private var isInterrupted = false
+
+  abstract class PriorityRunnable(val priority: Int) extends Runnable with Comparable[Runnable] {
+    override def compareTo(t: Runnable): Int = {
+      val p = t match {
+        case runnable: PriorityRunnable => runnable.priority
+        case _ => 1
+      }
+      priority - p
+    }
+  }
 
   def remainingTasks(): Int = poolState.get.submittedTasks
 
@@ -74,7 +88,7 @@ class HandlerPool(
   final def onQuiescent(handler: () => Unit): Unit = {
     val state = poolState.get()
     if (state.isQuiescent) {
-      execute(new Runnable { def run(): Unit = handler() })
+      execute(new Runnable { def run(): Unit = handler() }, 0)
     } else {
       val newState = new PoolState(handler :: state.handlers, state.submittedTasks)
       val success = poolState.compareAndSet(state, newState)
@@ -271,7 +285,7 @@ class HandlerPool(
           // we can now safely put a final value
           c.resolveWithValue(v, cells)
         }
-      })
+      }, schedulingStrategy.calcPriority(c))
   }
 
   /**
@@ -317,7 +331,7 @@ class HandlerPool(
       handlersToRun.get.foreach { handler =>
         execute(new Runnable {
           def run(): Unit = handler()
-        })
+        }, 0) // TODO set a priority
       }
     }
   }
@@ -326,16 +340,16 @@ class HandlerPool(
   //def execute(f : => Unit) : Unit =
   //  execute(new Runnable{def run() : Unit = f})
 
-  def execute(fun: () => Unit): Unit =
-    execute(new Runnable { def run(): Unit = fun() })
+  def execute(fun: () => Unit, priority: Int): Unit =
+    execute(new Runnable { def run(): Unit = fun() }, priority)
 
-  def execute(task: Runnable): Unit = {
+  def execute(task: Runnable, priority: Int = 0): Unit = {
     // Submit task to the pool
     incSubmittedTasks()
 
     // Run the task
     try {
-      pool.execute(new Runnable {
+      pool.execute(new PriorityRunnable(priority) {
         def run(): Unit = {
           try {
             if (isInterrupted) {
@@ -367,7 +381,7 @@ class HandlerPool(
    *
    * @param cell The cell that is triggered.
    */
-  private[rasync] def triggerExecution[K <: Key[V], V](cell: Cell[K, V]): Unit = {
+  private[rasync] def triggerExecution[K <: Key[V], V](cell: Cell[K, V], priority: Int = 0): Unit = {
     if (cell.setTasksActive())
       // if the cell's state has successfully been changed, schedule further computations
       execute(() => {
@@ -377,7 +391,7 @@ class HandlerPool(
           case Outcome(v, isFinal) => completer.put(v, isFinal)
           case NoOutcome => /* don't do anything */
         }
-      })
+      }, priority)
   }
 
   /**

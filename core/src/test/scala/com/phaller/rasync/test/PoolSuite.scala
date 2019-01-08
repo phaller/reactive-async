@@ -3,6 +3,8 @@ package test
 
 import java.util.concurrent.ConcurrentHashMap
 
+import java.util.concurrent.CountDownLatch
+
 import org.scalatest.FunSuite
 
 import scala.concurrent.{ Await, Promise }
@@ -18,7 +20,7 @@ class PoolSuite extends FunSuite {
     while (i < 10000) {
       val p1 = Promise[Boolean]()
       val p2 = Promise[Boolean]()
-      pool.execute { () => { p1.success(true) }: Unit }
+      pool.execute({ () => { p1.success(true) }: Unit }, 0)
       pool.onQuiescent { () => p2.success(true) }
       try {
         Await.result(p2.future, 1.seconds)
@@ -43,7 +45,7 @@ class PoolSuite extends FunSuite {
         completer.cell.trigger()
         regCells.put(completer.cell, completer.cell)
         ()
-      })
+      }, 0)
     }
     val fut = pool.quiescentResolveDefaults // set all (registered) cells to 1 via key.fallback
     Await.ready(fut, 5.seconds)
@@ -62,12 +64,11 @@ class PoolSuite extends FunSuite {
         val completer = CellCompleter[StringIntKey, Int]("somekey")
         regCells.put(completer.cell, completer.cell)
         ()
-      })
+      }, 0)
     }
     val fut = pool.quiescentResolveDefaults // set all (registered) cells to 1 via key.fallback
     Await.ready(fut, 5.seconds)
 
     assert(regCells.size === 1000)
   }
-
 }

@@ -246,8 +246,6 @@ private class IntermediateState[K <: Key[V], V](
   val res: V,
   /** `true`, if the `init` method has been called.  */
   val tasksActive: Boolean,
-
-  // TODO can those be concurrent data structures? -> remove the need of CAS, in FinalState, we use TrieMaps
   /** A list of cells that depend on `this` cell. */
   val completeDependentCells: List[Cell[K, V]],
   /** A list of cells that `this` cell depends on mapped to the callbacks to call, if those cells change. */
@@ -1037,7 +1035,7 @@ private class CellImpl[K <: Key[V], V](pool: HandlerPool, val key: K, updater: U
           case _: FinalState[K, V] =>
           /* We are final already, so we ignore all incoming information. */
         }
-      })
+      }, pool.schedulingStrategy.calcPriority(this, otherCell))
     case _: FinalState[K, V] => /* We are final already, so we ignore all incoming information. */
   }
 

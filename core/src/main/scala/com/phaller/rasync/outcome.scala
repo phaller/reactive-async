@@ -35,14 +35,14 @@ object Outcome {
     valueOpt.map(value => if (isFinal) FinalOutcome(value) else NextOutcome(value)).getOrElse(NoOutcome)
 
   /**
-    * Returns a `NextOutcome`, `FinalOutcome`, or `NoOutcome` object.
-    *
-    * If `valueOpt` is `None`, `NoOutcome` is returned. Otherwise, a `NextOutcome` or
-    * `FinalOutcome` is returned depending on the boolean parameter.
-    *
-    * @param valueOpt  Option of a new value, a pair of a value V and a boolean to indicate if it is final.
-    * @return          Returns a `NextOutcome`, `FinalOutcome`, or `NoOutcome` object.
-    */
+   * Returns a `NextOutcome`, `FinalOutcome`, or `NoOutcome` object.
+   *
+   * If `valueOpt` is `None`, `NoOutcome` is returned. Otherwise, a `NextOutcome` or
+   * `FinalOutcome` is returned depending on the boolean parameter.
+   *
+   * @param valueOpt  Option of a new value, a pair of a value V and a boolean to indicate if it is final.
+   * @return          Returns a `NextOutcome`, `FinalOutcome`, or `NoOutcome` object.
+   */
   def apply[V](valueOpt: Option[(V, Boolean)]): Outcome[V] = valueOpt match {
     case Some((v, false)) => NextOutcome(v)
     case Some((v, true)) => FinalOutcome(v)
