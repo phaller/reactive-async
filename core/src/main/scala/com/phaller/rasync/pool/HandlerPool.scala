@@ -4,7 +4,7 @@ package pool
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicReference
 
-import cell.{ Cell, CellCompleter, NoOutcome, Outcome }
+import cell.{ ConcurrentCellImpl, _ }
 import lattice.{ DefaultKey, Key, Updater }
 import org.opalj.graphs._
 
@@ -21,21 +21,21 @@ private class PoolState(val handlers: List[() => Unit] = List(), val submittedTa
     submittedTasks == 0
 }
 
-class HandlerPool[V](
-  val key: Key[V] = new DefaultKey[V],
+class HandlerPool[V, E >: Null](
+  val key: Key[V, E] = new DefaultKey[V, E](),
   val parallelism: Int = Runtime.getRuntime.availableProcessors(),
   unhandledExceptionHandler: Throwable => Unit = _.printStackTrace(),
-  val schedulingStrategy: SchedulingStrategy = DefaultScheduling) {
+  val schedulingStrategy: SchedulingStrategy[V, E] = new DefaultScheduling[V, E]) {
 
   private val pool: AbstractExecutorService =
-    if (schedulingStrategy == DefaultScheduling)
-      new ForkJoinPool(parallelism)
-    else
-      new ThreadPoolExecutor(parallelism, parallelism, Int.MaxValue, TimeUnit.NANOSECONDS, new PriorityBlockingQueue[Runnable]())
+    schedulingStrategy match {
+      case _: DefaultScheduling[_, _] => new ForkJoinPool(parallelism)
+      case _ => new ThreadPoolExecutor(parallelism, parallelism, Int.MaxValue, TimeUnit.NANOSECONDS, new PriorityBlockingQueue[Runnable]())
+    }
 
   private val poolState = new AtomicReference[PoolState](new PoolState)
 
-  private val cellsNotDone = new ConcurrentLinkedQueue[Cell[_]]()
+  private val cellsNotDone = new ConcurrentLinkedQueue[Cell[_, _]]()
 
   abstract class PriorityRunnable(val priority: Int) extends Runnable with Comparable[Runnable] {
     override def compareTo(t: Runnable): Int = {
@@ -59,11 +59,16 @@ class HandlerPool[V](
    * @param updater The updater used to update the value of this cell.
    * @return Returns a cell.
    */
-  def mkCell(init: (Cell[V]) => Outcome[V])(implicit updater: Updater[V]): Cell[V] = {
-    CellCompleter(init)(updater, this).cell
+  def mkCell(init: (Cell[V, E]) => Outcome[V], entity: E = null)(implicit updater: Updater[V]): Cell[V, E] = {
+    val impl = new ConcurrentCellImpl[V, E](this, updater, init, entity)
+    this.register(impl)
+    impl
   }
-  def mkSequentialCell(init: (Cell[V]) => Outcome[V])(implicit updater: Updater[V]): Cell[V] = {
-    CellCompleter(init, sequential = true)(updater, this).cell
+
+  def mkSequentialCell(init: (Cell[V, E]) => Outcome[V], entity: E = null)(implicit updater: Updater[V]): Cell[V, E] = {
+    val impl = new SequentialCellImpl[V, E](this, updater, init, entity)
+    this.register(impl)
+    impl
   }
 
   /**
@@ -74,8 +79,8 @@ class HandlerPool[V](
    * @param updater The updater used to update the value of this cell.
    * @return Returns a cell with value `v`.
    */
-  def mkCompletedCell(result: V)(implicit updater: Updater[V]): Cell[V] = {
-    CellCompleter.completed(result)(updater, this).cell
+  def mkCompletedCell(result: V, entity: E)(implicit updater: Updater[V]): Cell[V, E] = {
+    CellCompleter.completed(result, entity)(updater, this).cell
   }
 
   /**
@@ -102,7 +107,7 @@ class HandlerPool[V](
    *
    * @param cell The cell.
    */
-  def register(cell: Cell[V]): Unit =
+  def register(cell: Cell[V, E]): Unit =
     cellsNotDone.add(cell)
 
   /**
@@ -110,7 +115,7 @@ class HandlerPool[V](
    *
    * @param cell The cell.
    */
-  def deregister(cell: Cell[V]): Unit =
+  def deregister(cell: Cell[V, E]): Unit =
     cellsNotDone.remove(cell)
 
   /**
@@ -122,8 +127,8 @@ class HandlerPool[V](
   }
 
   /** Returns all non-completed cells, when quiescence is reached. */
-  def quiescentIncompleteCells: Future[Iterable[Cell[_]]] = {
-    val p = Promise[Iterable[Cell[_]]]
+  def quiescentIncompleteCells: Future[Iterable[Cell[_, _]]] = {
+    val p = Promise[Iterable[Cell[_, _]]]
     this.onQuiescent { () =>
       deregisterCompletedCells()
       p.success(cellsNotDone.asScala)
@@ -149,7 +154,7 @@ class HandlerPool[V](
 
       val activeCells = this.cellsNotDone.asScala
         .filter(_.tasksActive())
-        .asInstanceOf[Iterable[Cell[V]]]
+        .asInstanceOf[Iterable[Cell[V, E]]]
 
       val independent = activeCells.filter(_.isIndependent())
       val waitAgain: Boolean =
@@ -163,7 +168,7 @@ class HandlerPool[V](
           if (activeCells.isEmpty) {
             false
           } else {
-            val cSCCs = closedSCCs[Cell[V]](activeCells, (cell: Cell[V]) => cell.cellDependencies)
+            val cSCCs = closedSCCs[Cell[V, E]](activeCells, (cell: Cell[V, E]) => cell.cellDependencies)
             cSCCs
               .map(resolveCycle) // resolve all cSCCs
               .exists(b => b) // return if any resolution took place
@@ -184,17 +189,17 @@ class HandlerPool[V](
   /**
    * Resolves a cycle of unfinished cells via the key's `resolve` method.
    */
-  private def resolveCycle(cells: Iterable[Cell[V]]): Boolean =
+  private def resolveCycle(cells: Iterable[Cell[V, E]]): Boolean =
     resolve(cells, key.resolve)
 
   /**
    * Resolves a cell with default value with the key's `fallback` method.
    */
-  private def resolveIndependent(cells: Iterable[Cell[V]]): Boolean =
+  private def resolveIndependent(cells: Iterable[Cell[V, E]]): Boolean =
     resolve(cells, key.fallback)
 
   /** Resolve all cells with the associated value. */
-  private def resolve(cells: Iterable[Cell[V]], k: (Iterable[Cell[V]]) => Iterable[(Cell[V], V)]): Boolean = {
+  private def resolve(cells: Iterable[Cell[V, E]], k: (Iterable[Cell[V, E]]) => Iterable[(Cell[V, E], V)]): Boolean = {
     try {
       val results = k(cells)
       val dontCall = results.map(_._1).toSeq
@@ -310,7 +315,7 @@ class HandlerPool[V](
    *
    * @param cell The cell that is triggered.
    */
-  private[rasync] def triggerExecution(cell: Cell[V], priority: Int = 0): Unit = {
+  private[rasync] def triggerExecution(cell: Cell[V, E], priority: Int = 0): Unit = {
     if (cell.setTasksActive())
       // if the cell's state has successfully been changed, schedule further computations
       execute(() => {
@@ -344,4 +349,9 @@ class HandlerPool[V](
   def reportFailure(t: Throwable): Unit =
     t.printStackTrace()
 
+}
+
+object HandlerPool {
+  def apply[V]: HandlerPool[V, Null] = new HandlerPool[V, Null]()
+  def apply[V](key: Key[V, Null]): HandlerPool[V, Null] = new HandlerPool[V, Null](key)
 }

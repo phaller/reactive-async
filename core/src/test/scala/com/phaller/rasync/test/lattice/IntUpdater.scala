@@ -1,17 +1,17 @@
 package com.phaller.rasync.test.lattice
 
 import com.phaller.rasync.cell.Cell
-import com.phaller.rasync.lattice.{ Key, PartialOrderingWithBottom, Updater }
+import com.phaller.rasync.lattice.{ Key, Updater }
 
 import scala.language.implicitConversions
 
-class StringIntKey(s: String) extends Key[Int] {
-  def resolve(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = {
-    cells.map((cell: Cell[Int]) => (cell, 0))
+class StringIntKey(s: String) extends Key[Int, Null] {
+  def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = {
+    cells.map((cell: Cell[Int, Null]) => (cell, 0))
   }
 
-  def fallback(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = {
-    cells.map((cell: Cell[Int]) => (cell, 1))
+  def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = {
+    cells.map((cell: Cell[Int, Null]) => (cell, 1))
   }
 
   override def toString = s

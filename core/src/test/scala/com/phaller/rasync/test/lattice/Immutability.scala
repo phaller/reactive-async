@@ -1,19 +1,20 @@
 package com.phaller.rasync
 package test
+package lattice
 
 import com.phaller.rasync.cell.Cell
-import com.phaller.rasync.lattice.{ Key, Lattice, MonotonicUpdater }
+import com.phaller.rasync.lattice.{ Key, Lattice }
 
-object ImmutabilityKey extends Key[Immutability] {
+object ImmutabilityKey extends Key[Immutability, Null] {
 
-  def resolve(cells: Iterable[Cell[Immutability]]): Iterable[(Cell[Immutability], Immutability)] = {
+  def resolve(cells: Iterable[Cell[Immutability, Null]]): Iterable[(Cell[Immutability, Null], Immutability)] = {
     val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
     if (conditionallyImmutableCells.nonEmpty)
       cells.map(cell => (cell, ConditionallyImmutable))
     else
       cells.map(cell => (cell, Immutable))
   }
-  def fallback(cells: Iterable[Cell[Immutability]]): Iterable[(Cell[Immutability], Immutability)] = {
+  def fallback(cells: Iterable[Cell[Immutability, Null]]): Iterable[(Cell[Immutability, Null], Immutability)] = {
     cells.map(cell => (cell, Immutable))
   }
 

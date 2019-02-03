@@ -14,7 +14,7 @@ import com.phaller.rasync.test.lattice.{ IntUpdater, StringIntKey }
 
 class PoolSuite extends FunSuite {
   test("onQuiescent") {
-    val pool = new HandlerPool[Nothing]
+    val pool = HandlerPool[Int]
 
     var i = 0
     while (i < 10000) {
@@ -37,11 +37,11 @@ class PoolSuite extends FunSuite {
   test("register cells concurrently") {
     implicit val stringIntUpdater: Updater[Int] = new IntUpdater
 
-    implicit val pool = new HandlerPool[Int](new StringIntKey("s"))
-    var regCells = new ConcurrentHashMap[Cell[Int], Cell[Int]]()
+    implicit val pool = new HandlerPool[Int, Null](new StringIntKey("s"))
+    var regCells = new ConcurrentHashMap[Cell[Int, Null], Cell[Int, Null]]()
     for (_ <- 1 to 1000) {
       pool.execute(() => {
-        val completer = CellCompleter[Int]()
+        val completer = CellCompleter[Int, Null]()
         completer.cell.trigger()
         regCells.put(completer.cell, completer.cell)
         ()
@@ -57,11 +57,11 @@ class PoolSuite extends FunSuite {
   test("register cells concurrently 2") {
     implicit val stringIntUpdater: Updater[Int] = new IntUpdater
 
-    implicit val pool = new HandlerPool[Int](new StringIntKey("s"))
-    var regCells = new ConcurrentHashMap[Cell[Int], Cell[Int]]()
+    implicit val pool = new HandlerPool[Int, Null](new StringIntKey("s"))
+    var regCells = new ConcurrentHashMap[Cell[Int, Null], Cell[Int, Null]]()
     for (_ <- 1 to 1000) {
       pool.execute(() => {
-        val completer = CellCompleter[Int]()
+        val completer = CellCompleter[Int, Null]()
         regCells.put(completer.cell, completer.cell)
         ()
       })
@@ -73,7 +73,7 @@ class PoolSuite extends FunSuite {
   }
 
   test("handler pool quiescence") {
-    implicit val pool = new HandlerPool
+    implicit val pool = new HandlerPool[Int, Null]
     val latch = new CountDownLatch(1)
     val latch2 = new CountDownLatch(1)
     pool.execute { () => latch.await() }

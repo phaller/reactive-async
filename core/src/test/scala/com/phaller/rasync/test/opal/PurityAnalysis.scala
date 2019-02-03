@@ -52,13 +52,13 @@ import org.opalj.bytecode.JRELibraryFolder
 import scala.util.Try
 
 // A strategy tailored to PurityAnalysis
-object PurityStrategy extends SchedulingStrategy {
-  override def calcPriority[Purity](dependentCell: Cell[Purity], other: Cell[Purity], value: Try[ValueOutcome[Purity]]): Int = value match {
+object PurityStrategy extends SchedulingStrategy[Purity, Null] {
+  override def calcPriority(dependentCell: Cell[Purity, Null], other: Cell[Purity, Null], value: Try[ValueOutcome[Purity]]): Int = value match {
     case scala.util.Success(FinalOutcome(Impure)) => -1
     case _ => 1
   }
 
-  override def calcPriority[Purity](dependentCell: Cell[Purity], value: Try[Purity]): Int = value match {
+  override def calcPriority(dependentCell: Cell[Purity, Null], value: Try[Purity]): Int = value match {
     case scala.util.Success(Pure) => 0
     case _ => -1
   }
@@ -83,8 +83,8 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
 
     val startTime = System.currentTimeMillis // Used for measuring execution time
     // 1. Initialization of key data structures (one cell(completer) per method)
-    implicit val pool: HandlerPool[Purity] = new HandlerPool(key = PurityKey, schedulingStrategy = PurityStrategy)
-    var methodToCell = Map.empty[Method, Cell[Purity]]
+    implicit val pool: HandlerPool[Purity, Null] = new HandlerPool(key = PurityKey, schedulingStrategy = PurityStrategy)
+    var methodToCell = Map.empty[Method, Cell[Purity, Null]]
     for {
       classFile <- project.allProjectClassFiles
       method <- classFile.methods
@@ -132,7 +132,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
    */
   def analyze(
     project: Project[URL],
-    methodToCell: Map[Method, Cell[Purity]],
+    methodToCell: Map[Method, Cell[Purity, Null]],
     classFile: ClassFile,
     method: Method): Outcome[Purity] = {
     import project.nonVirtualCall
@@ -231,7 +231,7 @@ object PurityAnalysis extends DefaultOneStepAnalysis {
     }
   }
 
-  def c(v: Iterable[(Cell[Purity], Try[ValueOutcome[Purity]])]): Outcome[Purity] = {
+  def c(v: Iterable[(Cell[Purity, Null], Try[ValueOutcome[Purity]])]): Outcome[Purity] = {
     // If any dependee is Impure, the dependent Cell is impure.
     // Otherwise, we do not know anything new.
     // Exception will be rethrown.

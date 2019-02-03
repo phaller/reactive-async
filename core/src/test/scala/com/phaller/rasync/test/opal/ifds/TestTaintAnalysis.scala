@@ -41,7 +41,7 @@ case class FlowFact(flow: ListSet[Method]) extends Fact {
  */
 class TestTaintAnalysis(
   parallelism: Int = Runtime.getRuntime.availableProcessors(),
-  scheduling: SchedulingStrategy = DefaultScheduling)(
+  scheduling: SchedulingStrategy[IFDSProperty[Fact], (DeclaredMethod, Fact)])(
   implicit
   val project: SomeProject) extends AbstractIFDSAnalysis[Fact](parallelism, scheduling)(project) {
 
@@ -324,8 +324,10 @@ class TestTaintAnalysisRunner extends FunSuite {
 
     val p0 = Project(new java.io.File(JRELibraryFolder.getAbsolutePath))
 
+    com.phaller.rasync.pool.SchedulingStrategy
+
     for (
-      scheduling <- List(DefaultScheduling, SourcesWithManyTargetsFirst, SourcesWithManyTargetsLast, TargetsWithManySourcesFirst, TargetsWithManySourcesLast, TargetsWithManyTargetsFirst, TargetsWithManyTargetsLast, SourcesWithManySourcesFirst, SourcesWithManySourcesLast);
+      scheduling <- List(new DefaultScheduling[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)]);
       threads <- List(1, 2, 4, 8, 16, 32)
     ) {
       var result = 0

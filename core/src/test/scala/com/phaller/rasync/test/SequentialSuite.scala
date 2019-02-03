@@ -4,7 +4,8 @@ import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.phaller.rasync.cell.Outcome
-import com.phaller.rasync.lattice.{ DefaultKey, Lattice, NaturalNumberKey, Updater }
+import com.phaller.rasync.lattice.lattices.NaturalNumberKey
+import com.phaller.rasync.lattice.{ DefaultKey, Lattice, Updater }
 import com.phaller.rasync.pool.HandlerPool
 import com.phaller.rasync.test.lattice.IntUpdater
 import org.scalatest.FunSuite
@@ -20,7 +21,7 @@ class SequentialSuite extends FunSuite with SequentialCompleterFactory {
     val latch = new CountDownLatch(1)
     val random = new scala.util.Random()
 
-    implicit val pool: HandlerPool[Int] = new HandlerPool[Int](NaturalNumberKey)
+    implicit val pool = HandlerPool[Int](NaturalNumberKey)
     val completer1 = mkCompleter[Int]
 
     val cell1 = completer1.cell
@@ -77,8 +78,8 @@ class SequentialSuite extends FunSuite with SequentialCompleterFactory {
     val latch = new CountDownLatch(1)
     val random = new scala.util.Random()
 
-    val theKey = new DefaultKey[Set[Int]]
-    implicit val pool: HandlerPool[Set[Int]] = new HandlerPool[Set[Int]](theKey)
+    val theKey = DefaultKey[Set[Int]]
+    implicit val pool = HandlerPool[Set[Int]](theKey)
     val completer1 = mkCompleter[Set[Int]]
     val cell1 = completer1.cell
 

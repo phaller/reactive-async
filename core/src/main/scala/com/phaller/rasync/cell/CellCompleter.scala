@@ -8,15 +8,15 @@ import scala.util.{ Failure, Try }
 /**
  * Interface trait for programmatically completing a cell. Analogous to `Promise[V]`.
  */
-private[rasync] trait CellCompleter[V] {
+private[rasync] trait CellCompleter[V, E >: Null] {
 
   /**
    * The cell associated with this completer.
    */
-  val cell: Cell[V]
+  val cell: Cell[V, E]
 
   /** A method to call */
-  private[rasync] val init: (Cell[V]) => Outcome[V]
+  private[rasync] val init: (Cell[V, E]) => Outcome[V]
 
   /**
    * Update `this` cells value with `x` and freeze it.
@@ -42,10 +42,8 @@ private[rasync] trait CellCompleter[V] {
 
   def putFailure(e: Failure[V]): Unit
 
-  def freeze(): Unit
-
   private[rasync] def tryNewState(value: V): Unit
-  private[rasync] def tryComplete(value: Try[V], dontCall: Option[Seq[Cell[V]]]): Unit
+  private[rasync] def tryComplete(value: Try[V], dontCall: Option[Seq[Cell[V, E]]]): Unit
 
   /**
    * Run code for `this` cell sequentially.
@@ -58,10 +56,10 @@ object CellCompleter {
    * Create a completer for a cell holding values of type `V`
    * given a `HandlerPool` and a `Key[V]`.
    */
-  def apply[V](init: (Cell[V]) => Outcome[V] = (_: Cell[V]) => NoOutcome, sequential: Boolean = false)(implicit updater: Updater[V], pool: HandlerPool[V]): CellCompleter[V] = {
+  def apply[V, E >: Null](init: (Cell[V, E]) => Outcome[V] = (_: Cell[V, E]) => NoOutcome, sequential: Boolean = false, entity: E = null)(implicit updater: Updater[V], pool: HandlerPool[V, E]): CellCompleter[V, E] = {
     val impl =
-      if (sequential) new SequentialCellImpl[V](pool, updater, init)
-      else new ConcurrentCellImpl[V](pool, updater, init)
+      if (sequential) new SequentialCellImpl[V, E](pool, updater, init, entity)
+      else new ConcurrentCellImpl[V, E](pool, updater, init, entity)
     pool.register(impl)
     impl
   }
@@ -72,8 +70,8 @@ object CellCompleter {
    * Note: there is no `K` type parameter, since we always use type
    * `DefaultKey[V]`, no other key would make sense.
    */
-  def completed[V](result: V)(implicit updater: Updater[V], pool: HandlerPool[V]): CellCompleter[V] = {
-    val impl = new ConcurrentCellImpl[V](pool, updater, _ => NoOutcome)
+  def completed[V, E >: Null](result: V, entity: E = null)(implicit updater: Updater[V], pool: HandlerPool[V, E]): CellCompleter[V, E] = {
+    val impl = new ConcurrentCellImpl[V, E](pool, updater, _ => NoOutcome, entity)
     pool.register(impl)
     impl.putFinal(result)
     impl

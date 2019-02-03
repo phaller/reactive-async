@@ -12,10 +12,11 @@ import scala.collection.mutable
 import scala.concurrent.duration.TimeUnit
 import scala.util.{ Failure, Success, Try }
 
-trait Cell[V] {
-  private[rasync] val completer: CellCompleter[V]
+trait Cell[V, E >: Null] {
+  private[rasync] val completer: CellCompleter[V, E]
 
-  @volatile var obj: AnyRef = _
+  // some entity this cell represents
+  val entity: E = null
 
   /**
    * Returns the current value of `this` `Cell`.
@@ -50,7 +51,7 @@ trait Cell[V] {
    * @param valueCallback  Callback that receives the new value of `other` and returns an `Outcome` for `this` cell.
    * @param other*  Cells that `this` Cell depends on.
    */
-  def when(other: Cell[V]*)(valueCallback: Iterable[(Cell[V], Try[ValueOutcome[V]])] => Outcome[V]): Unit
+  def when(other: Cell[V, E]*)(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit
 
   // internal API
 
@@ -74,15 +75,15 @@ trait Cell[V] {
   private[rasync] def setTasksActive(): Boolean
 
   private[rasync] def numDependencies: Int
-  private[rasync] def cellDependencies: Seq[Cell[V]]
+  private[rasync] def cellDependencies: Seq[Cell[V, E]]
 
   /** Returns the number of cells that depend on this cell. */
   private[rasync] def numDependentCells: Int
-  private[rasync] def addDependentCell(dependentCell: Cell[V]): Unit
-  private[rasync] def removeDependentCell(dependentCell: Cell[V]): Unit
-  private[rasync] def removeDependeeCells(otherCells: Iterable[Cell[V]]): Unit
+  private[rasync] def addDependentCell(dependentCell: Cell[V, E]): Unit
+  private[rasync] def removeDependentCell(dependentCell: Cell[V, E]): Unit
+  private[rasync] def removeDependeeCells(otherCells: Iterable[Cell[V, E]]): Unit
 
-  private[rasync] def addUpdate(dependee: Cell[V]): Unit
+  private[rasync] def addUpdate(dependee: Cell[V, E]): Unit
 
   /**
    * Put a final value to `this` cell, but do not propagate to some cells.
@@ -92,16 +93,16 @@ trait Cell[V] {
    * @param value The value to put.
    * @param dontCall The cells that won't be informed about the update.
    */
-  private[rasync] def resolveWithValue(value: Try[V], dontCall: Seq[Cell[V]]): Unit
+  private[rasync] def resolveWithValue(value: Try[V], dontCall: Seq[Cell[V, E]]): Unit
   private[rasync] def isIndependent(): Boolean
 
   protected val sequential: Boolean
 }
 
-trait SequentialCell[V] extends Cell[V] {
+trait SequentialCell[V, E >: Null] extends Cell[V, E] {
   override val sequential = true
 }
-trait ConcurrentCell[V] extends Cell[V] {
+trait ConcurrentCell[V, E >: Null] extends Cell[V, E] {
   override val sequential = false
 }
 
@@ -121,11 +122,11 @@ private trait State[V] {
  * @param deps      dependent Cells + a staged value for this cell (this is not needed for completeDeps, the staged value is always the final one)
  * @param callbacks those callbacks are run if the cell t(hat we depend on) changes.
  */
-private class IntermediateState[V](override val res: Success[V], val tasksActive: Boolean, val dependees: Map[Cell[V], CallbackRunnable[V]], val dependers: Set[Cell[V]]) extends State[V]
+private class IntermediateState[V, E >: Null](override val res: Success[V], val tasksActive: Boolean, val dependees: Map[Cell[V, E], CallbackRunnable[V, E]], val dependers: Set[Cell[V, E]]) extends State[V]
 
 private object IntermediateState {
-  def empty[V](updater: Updater[V]): IntermediateState[V] =
-    new IntermediateState[V](Success(updater.bottom), false, Map.empty, Set.empty)
+  def empty[V, E >: Null](updater: Updater[V]): IntermediateState[V, E] =
+    new IntermediateState[V, E](Success(updater.bottom), false, Map.empty, Set.empty)
 }
 
 private class FinalState[V](
@@ -137,8 +138,8 @@ private class FinalState[V](
   * more time. After that, the dependentCell doese not depend on `this` cell any more and is removed
   * from `completeDependentCells`. Repeated polls will return in NoOutcome.
   */
-//  val completeDependentCells: TrieMap[Cell[V], Unit],
-//  val nextDependentCells: TrieMap[Cell[V], Unit]
+//  val completeDependentCells: TrieMap[Cell[V, E], Unit],
+//  val nextDependentCells: TrieMap[Cell[V, E], Unit]
 ) extends State[V]
 
 /**
@@ -146,13 +147,13 @@ private class FinalState[V](
  *
  * Instances of the class use a `State` to store the current value and dependency information.
  */
-private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Updater[V], override val init: (Cell[V]) => Outcome[V]) extends Cell[V] with CellCompleter[V] {
+private[rasync] abstract class CellImpl[V, E >: Null](pool: HandlerPool[V, E], updater: Updater[V], override val init: (Cell[V, E]) => Outcome[V], override val entity: E) extends Cell[V, E] with CellCompleter[V, E] {
 
   implicit object SeqTaskOrdering extends Ordering[(Int, () => _)] {
     override def compare(x: (Int, () => _), y: (Int, () => _)): Int = x._1 - y._1
   }
 
-  implicit val ctx: HandlerPool[V] = pool
+  implicit val ctx: HandlerPool[V, E] = pool
 
   // Used for tests only.
   private val nodepslatch = new CountDownLatch(1)
@@ -161,7 +162,7 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
    * (a) `FinalState[V]`         for the final result, or
    * (b) `IntermediateState[K,V]`   for an incomplete state.
    */
-  private val state: AtomicReference[State[V]] = new AtomicReference(IntermediateState.empty[V](updater))
+  private val state: AtomicReference[State[V]] = new AtomicReference(IntermediateState.empty[V, E](updater))
 
   private val queuedCallbacks = new AtomicReference(new mutable.PriorityQueue[(Int, () => _)]()(SeqTaskOrdering))
 
@@ -221,8 +222,8 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
     } else removeCompletedSequentialTaks()
   }
 
-  override val completer: CellCompleter[V] = this
-  override val cell: Cell[V] = this
+  override val completer: CellCompleter[V, E] = this
+  override val cell: Cell[V, E] = this
 
   override def getResult(): V = state.get.res match {
     case Success(result) => result
@@ -235,7 +236,7 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
   override def getState(): Try[ValueOutcome[V]] = state.get() match {
     case finalRes: FinalState[V] =>
       finalRes.res.map(FinalOutcome(_))
-    case current: IntermediateState[V] =>
+    case current: IntermediateState[V, E] =>
       current.res.map(NextOutcome(_))
   }
 
@@ -270,11 +271,11 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
     putFinal(getResult())
   }
 
-  private[this] def currentState(): IntermediateState[V] = state.get match {
+  private[this] def currentState(): IntermediateState[V, E] = state.get match {
     case _: FinalState[V] => // completed with final result
       null
-    case pre: IntermediateState[_] => // not completed
-      pre.asInstanceOf[IntermediateState[V]]
+    case pre: IntermediateState[_, _] => // not completed
+      pre.asInstanceOf[IntermediateState[V, E]]
   }
 
   override private[rasync] def numDependencies: Int = {
@@ -283,7 +284,7 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
     else current.dependees.size
   }
 
-  override private[rasync] def cellDependencies: Seq[Cell[V]] = {
+  override private[rasync] def cellDependencies: Seq[Cell[V, E]] = {
     val current = currentState()
     if (current == null) Seq.empty
     else current.dependees.keys.toSeq
@@ -292,33 +293,33 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
   override private[rasync] def isIndependent(): Boolean = state.get match {
     case _: FinalState[V] => // completed with final result
       true
-    case current: IntermediateState[V] => // not completed
+    case current: IntermediateState[V, E] => // not completed
       current.dependees.isEmpty
   }
 
   override def numDependentCells: Int = state.get match {
     case _: FinalState[V] => // completed with final result
       0
-    case current: IntermediateState[V] => // not completed
+    case current: IntermediateState[V, E] => // not completed
       current.dependers.size
   }
 
-  override private[rasync] def resolveWithValue(value: Try[V], dontCall: Seq[Cell[V]]): Unit = {
+  override private[rasync] def resolveWithValue(value: Try[V], dontCall: Seq[Cell[V, E]]): Unit = {
     tryComplete(value, Some(dontCall))
   }
 
   @tailrec
-  override final def when(other: Cell[V]*)(valueCallback: Iterable[(Cell[V], Try[ValueOutcome[V]])] => Outcome[V]): Unit = state.get match {
+  override final def when(other: Cell[V, E]*)(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit = state.get match {
     case _: FinalState[V] => // completed with final result
     // do not add dependency
     // in fact, do nothing
 
-    case current: IntermediateState[V] => // not completed
+    case current: IntermediateState[V, E] => // not completed
       val newCallback =
-        if (sequential) new SequentialCallbackRunnable[V](pool, this, other, valueCallback)
-        else new ConcurrentCallbackRunnable[V](pool, this, other, valueCallback)
+        if (sequential) new SequentialCallbackRunnable[V, E](pool, this, other, valueCallback)
+        else new ConcurrentCallbackRunnable[V, E](pool, this, other, valueCallback)
 
-      val newState = new IntermediateState[V](current.res, current.tasksActive, current.dependees ++ other.map(_ → newCallback), current.dependers)
+      val newState = new IntermediateState[V, E](current.res, current.tasksActive, current.dependees ++ other.map(_ → newCallback), current.dependers)
       if (state.compareAndSet(current, newState)) {
         other.foreach(c => {
           c.addDependentCell(this)
@@ -328,14 +329,14 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
   }
 
   @tailrec
-  override final private[rasync] def addDependentCell(dependentCompleter: Cell[V]): Unit = state.get match {
+  override final private[rasync] def addDependentCell(dependentCompleter: Cell[V, E]): Unit = state.get match {
     case _: FinalState[V] =>
       // call now!
       dependentCompleter.addUpdate(this)
 
-    case current: IntermediateState[V] =>
+    case current: IntermediateState[V, E] =>
       if (!current.dependers.contains(dependentCompleter)) { // ignore duplicates
-        val newState = new IntermediateState[V](current.res, current.tasksActive, current.dependees, current.dependers + dependentCompleter)
+        val newState = new IntermediateState[V, E](current.res, current.tasksActive, current.dependees, current.dependers + dependentCompleter)
         if (state.compareAndSet(current, newState)) {
 
           if (newState.res.value != updater.bottom) {
@@ -365,12 +366,12 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
     case _: FinalState[V] => // completed with final result already
     // As decided by phaller, we ignore all updates after freeze and do not throw exceptions
 
-    case current: IntermediateState[V] => // not completed
+    case current: IntermediateState[V, E] => // not completed
       val updatedValue = current.res.map(tryJoin(_, value)).asInstanceOf[Success[V]]
       // We only have to continue, if the updated value actually changes the cell;
       // If value is lower or equal current.res, nothing changes.
       if (updatedValue != current.res) {
-        val newState = new IntermediateState[V](updatedValue, current.tasksActive, current.dependees, current.dependers)
+        val newState = new IntermediateState[V, E](updatedValue, current.tasksActive, current.dependees, current.dependers)
         if (state.compareAndSet(current, newState)) {
           // We have a new value. Inform dependers
           current.dependers.foreach(_.addUpdate(this))
@@ -379,11 +380,11 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
       }
   }
 
-  private[rasync] override def tryComplete(value: Try[V], dontCall: Option[Seq[Cell[V]]]): Unit = state.get match {
+  private[rasync] override def tryComplete(value: Try[V], dontCall: Option[Seq[Cell[V, E]]]): Unit = state.get match {
     case _: FinalState[V] => // completed with final result already
     // As decided by phaller, we ignore all updates after freeze and do not throw exceptions
 
-    case current: IntermediateState[V] => // not completed
+    case current: IntermediateState[V, E] => // not completed
 
       val updatedValue: Try[V] = value.map(tryJoin(current.res.value, _))
       val newState = new FinalState[V](updatedValue)
@@ -403,10 +404,10 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
       } else tryComplete(value, dontCall) // CAS failed, try again
   }
 
-  override private[rasync] def addUpdate(dependee: Cell[V]): Unit = state.get() match {
+  override private[rasync] def addUpdate(dependee: Cell[V, E]): Unit = state.get() match {
     case _: FinalState[V] =>
     // ignore updates after this cell has been completed
-    case current: IntermediateState[V] =>
+    case current: IntermediateState[V, E] =>
       current.dependees.get(dependee).foreach(_.addUpdate(dependee))
   }
 
@@ -415,10 +416,10 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
    * Afterwards, `dependentCell` won't get informed about updates of `this` cell any more.
    */
   @tailrec
-  override final private[rasync] def removeDependentCell(dependentCell: Cell[V]): Unit = state.get match {
-    case current: IntermediateState[V] =>
+  override final private[rasync] def removeDependentCell(dependentCell: Cell[V, E]): Unit = state.get match {
+    case current: IntermediateState[V, E] =>
       val newDependers = current.dependers - dependentCell
-      val newState = new IntermediateState[V](current.res, current.tasksActive, current.dependees, newDependers)
+      val newState = new IntermediateState[V, E](current.res, current.tasksActive, current.dependees, newDependers)
       if (!state.compareAndSet(current, newState)) {
         removeDependentCell(dependentCell)
       }
@@ -430,11 +431,11 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
    * Afterwards, `dependentCell` won't get informed about updates of `this` cell any more.
    */
   @tailrec
-  override private[rasync] final def removeDependeeCells(otherCells: Iterable[Cell[V]]): Unit = state.get match {
-    case current: IntermediateState[V] =>
+  override private[rasync] final def removeDependeeCells(otherCells: Iterable[Cell[V, E]]): Unit = state.get match {
+    case current: IntermediateState[V, E] =>
 
       val newDependees = current.dependees -- otherCells //.filterNot(_ == otherCells)
-      val newState = new IntermediateState[V](current.res, current.tasksActive, newDependees, current.dependers)
+      val newState = new IntermediateState[V, E](current.res, current.tasksActive, newDependees, current.dependers)
       if (state.compareAndSet(current, newState)) {
         if (newState.dependees.isEmpty)
           nodepslatch.countDown()
@@ -453,7 +454,7 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
 
   override private[rasync] def tasksActive() = state.get match {
     case _: FinalState[V] => false
-    case s: IntermediateState[_] => s.tasksActive
+    case s: IntermediateState[_, _] => s.tasksActive
   }
 
   /**
@@ -463,7 +464,7 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
    */
   @tailrec
   override private[rasync] final def setTasksActive(): Boolean = state.get match {
-    case current: IntermediateState[V] =>
+    case current: IntermediateState[V, E] =>
       if (current.tasksActive)
         false // Cell has been active before
       else {
@@ -476,7 +477,7 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
 
   // Schedules execution of `callback` when next intermediate result is available.
   override private[rasync] def onNext[U](callback: Try[V] => U): Unit = state.get match {
-    case _: IntermediateState[_] =>
+    case _: IntermediateState[_, _] =>
       if (getResult() != updater.bottom) callback(Success(getResult()))
       onNextHandler = callback :: onNextHandler
     case _ => callback(Success(getResult()))
@@ -484,7 +485,7 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
 
   // Schedules execution of `callback` when completed with final result.
   override def onComplete[U](callback: Try[V] => U): Unit = state.get match {
-    case _: IntermediateState[_] =>
+    case _: IntermediateState[_, _] =>
       onCompleteHandler = callback :: onCompleteHandler
     case _ =>
       callback(Success(getResult()))
@@ -492,5 +493,5 @@ private[rasync] abstract class CellImpl[V](pool: HandlerPool[V], updater: Update
 
 }
 
-private[rasync] class SequentialCellImpl[V](pool: HandlerPool[V], updater: Updater[V], override val init: (Cell[V]) => Outcome[V]) extends CellImpl[V](pool, updater, init) with SequentialCell[V]
-private[rasync] class ConcurrentCellImpl[V](pool: HandlerPool[V], updater: Updater[V], override val init: (Cell[V]) => Outcome[V]) extends CellImpl[V](pool, updater, init) with ConcurrentCell[V]
+private[rasync] class SequentialCellImpl[V, E >: Null](pool: HandlerPool[V, E], updater: Updater[V], override val init: (Cell[V, E]) => Outcome[V], override val entity: E) extends CellImpl[V, E](pool, updater, init, entity) with SequentialCell[V, E]
+private[rasync] class ConcurrentCellImpl[V, E >: Null](pool: HandlerPool[V, E], updater: Updater[V], override val init: (Cell[V, E]) => Outcome[V], override val entity: E) extends CellImpl[V, E](pool, updater, init, entity) with ConcurrentCell[V, E]

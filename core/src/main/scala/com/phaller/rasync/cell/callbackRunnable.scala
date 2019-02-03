@@ -16,22 +16,22 @@ import scala.util.{ Failure, Success, Try }
  * CallbackRunnables store information about the involved cells and the callback to
  * be run.
  */
-private[rasync] abstract class CallbackRunnable[V] extends Runnable with OnCompleteRunnable {
-  protected val pool: HandlerPool[V]
+private[rasync] abstract class CallbackRunnable[V, E >: Null] extends Runnable with OnCompleteRunnable {
+  protected val pool: HandlerPool[V, E]
 
-  protected val dependentCompleter: CellCompleter[V]
+  protected val dependentCompleter: CellCompleter[V, E]
 
   /** The cell that triggers the callback. */
-  protected val dependees: Iterable[Cell[V]]
+  protected val dependees: Iterable[Cell[V, E]]
 
   /** The callback to be called. It retrieves an updated value of otherCell and returns an Outcome for dependentCompleter. */
-  protected val callback: Iterable[(Cell[V], Try[ValueOutcome[V]])] => Outcome[V]
+  protected val callback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]
 
-  protected val updatedDependees = new AtomicReference[Set[Cell[V]]](Set.empty)
+  protected val updatedDependees = new AtomicReference[Set[Cell[V, E]]](Set.empty)
   protected var prio: Int = Int.MaxValue
 
   @tailrec
-  final def addUpdate(other: Cell[V]): Unit = {
+  final def addUpdate(other: Cell[V, E]): Unit = {
     val oldUpdatedDependees = updatedDependees.get
     val newUpdatedDependees = oldUpdatedDependees + other
     if (updatedDependees.compareAndSet(oldUpdatedDependees, newUpdatedDependees)) {
@@ -106,7 +106,7 @@ private[rasync] abstract class CallbackRunnable[V] extends Runnable with OnCompl
 /**
  * Run a callback concurrently, if a value in a cell changes.
  */
-private[rasync] class ConcurrentCallbackRunnable[V](override val pool: HandlerPool[V], override val dependentCompleter: CellCompleter[V], override val dependees: Iterable[Cell[V]], override val callback: Iterable[(Cell[V], Try[ValueOutcome[V]])] => Outcome[V]) extends CallbackRunnable[V] {
+private[rasync] class ConcurrentCallbackRunnable[V, E >: Null](override val pool: HandlerPool[V, E], override val dependentCompleter: CellCompleter[V, E], override val dependees: Iterable[Cell[V, E]], override val callback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]) extends CallbackRunnable[V, E] {
   override def run(): Unit =
     callCallback()
 }
@@ -114,7 +114,7 @@ private[rasync] class ConcurrentCallbackRunnable[V](override val pool: HandlerPo
 /**
  * Run a callback sequentially (for a dependent cell), if a value in another cell changes.
  */
-private[rasync] class SequentialCallbackRunnable[V](override val pool: HandlerPool[V], override val dependentCompleter: CellCompleter[V], override val dependees: Iterable[Cell[V]], override val callback: Iterable[(Cell[V], Try[ValueOutcome[V]])] => Outcome[V]) extends CallbackRunnable[V] {
+private[rasync] class SequentialCallbackRunnable[V, E >: Null](override val pool: HandlerPool[V, E], override val dependentCompleter: CellCompleter[V, E], override val dependees: Iterable[Cell[V, E]], override val callback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]) extends CallbackRunnable[V, E] {
   override def run(): Unit =
     dependentCompleter.sequential(callCallback _, prio)
 }

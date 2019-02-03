@@ -21,7 +21,7 @@ import scala.util.{ Failure, Success, Try }
  * For the mixedcase, see MixedKeyResolutionsuite
  */
 class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
-  def forwardAsNext(upd: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] = {
+  def forwardAsNext[E >: Null](upd: Iterable[(Cell[Int, E], Try[ValueOutcome[Int]])]): Outcome[Int] = {
     val c = upd.head._2
     NextOutcome(c.get.value)
   }
@@ -29,10 +29,10 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
   implicit val intUpdater: Updater[Int] = new IntUpdater
 
   test("DefaultKey.resolve 1") {
-    val k = new DefaultKey[Int]
-    implicit val pool = new HandlerPool[Int](k)
-    val completer1 = mkSeqCompleter[Int]
-    val completer2 = mkConCompleter[Int]
+    val k = new DefaultKey[Int, Null]
+    implicit val pool = new HandlerPool[Int, Null](k)
+    val completer1 = mkSeqCompleter[Int, Null]
+    val completer2 = mkConCompleter[Int, Null]
     completer1.cell.when(completer2.cell)(forwardAsNext)
     completer2.cell.when(completer1.cell)(forwardAsNext)
     completer1.putNext(5)
@@ -45,10 +45,10 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
   }
 
   test("DefaultKey.resolve 2") {
-    val k = new DefaultKey[Int]
-    implicit val pool = new HandlerPool[Int](k)
-    val completer1 = mkConCompleter[Int]
-    val completer2 = mkSeqCompleter[Int]
+    val k = new DefaultKey[Int, Null]
+    implicit val pool = new HandlerPool[Int, Null](k)
+    val completer1 = mkConCompleter[Int, Null]
+    val completer2 = mkSeqCompleter[Int, Null]
     completer1.cell.when(completer2.cell)(forwardAsNext)
     completer2.cell.when(completer1.cell)(forwardAsNext)
     completer1.putNext(5)
@@ -63,24 +63,24 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
   test("when: cSCC with constant resolution 1") {
     val latch = new CountDownLatch(4)
 
-    object ConstantKey extends Key[Int] {
+    object ConstantKey extends Key[Int, Null] {
       val RESOLVEDINCYCLE = 5
       val RESOLVEDASINDPENDENT = 10
 
-      override def resolve(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = cells.map((_, RESOLVEDINCYCLE))
+      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDINCYCLE))
 
-      override def fallback(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = cells.map((_, RESOLVEDASINDPENDENT))
+      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDASINDPENDENT))
     }
 
-    implicit val pool = new HandlerPool[Int](ConstantKey)
+    implicit val pool = new HandlerPool[Int, Null](ConstantKey)
 
-    val completer1 = mkConCompleter[Int]
+    val completer1 = mkConCompleter[Int, Null]
     val cell1 = completer1.cell
-    val completer2 = mkConCompleter[Int]
+    val completer2 = mkConCompleter[Int, Null]
     val cell2 = completer2.cell
-    val completer3 = mkSeqCompleter[Int]
+    val completer3 = mkSeqCompleter[Int, Null]
     val cell3 = completer3.cell
-    val completer4 = mkSeqCompleter[Int]
+    val completer4 = mkSeqCompleter[Int, Null]
     val cell4 = completer4.cell
 
     // set unwanted values:
@@ -90,7 +90,7 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
       case FinalOutcome(_) =>
         NoOutcome
       case NextOutcome(-1) =>
@@ -128,24 +128,24 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
   test("when: cSCC with constant resolution 2") {
     val latch = new CountDownLatch(4)
 
-    object ConstantKey extends Key[Int] {
+    object ConstantKey extends Key[Int, Null] {
       val RESOLVEDINCYCLE = 5
       val RESOLVEDASINDPENDENT = 10
 
-      override def resolve(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = cells.map((_, RESOLVEDINCYCLE))
+      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDINCYCLE))
 
-      override def fallback(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = cells.map((_, RESOLVEDASINDPENDENT))
+      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDASINDPENDENT))
     }
 
-    implicit val pool = new HandlerPool[Int](ConstantKey)
+    implicit val pool = new HandlerPool[Int, Null](ConstantKey)
 
-    val completer1 = mkConCompleter[Int]
+    val completer1 = mkConCompleter[Int, Null]
     val cell1 = completer1.cell
-    val completer2 = mkSeqCompleter[Int]
+    val completer2 = mkSeqCompleter[Int, Null]
     val cell2 = completer2.cell
-    val completer3 = mkSeqCompleter[Int]
+    val completer3 = mkSeqCompleter[Int, Null]
     val cell3 = completer3.cell
-    val completer4 = mkConCompleter[Int]
+    val completer4 = mkConCompleter[Int, Null]
     val cell4 = completer4.cell
 
     // set unwanted values:
@@ -155,7 +155,7 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
       case FinalOutcome(_) =>
         NoOutcome
       case NextOutcome(-1) =>
@@ -193,15 +193,15 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
   test("when: cSCC with default resolution 1") {
     val latch = new CountDownLatch(4)
 
-    implicit val pool = new HandlerPool[Int]
+    implicit val pool = new HandlerPool[Int, Null]
 
-    val completer1 = mkSeqCompleter[Int]
+    val completer1 = mkSeqCompleter[Int, Null]
     val cell1 = completer1.cell
-    val completer2 = mkConCompleter[Int]
+    val completer2 = mkConCompleter[Int, Null]
     val cell2 = completer2.cell
-    val completer3 = mkSeqCompleter[Int]
+    val completer3 = mkSeqCompleter[Int, Null]
     val cell3 = completer3.cell
-    val completer4 = mkConCompleter[Int]
+    val completer4 = mkConCompleter[Int, Null]
     val cell4 = completer4.cell
 
     // set unwanted values:
@@ -211,7 +211,7 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
       case FinalOutcome(_) =>
         NoOutcome
       case NextOutcome(-1) =>
@@ -249,15 +249,15 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
   test("when: cSCC with default resolution 2") {
     val latch = new CountDownLatch(4)
 
-    implicit val pool = new HandlerPool[Int]
+    implicit val pool = new HandlerPool[Int, Null]
 
-    val completer1 = mkConCompleter[Int]
+    val completer1 = mkConCompleter[Int, Null]
     val cell1 = completer1.cell
-    val completer2 = mkConCompleter[Int]
+    val completer2 = mkConCompleter[Int, Null]
     val cell2 = completer2.cell
-    val completer3 = mkSeqCompleter[Int]
+    val completer3 = mkSeqCompleter[Int, Null]
     val cell3 = completer3.cell
-    val completer4 = mkConCompleter[Int]
+    val completer4 = mkConCompleter[Int, Null]
     val cell4 = completer4.cell
 
     // set unwanted values:
@@ -267,7 +267,7 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
       case FinalOutcome(_) =>
         NoOutcome
       case NextOutcome(-1) =>
@@ -312,11 +312,11 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    implicit val pool: HandlerPool[Value] = new HandlerPool[Value]
+    implicit val pool: HandlerPool[Value, Null] = new HandlerPool[Value, Null]
 
     for (i <- 1 to 100) {
-      val completer1 = mkConCompleter[Value]
-      val completer2 = mkSeqCompleter[Value]
+      val completer1 = mkConCompleter[Value, Null]
+      val completer2 = mkSeqCompleter[Value, Null]
       val cell1 = completer1.cell
       val cell2 = completer2.cell
 
@@ -343,11 +343,11 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    implicit val pool: HandlerPool[Value] = new HandlerPool[Value]
+    implicit val pool: HandlerPool[Value, Null] = new HandlerPool[Value, Null]
 
     for (i <- 1 to 100) {
-      val completer1 = mkSeqCompleter[Value]
-      val completer2 = mkConCompleter[Value]
+      val completer1 = mkSeqCompleter[Value, Null]
+      val completer2 = mkConCompleter[Value, Null]
       val cell1 = completer1.cell
       val cell2 = completer2.cell
 
@@ -375,17 +375,17 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    object TheKey extends DefaultKey[Value] {
-      override def resolve(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+    object TheKey extends DefaultKey[Value, Null] {
+      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, OK))
       }
     }
 
-    implicit val pool = new HandlerPool[Value](TheKey)
+    implicit val pool = new HandlerPool[Value, Null](TheKey)
 
     for (i <- 1 to 100) {
-      val completer1 = mkConCompleter[Value]
-      val completer2 = mkSeqCompleter[Value]
+      val completer1 = mkConCompleter[Value, Null]
+      val completer2 = mkSeqCompleter[Value, Null]
       val cell1 = completer1.cell
       val cell2 = completer2.cell
 
@@ -413,17 +413,17 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    object TheKey extends DefaultKey[Value] {
-      override def resolve(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+    object TheKey extends DefaultKey[Value, Null] {
+      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, OK))
       }
     }
 
-    implicit val pool = new HandlerPool[Value](TheKey)
+    implicit val pool = new HandlerPool[Value, Null](TheKey)
 
     for (i <- 1 to 100) {
-      val completer1 = mkSeqCompleter[Value]
-      val completer2 = mkConCompleter[Value]
+      val completer1 = mkSeqCompleter[Value, Null]
+      val completer2 = mkConCompleter[Value, Null]
       val cell1 = completer1.cell
       val cell2 = completer2.cell
 
@@ -453,21 +453,21 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    object TheKey extends DefaultKey[Value] {
-      override def resolve(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+    object TheKey extends DefaultKey[Value, Null] {
+      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
 
-    implicit val pool = new HandlerPool[Value](TheKey)
-    val completer1 = mkConCompleter[Value]
-    val completer2 = mkConCompleter[Value]
+    implicit val pool = new HandlerPool[Value, Null](TheKey)
+    val completer1 = mkConCompleter[Value, Null]
+    val completer2 = mkConCompleter[Value, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    val out = mkSeqCompleter[Value]
+    val out = mkSeqCompleter[Value, Null]
 
     // let `cell1` and `cell2` form a cycle
     cell1.when(cell2)(_ => NextOutcome(ShouldNotHappen))
@@ -500,21 +500,21 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    object TheKey extends DefaultKey[Value] {
-      override def resolve(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+    object TheKey extends DefaultKey[Value, Null] {
+      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
 
-    implicit val pool = new HandlerPool[Value](TheKey)
-    val completer1 = mkSeqCompleter[Value]
-    val completer2 = mkConCompleter[Value]
+    implicit val pool = new HandlerPool[Value, Null](TheKey)
+    val completer1 = mkSeqCompleter[Value, Null]
+    val completer2 = mkConCompleter[Value, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    val out = mkSeqCompleter[Value]
+    val out = mkSeqCompleter[Value, Null]
 
     // let `cell1` and `cell2` form a cycle
     cell1.when(cell2)(_ => NextOutcome(ShouldNotHappen))
@@ -547,21 +547,21 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    object TheKey extends DefaultKey[Value] {
-      override def resolve(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+    object TheKey extends DefaultKey[Value, Null] {
+      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         Seq()
       }
     }
 
-    implicit val pool = new HandlerPool[Value](TheKey)
-    val completer1 = mkSeqCompleter[Value]
-    val completer2 = mkSeqCompleter[Value]
+    implicit val pool = new HandlerPool[Value, Null](TheKey)
+    val completer1 = mkSeqCompleter[Value, Null]
+    val completer2 = mkSeqCompleter[Value, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    val in = mkConCompleter[Value]
+    val in = mkConCompleter[Value, Null]
     in.putNext(Dummy)
     cell1.when(cell2)(_ => NextOutcome(ShouldNotHappen))
     cell2.when(cell1)(_ => NextOutcome(ShouldNotHappen))
@@ -591,21 +591,21 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    object TheKey extends DefaultKey[Value] {
-      override def resolve(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+    object TheKey extends Key[Value, Null] {
+      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         Seq()
       }
     }
 
-    implicit val pool = new HandlerPool[Value](TheKey)
-    val completer1 = mkConCompleter[Value]
-    val completer2 = mkConCompleter[Value]
+    implicit val pool = new HandlerPool[Value, Null](TheKey)
+    val completer1 = mkConCompleter[Value, Null]
+    val completer2 = mkConCompleter[Value, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
-    val in = mkSeqCompleter[Value]
+    val in = mkSeqCompleter[Value, Null]
     in.putNext(Dummy)
     cell1.when(cell2)(_ => NextOutcome(ShouldNotHappen))
     cell2.when(cell1)(_ => NextOutcome(ShouldNotHappen))

@@ -15,7 +15,6 @@ import org.opalj.br.analyses.{ DeclaredMethods, DeclaredMethodsKey, Project }
 import org.opalj.br.cfg.BasicBlock
 import org.opalj.br.cfg.CFG
 import org.opalj.br.cfg.CFGNode
-import org.opalj.fpcf.FPCFAnalysis
 import org.opalj.fpcf.analyses.AbstractIFDSAnalysis.V
 import org.opalj.fpcf.analyses.Statement
 import org.opalj.fpcf.properties.IFDSProperty
@@ -54,18 +53,18 @@ import scala.util.Try
  * @author Jan Kölzer (adaption to Reactive Async)
  */
 // The `scheduling` is only for testing. In production, one would create a HandlerPool with the best scheduling for IFDS
-abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int, scheduling: SchedulingStrategy)(implicit project: Project[_]) {
+abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int, scheduling: SchedulingStrategy[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)])(implicit project: Project[_]) {
 
   private val tacProvider: Method ⇒ TACode[TACMethodParameter, DUVar[ValueInformation]] = project.get(DefaultTACAIKey)
 
   // [p. ackland] "Both resolve and fallback return the empty set for each cell because on quiescence we know that no more propagations will be made and the cell can be completed."
-  object TheKey extends Key[IFDSProperty[DataFlowFact]] {
-    override def resolve(cells: Iterable[Cell[IFDSProperty[DataFlowFact]]]): Iterable[(Cell[IFDSProperty[DataFlowFact]], IFDSProperty[DataFlowFact])] = {
+  object TheKey extends Key[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)] {
+    override def resolve(cells: Iterable[Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)]]): Iterable[(Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)], IFDSProperty[DataFlowFact])] = {
       val p = createProperty(Map.empty)
       cells.map((_, p))
     }
 
-    override def fallback(cells: Iterable[Cell[IFDSProperty[DataFlowFact]]]): Iterable[(Cell[IFDSProperty[DataFlowFact]], IFDSProperty[DataFlowFact])] = {
+    override def fallback(cells: Iterable[Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)]]): Iterable[(Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)], IFDSProperty[DataFlowFact])] = {
       val p = createProperty(Map.empty)
       cells.map((_, p))
     }
@@ -78,11 +77,11 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int, scheduling: 
     override val bottom: IFDSProperty[DataFlowFact] = createProperty(Map.empty)
   }
 
-  implicit val pool: HandlerPool[IFDSProperty[DataFlowFact]] = new HandlerPool[IFDSProperty[DataFlowFact]](key = TheKey, parallelism = parallelism, schedulingStrategy = scheduling)
+  implicit val pool: HandlerPool[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)] = new HandlerPool[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)](key = TheKey, parallelism = parallelism, schedulingStrategy = scheduling)
 
   // Each cell represents a Method + the flow facts currently known.
   // The following maps maps (method,fact) to cells
-  private val mfToCell = TrieMap.empty[(DeclaredMethod, DataFlowFact), Cell[IFDSProperty[DataFlowFact]]]
+  private val mfToCell = TrieMap.empty[(DeclaredMethod, DataFlowFact), Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)]]
 
   /**
    * Provides the concrete property key (that must be unique for every distinct concrete analysis
@@ -127,7 +126,7 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int, scheduling: 
     val code: Array[Stmt[DUVar[ValueInformation]]],
     val cfg: CFG[Stmt[DUVar[ValueInformation]], TACStmts[DUVar[ValueInformation]]],
     var ifdsData: Map[(DeclaredMethod, DataFlowFact), Set[(BasicBlock, Int)]],
-    var ifdsDependees: Map[Cell[IFDSProperty[DataFlowFact]], Outcome[IFDSProperty[DataFlowFact]]] = Map.empty,
+    var ifdsDependees: Map[Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)], Outcome[IFDSProperty[DataFlowFact]]] = Map.empty,
     // DataFlowFacts known to be valid on entry to a basic block
     var incoming: Map[BasicBlock, Set[DataFlowFact]] = Map.empty,
     // DataFlowFacts known to be valid on exit from a basic block on the cfg edge to a specific successor
@@ -140,10 +139,9 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int, scheduling: 
     cell(e).getResult()
 
   /** Map (method, fact) pairs to cells. A new cell is created, if it does not exist yet. See also mf() for the reverse direction. */
-  private def cell(source: (DeclaredMethod, DataFlowFact)): Cell[IFDSProperty[DataFlowFact]] = {
+  private def cell(source: (DeclaredMethod, DataFlowFact)): Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)] = {
     // Can performance be improved if we first check, if mfToCell.isDefinedAt(source) first?
-    val c = pool.mkSequentialCell(c ⇒ performAnalysis(source))
-    c.obj = source
+    val c = pool.mkSequentialCell(c ⇒ performAnalysis(source), source)
     mfToCell.putIfAbsent(source, c)
       .getOrElse(c)
   }
@@ -279,8 +277,8 @@ abstract class AbstractIFDSAnalysis[DataFlowFact](parallelism: Int, scheduling: 
     }
   }
 
-  def cont(updates: Iterable[(Cell[IFDSProperty[DataFlowFact]], Try[ValueOutcome[IFDSProperty[DataFlowFact]]])])(implicit state: State): Outcome[IFDSProperty[DataFlowFact]] = {
-    handleCallUpdates(updates.map(_._1.obj.asInstanceOf[(DeclaredMethod, DataFlowFact)]))
+  def cont(updates: Iterable[(Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)], Try[ValueOutcome[IFDSProperty[DataFlowFact]]])])(implicit state: State): Outcome[IFDSProperty[DataFlowFact]] = {
+    handleCallUpdates(updates.map(_._1.entity))
     createResult()
   }
 

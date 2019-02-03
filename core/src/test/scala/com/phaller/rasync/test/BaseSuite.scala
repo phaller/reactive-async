@@ -3,25 +3,26 @@ package test
 
 import org.scalatest.FunSuite
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import com.phaller.rasync.cell._
 
 import scala.util.{ Failure, Success, Try }
 import scala.concurrent.{ Await, Promise }
 import com.phaller.rasync.lattice._
+import com.phaller.rasync.lattice.lattices.NaturalNumberKey
 import com.phaller.rasync.pool.HandlerPool
-import com.phaller.rasync.test.lattice.IntUpdater
+import com.phaller.rasync.test.lattice._
 
 // Tests for puts and non-cyclic deps of the same type
 abstract class BaseSuite extends FunSuite with CompleterFactory {
 
   implicit val intUpdater: Updater[Int] = new IntUpdater
 
-  def if10thenFinal20(updates: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] =
-    ifXthenFinalY(10, 20)(updates)
+  def if10thenFinal20[E >: Null](updates: Iterable[(Cell[Int, E], Try[ValueOutcome[Int]])]): Outcome[Int] =
+    ifXthenFinalY[E](10, 20)(updates)
 
-  def ifXthenFinalY(x: Int, y: Int)(upd: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] = {
+  def ifXthenFinalY[E >: Null](x: Int, y: Int)(upd: Iterable[(Cell[Int, E], Try[ValueOutcome[Int]])]): Outcome[Int] = {
     val c = upd.head._2
     if (c.get.value == x) FinalOutcome(y) else NoOutcome
   }
@@ -29,8 +30,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("putFinal") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer = mkCompleter[Int, Null]
     val cell = completer.cell
     cell.onComplete {
       case Success(v) =>
@@ -48,8 +49,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("putFinal: 2 putFinals with same value to the same cell") {
-    implicit val pool = new HandlerPool[Int]
-    val completer = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer = mkCompleter[Int, Null]
     val cell = completer.cell
 
     completer.putFinal(5)
@@ -65,8 +66,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("putFinal: putFinal on complete cell without adding new information") {
-    implicit val pool = new HandlerPool[Immutability]
-    val completer = mkCompleter[Immutability]
+    implicit val pool = new HandlerPool[Immutability, Null]
+    val completer = mkCompleter[Immutability, Null]
     val cell = completer.cell
 
     completer.putFinal(Mutable)
@@ -85,9 +86,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("when") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int](parallelism = 1)
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null](parallelism = 1)
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -111,9 +112,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("when: dependency count after putFinal") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -137,9 +138,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("when: dependency count 2") {
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -156,11 +157,11 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("when: dependency count for multiple deps") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
-    val completer3 = mkCompleter[Int]
-    val completer4 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
+    val completer3 = mkCompleter[Int, Null]
+    val completer4 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -174,11 +175,11 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("when: dependency count for multiple deps 2") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
-    val completer3 = mkCompleter[Int]
-    val completer4 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
+    val completer3 = mkCompleter[Int, Null]
+    val completer4 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -194,11 +195,11 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("when: callback removal") {
-    implicit val pool = new HandlerPool[Int]
+    implicit val pool = new HandlerPool[Int, Null]
     val latch = new CountDownLatch(1)
 
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     completer1.cell.when(completer2.cell)(if10thenFinal20)
 
@@ -220,8 +221,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("onNext") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer = mkCompleter[Int, Null]
 
     val cell = completer.cell
 
@@ -244,9 +245,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("when: num dependencies after non-final value") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -275,9 +276,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("whenNext: Triggered by putFinal") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -300,9 +301,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
 
   test("when: Remove dependencies from cells that depend on a completing cell") {
     /* Needs the dependees from the feature/cscc-resolving branch */
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -317,9 +318,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("when: callback removal 2") {
-    implicit val pool = new HandlerPool[Immutability]
-    val completer1 = mkCompleter[Immutability]
-    val completer2 = mkCompleter[Immutability]
+    implicit val pool = new HandlerPool[Immutability, Null]
+    val completer1 = mkCompleter[Immutability, Null]
+    val completer2 = mkCompleter[Immutability, Null]
 
     completer1.cell.when(completer2.cell)(_.head._2 match {
       case Success(NextOutcome(Mutable)) => NextOutcome(Mutable)
@@ -338,14 +339,14 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
 
   test("when: Dependencies concurrency test") {
     val n = 10000
-    implicit val pool = new HandlerPool[Immutability]
+    implicit val pool = new HandlerPool[Immutability, Null]
     val latch = new CountDownLatch(n)
-    val completer1 = mkCompleter[Immutability]
+    val completer1 = mkCompleter[Immutability, Null]
 
     for (i <- 1 to n) {
       pool.execute(() => {
-        val completer2 = mkCompleter[Immutability]
-        val completer3 = mkCompleter[Immutability]
+        val completer2 = mkCompleter[Immutability, Null]
+        val completer3 = mkCompleter[Immutability, Null]
         completer1.cell.when(completer2.cell, completer3.cell)(_ => NextOutcome(Mutable))
         latch.countDown()
       })
@@ -362,9 +363,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
     var expectedValue: Option[Immutability] = None
 
     for (_ <- 1 to 100) {
-      implicit val pool = new HandlerPool[Immutability]
-      val completer1 = mkCompleter[Immutability]
-      val completer2 = mkCompleter[Immutability]
+      implicit val pool = new HandlerPool[Immutability, Null]
+      val completer1 = mkCompleter[Immutability, Null]
+      val completer2 = mkCompleter[Immutability, Null]
 
       val cell1 = completer1.cell
       cell1.trigger()
@@ -386,11 +387,11 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("when: One cell with several dependencies on the same cell concurrency test") {
-    implicit val pool = new HandlerPool[Immutability]()
+    implicit val pool = new HandlerPool[Immutability, Null]()
 
     for (_ <- 1 to 1000) {
-      val completer1 = mkCompleter[Immutability]
-      val completer2 = mkCompleter[Immutability]
+      val completer1 = mkCompleter[Immutability, Null]
+      val completer2 = mkCompleter[Immutability, Null]
       completer1.cell.when(completer2.cell)(it => it.head._2.get.value match {
         case Immutable | ConditionallyImmutable => NoOutcome
         case Mutable => NextOutcome(Mutable)
@@ -415,9 +416,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
     var expectedValue: Option[Immutability] = None
 
     for (_ <- 1 to 100) {
-      implicit val pool = new HandlerPool[Immutability]()
-      val completer1 = mkCompleter[Immutability]
-      val completer2 = mkCompleter[Immutability]
+      implicit val pool = new HandlerPool[Immutability, Null]()
+      val completer1 = mkCompleter[Immutability, Null]
+      val completer2 = mkCompleter[Immutability, Null]
 
       val cell1 = completer1.cell
 
@@ -440,9 +441,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("when: complete dependent cell - ignored update") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -476,9 +477,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("when: complete depedent cell, dependency 1") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -504,9 +505,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
     val latch1 = new CountDownLatch(1)
     val latch2 = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(if10thenFinal20)
@@ -542,9 +543,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
     val latch1 = new CountDownLatch(1)
     val latch2 = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
 
     val cell1 = completer1.cell
     cell1.when(completer2.cell)(it => {
@@ -591,8 +592,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("put: isFinal == true") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer = mkCompleter[Int, Null]
     completer.cell.onComplete {
       case Success(v) =>
         assert(v === 6)
@@ -610,8 +611,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("put: isFinal == false") {
     val latch = new CountDownLatch(1)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer = mkCompleter[Int, Null]
     completer.cell.onNext {
       case Success(x) =>
         assert(x === 10)
@@ -633,10 +634,10 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       def join(curr: Set[Int], v2: Set[Int]): Set[Int] = curr ++ v2
       val bottom = Set.empty[Int]
     }
-    val key = new DefaultKey[Set[Int]]
+    val key = new DefaultKey()
 
-    implicit val pool = new HandlerPool[Set[Int]]
-    val completer = mkCompleter[Set[Int]]
+    implicit val pool = new HandlerPool[Set[Int], Null]
+    val completer = mkCompleter[Set[Int], Null]
     val cell = completer.cell
     cell.onComplete {
       case Success(v) =>
@@ -660,10 +661,10 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       def join(curr: Set[Int], v2: Set[Int]): Set[Int] = curr ++ v2
       val bottom = Set.empty[Int]
     }
-    val key = new DefaultKey[Set[Int]]
+    val key = new DefaultKey()
 
-    implicit val pool = new HandlerPool[Set[Int]]
-    val completer = mkCompleter[Set[Int]]
+    implicit val pool = new HandlerPool[Set[Int], Null]
+    val completer = mkCompleter[Set[Int], Null]
     val cell = completer.cell
     completer.putNext(Set(3, 5))
     cell.onNext {
@@ -681,9 +682,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("quiescent incomplete cells") {
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     cell1.when(cell2)(if10thenFinal20)
@@ -694,9 +695,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("quiescent resolve cycle") {
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     cell1.when(cell2)(_ => NoOutcome)
@@ -709,8 +710,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("getResult: from complete cell") {
-    implicit val pool = new HandlerPool[Int]
-    val completer = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer = mkCompleter[Int, Null]
     val cell = completer.cell
 
     completer.putFinal(10)
@@ -721,8 +722,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("getResult: from incomplete cell") {
-    implicit val pool = new HandlerPool[Int]
-    val completer = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer = mkCompleter[Int, Null]
     val cell = completer.cell
 
     val result = cell.getResult
@@ -731,8 +732,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("getResult: from a partially complete cell") {
-    implicit val pool = new HandlerPool[Immutability]
-    val completer = mkCompleter[Immutability]
+    implicit val pool = new HandlerPool[Immutability, Null]
+    val completer = mkCompleter[Immutability, Null]
     val cell = completer.cell
 
     completer.putNext(ConditionallyImmutable)
@@ -743,8 +744,8 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("putNext: Successful, using ImmutabilityLattce") {
-    implicit val pool = new HandlerPool[Immutability](ImmutabilityKey)
-    val completer = mkCompleter[Immutability]
+    implicit val pool = new HandlerPool[Immutability, Null](ImmutabilityKey)
+    val completer = mkCompleter[Immutability, Null]
     val cell = completer.cell
 
     completer.putNext(Immutable)
@@ -770,10 +771,10 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("putNext: concurrency test") {
-    implicit val pool = new HandlerPool[Immutability](ImmutabilityKey)
+    implicit val pool = new HandlerPool[Immutability, Null](ImmutabilityKey)
 
     for (i <- 1 to 10000) {
-      val completer = mkCompleter[Immutability]
+      val completer = mkCompleter[Immutability, Null]
 
       pool.execute(() => completer.putNext(Immutable))
       pool.execute(() => completer.putNext(ConditionallyImmutable))
@@ -797,10 +798,10 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   test("when: different depender") {
     val latch1 = new CountDownLatch(2)
 
-    implicit val pool = new HandlerPool[Int]
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
-    val completer3 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
+    val completer3 = mkCompleter[Int, Null]
 
     completer2.cell.when(completer1.cell)(_ => {
       FinalOutcome(10)
@@ -825,10 +826,10 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("putNext and putFinal: concurrency test") {
-    implicit val pool = new HandlerPool[Immutability](ImmutabilityKey)
+    implicit val pool = new HandlerPool[Immutability, Null](ImmutabilityKey)
 
     for (i <- 1 to 10000) {
-      val completer = mkCompleter[Immutability]
+      val completer = mkCompleter[Immutability, Null]
 
       pool.execute(() => completer.putNext(Immutable))
       pool.execute(() => completer.putNext(ConditionallyImmutable))
@@ -854,10 +855,10 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       override def join(v1: Int, v2: Int): Int = Math.max(v1, v2)
       val bottom = 0
     }
-    val key = new DefaultKey[Int]
+    val key = DefaultKey[Int]
 
-    implicit val pool = new HandlerPool(key, unhandledExceptionHandler = { t => /* do nothing */ })
-    val completer = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null](key, unhandledExceptionHandler = { t => /* do nothing */ })
+    val completer = mkCompleter[Int, Null]
 
     pool.execute { () =>
       // NOTE: This will print a stacktrace, but that is fine (not a bug).
@@ -879,14 +880,14 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       override def join(x: Int, y: Int): Int = Math.max(x, y)
       val bottom = 0
     }
-    val key = new DefaultKey[Int]
+    val key = new DefaultKey[Int, Null]()
 
-    implicit val pool = new HandlerPool[Int](key)
+    implicit val pool = new HandlerPool[Int, Null](key)
 
     for (_ <- 1 to 100) {
       val latch = new CountDownLatch(1)
-      val completer1 = mkCompleter[Int]
-      val completer2 = mkCompleter[Int]
+      val completer1 = mkCompleter[Int, Null]
+      val completer2 = mkCompleter[Int, Null]
       var called = 0
       completer2.cell.when(completer1.cell)(it => {
         if (it.head._2.get.isInstanceOf[FinalOutcome[_]]) {
@@ -929,9 +930,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
 
     val n = 10000
 
-    implicit val pool = new HandlerPool[Int](NaturalNumberKey)
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null](NaturalNumberKey)
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     cell1.trigger()
@@ -958,12 +959,12 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("cell dependency on itself") {
-    class ReactivePropertyStoreKey extends Key[Int] {
-      override def resolve(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = {
+    class ReactivePropertyStoreKey extends Key[Int, Null] {
+      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = {
         Seq((cells.head, 42))
       }
 
-      override def fallback(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = {
+      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = {
         cells.map(cell ⇒ (cell, cell.getResult()))
       }
 
@@ -971,13 +972,13 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
     }
 
     implicit val pool = new HandlerPool(parallelism = 1, key = new ReactivePropertyStoreKey())
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
 
-    val completer10 = mkCompleter[Int]
-    val completer20 = mkCompleter[Int]
+    val completer10 = mkCompleter[Int, Null]
+    val completer20 = mkCompleter[Int, Null]
     val cell10 = completer10.cell
     val cell20 = completer20.cell
 
@@ -1018,9 +1019,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("recursive quiescentResolveCell using resolve") {
-    implicit val pool = new HandlerPool[Int](new RecursiveQuiescentTestKey)
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null](new RecursiveQuiescentTestKey)
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
     cell2.trigger()
@@ -1045,9 +1046,9 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
   }
 
   test("recursive quiescentResolveCell using fallback") {
-    implicit val pool = new HandlerPool[Int](new RecursiveQuiescentTestKey)
-    val completer1 = mkCompleter[Int]
-    val completer2 = mkCompleter[Int]
+    implicit val pool = new HandlerPool[Int, Null](new RecursiveQuiescentTestKey)
+    val completer1 = mkCompleter[Int, Null]
+    val completer2 = mkCompleter[Int, Null]
     val cell1 = completer1.cell
     val cell2 = completer2.cell
 
@@ -1065,12 +1066,12 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
     pool.onQuiescenceShutdown()
   }
 
-  class RecursiveQuiescentTestKey extends Key[Int] {
-    override def resolve(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = {
+  class RecursiveQuiescentTestKey extends Key[Int, Null] {
+    override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = {
       Seq((cells.head, 42))
     }
 
-    override def fallback(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = {
+    override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = {
       cells.map(cell ⇒ (cell, 43))
     }
   }

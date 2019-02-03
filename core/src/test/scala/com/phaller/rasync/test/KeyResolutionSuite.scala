@@ -21,7 +21,7 @@ import scala.util.{ Failure, Success, Try }
  * For the mixedcase, see MixedKeyResolutionsuite
  */
 abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
-  def forwardAsNext(upd: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] = {
+  def forwardAsNext(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = {
     val c = upd.head._2
     NextOutcome(c.get.value)
   }
@@ -29,8 +29,8 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
   implicit val intUpdater: Updater[Int] = new IntUpdater
 
   test("DefaultKey.resolve") {
-    val k = new DefaultKey[Int]
-    implicit val pool = new HandlerPool[Int](k)
+    val k = new DefaultKey[Int, Null]
+    implicit val pool = HandlerPool(k)
     val completer1 = mkCompleter[Int]
     val completer2 = mkCompleter[Int]
     completer1.cell.when(completer2.cell)(forwardAsNext)
@@ -45,8 +45,8 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
   }
 
   test("DefaultKey.fallback") {
-    val k = new DefaultKey[Int]
-    implicit val pool = new HandlerPool[Int](k)
+    val k = DefaultKey[Int]
+    implicit val pool = new HandlerPool[Int, Null](k)
     val completer1 = mkCompleter[Int]
     completer1.cell.trigger()
     completer1.putNext(5)
@@ -57,8 +57,8 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
   }
 
   test("DefaultKey.fallback with additional depender") {
-    val k = new DefaultKey[Int]
-    implicit val pool = new HandlerPool[Int](k)
+    val k = DefaultKey[Int]
+    implicit val pool = HandlerPool(k)
     val completer1 = mkCompleter[Int]
     val completer2 = mkCompleter[Int]
     completer2.cell.when(completer1.cell)(_ => FinalOutcome(10))
@@ -75,16 +75,16 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
   test("when: cSCC with constant resolution") {
     val latch = new CountDownLatch(4)
 
-    object ConstantKey extends Key[Int] {
+    object ConstantKey extends Key[Int, Null] {
       val RESOLVEDINCYCLE = 5
       val RESOLVEDASINDPENDENT = 10
 
-      override def resolve(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = cells.map((_, RESOLVEDINCYCLE))
+      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDINCYCLE))
 
-      override def fallback(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] = cells.map((_, RESOLVEDASINDPENDENT))
+      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDASINDPENDENT))
     }
 
-    implicit val pool = new HandlerPool[Int](ConstantKey)
+    implicit val pool = HandlerPool(ConstantKey)
 
     val completer1 = mkCompleter[Int]
     val cell1 = completer1.cell
@@ -102,7 +102,7 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
       case FinalOutcome(_) =>
         NoOutcome
       case NextOutcome(-1) =>
@@ -140,7 +140,7 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
   test("when: cSCC with default resolution") {
     val latch = new CountDownLatch(4)
 
-    implicit val pool = new HandlerPool[Int]
+    implicit val pool = new HandlerPool[Int, Null]
 
     val completer1 = mkCompleter[Int]
     val cell1 = completer1.cell
@@ -158,7 +158,7 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
       case FinalOutcome(_) =>
         NoOutcome
       case NextOutcome(-1) =>
@@ -203,7 +203,7 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    implicit val pool: HandlerPool[Value] = new HandlerPool[Value]
+    implicit val pool: HandlerPool[Value, Null] = HandlerPool[Value]
 
     for (i <- 1 to 100) {
       val completer1 = mkCompleter[Value]
@@ -235,13 +235,13 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    object TheKey extends DefaultKey[Value] {
-      override def resolve(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+    object TheKey extends DefaultKey[Value, Null] {
+      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, OK))
       }
     }
 
-    implicit val pool = new HandlerPool[Value](TheKey)
+    implicit val pool = HandlerPool[Value](TheKey)
 
     for (i <- 1 to 100) {
       val completer1 = mkCompleter[Value]
@@ -275,16 +275,16 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    object TheKey extends DefaultKey[Value] {
-      override def resolve(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+    object TheKey extends Key[Value, Null] {
+      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
 
-    implicit val pool = new HandlerPool[Value](TheKey)
+    implicit val pool = HandlerPool[Value](TheKey)
     val completer1 = mkCompleter[Value]
     val completer2 = mkCompleter[Value]
     val cell1 = completer1.cell
@@ -322,16 +322,16 @@ abstract class KeyResolutionSuite extends FunSuite with CompleterFactory {
       override val bottom: Value = Bottom
     }
 
-    object TheKey extends DefaultKey[Value] {
-      override def resolve(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+    object TheKey extends Key[Value, Null] {
+      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value]]): Iterable[(Cell[Value], Value)] = {
+      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
         Seq()
       }
     }
 
-    implicit val pool = new HandlerPool[Value](TheKey)
+    implicit val pool = HandlerPool[Value](TheKey)
     val completer1 = mkCompleter[Value]
     val completer2 = mkCompleter[Value]
     val cell1 = completer1.cell

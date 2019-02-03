@@ -24,74 +24,80 @@ import scala.util.Try
  * If a tasks has been created to complete a `cell` via a `Key`,
  * `SchedulingStrategy.calcPriority(cell)` is called.
  */
-trait SchedulingStrategy {
-  def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int
-  def calcPriority[V](dependentCell: Cell[V], value: Try[V]): Int
+trait SchedulingStrategy[V, E >: Null] {
+  def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int
+  def calcPriority(dependentCell: Cell[V, E], value: Try[V]): Int
   override def toString: String = this.getClass.getSimpleName
 }
 
-/** All tasks are of equal priority. */
-object DefaultScheduling extends SchedulingStrategy {
-  override def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int = 0
-  override def calcPriority[V](cell: Cell[V], value: Try[V]): Int = 0
+object SchedulingStrategy {
+  def apply[V, E >: Null](s: SchedulingStrategy.type): SchedulingStrategy[V, E] = {
+    s.getClass.asInstanceOf[Class[SchedulingStrategy[V, E]]].newInstance()
+  }
 }
 
-object SourcesWithManyTargetsFirst extends SchedulingStrategy {
-  override def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int =
+/** All tasks are of equal priority. */
+class DefaultScheduling[V, E >: Null] extends SchedulingStrategy[V, E] {
+  override def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int = 0
+  override def calcPriority(cell: Cell[V, E], value: Try[V]): Int = 0
+}
+
+class SourcesWithManyTargetsFirst[V, E >: Null] extends SchedulingStrategy[V, E] {
+  override def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int =
     -other.numDependentCells
 
-  override def calcPriority[V](cell: Cell[V], value: Try[V]): Int =
+  override def calcPriority(cell: Cell[V, E], value: Try[V]): Int =
     -cell.numDependentCells
 }
 
-object SourcesWithManyTargetsLast extends SchedulingStrategy {
-  override def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int =
+class SourcesWithManyTargetsLast[V, E >: Null] extends SchedulingStrategy[V, E] {
+  override def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int =
     other.numDependentCells
 
-  override def calcPriority[V](cell: Cell[V], value: Try[V]): Int =
+  override def calcPriority(cell: Cell[V, E], value: Try[V]): Int =
     cell.numDependentCells
 }
 
-object SourcesWithManySourcesFirst extends SchedulingStrategy {
-  override def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int =
+class SourcesWithManySourcesFirst[V, E >: Null] extends SchedulingStrategy[V, E] {
+  override def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int =
     -other.numDependencies
 
-  override def calcPriority[V](cell: Cell[V], value: Try[V]): Int =
+  override def calcPriority(cell: Cell[V, E], value: Try[V]): Int =
     -cell.numDependencies
 }
 
-object SourcesWithManySourcesLast extends SchedulingStrategy {
-  override def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int =
+class SourcesWithManySourcesLast[V, E >: Null] extends SchedulingStrategy[V, E] {
+  override def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int =
     other.numDependencies
 
-  override def calcPriority[V](cell: Cell[V], value: Try[V]): Int =
+  override def calcPriority(cell: Cell[V, E], value: Try[V]): Int =
     cell.numDependencies
 }
 
-object TargetsWithManySourcesFirst extends SchedulingStrategy {
-  override def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int =
+class TargetsWithManySourcesFirst[V, E >: Null] extends SchedulingStrategy[V, E] {
+  override def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int =
     -dependentCell.numDependencies
 
-  override def calcPriority[V](cell: Cell[V], value: Try[V]): Int = 0
+  override def calcPriority(cell: Cell[V, E], value: Try[V]): Int = 0
 }
 
-object TargetsWithManySourcesLast extends SchedulingStrategy {
-  override def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int =
+class TargetsWithManySourcesLast[V, E >: Null] extends SchedulingStrategy[V, E] {
+  override def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int =
     dependentCell.numDependencies
 
-  override def calcPriority[V](dependentCell: Cell[V], value: Try[V]): Int = 0
+  override def calcPriority(dependentCell: Cell[V, E], value: Try[V]): Int = 0
 }
 
-object TargetsWithManyTargetsFirst extends SchedulingStrategy {
-  override def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int =
+class TargetsWithManyTargetsFirst[V, E >: Null] extends SchedulingStrategy[V, E] {
+  override def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int =
     -dependentCell.numDependencies
 
-  override def calcPriority[V](dependentCell: Cell[V], value: Try[V]): Int = 0
+  override def calcPriority(dependentCell: Cell[V, E], value: Try[V]): Int = 0
 }
 
-object TargetsWithManyTargetsLast extends SchedulingStrategy {
-  override def calcPriority[V](dependentCell: Cell[V], other: Cell[V], value: Try[ValueOutcome[V]]): Int =
+class TargetsWithManyTargetsLast[V, E >: Null] extends SchedulingStrategy[V, E] {
+  override def calcPriority(dependentCell: Cell[V, E], other: Cell[V, E], value: Try[ValueOutcome[V]]): Int =
     dependentCell.numDependentCells
 
-  override def calcPriority[V](dependentCell: Cell[V], value: Try[V]): Int = 0
+  override def calcPriority(dependentCell: Cell[V, E], value: Try[V]): Int = 0
 }

@@ -8,6 +8,7 @@ import scala.concurrent.duration._
 import com.phaller.rasync.lattice._
 import com.phaller.rasync.pool.HandlerPool
 import com.phaller.rasync.cell._
+import com.phaller.rasync.lattice.lattices.{ NaturalNumberKey, NaturalNumberLattice }
 import org.scalatest.FunSuite
 
 import scala.concurrent.Await
@@ -31,7 +32,7 @@ class ExceptionSuite extends FunSuite {
     // If the init method throws an exception e,
     // the cell is completed with Failure(e)
     val latch = new CountDownLatch(1)
-    val pool = new HandlerPool[Int](NaturalNumberKey)
+    val pool = HandlerPool[Int](NaturalNumberKey)
     val cell = pool.mkCell(_ => {
       throw new Exception("foo")
     })
@@ -59,7 +60,7 @@ class ExceptionSuite extends FunSuite {
     // If the callback thrown an exception e,
     // the dependent cell is completed with Failure e
     val latch = new CountDownLatch(1)
-    implicit val pool: HandlerPool[Int] = new HandlerPool[Int](NaturalNumberKey)
+    implicit val pool: HandlerPool[Int, Null] = new HandlerPool[Int, Null](NaturalNumberKey)
     val c0 = CellCompleter()
     val cell = pool.mkCell(c => {
       // build up dependency, throw exeption, if c0's value changes
@@ -93,7 +94,7 @@ class ExceptionSuite extends FunSuite {
     // If the callback thrown an exception e,
     // the dependent cell is completed with Failure e
     val latch = new CountDownLatch(1)
-    implicit val pool: HandlerPool[Int] = new HandlerPool(NaturalNumberKey)
+    implicit val pool: HandlerPool[Int, Null] = new HandlerPool[Int, Null](NaturalNumberKey)
     val c0 = CellCompleter()
     val cell = pool.mkSequentialCell(c => {
       // build up dependency, throw exeption, if c0's value changes
@@ -129,15 +130,15 @@ class ExceptionSuite extends FunSuite {
     // with Failure(e).
 
     // Define a key that throws exceptions
-    object ExceptionKey extends Key[Int] {
-      override def resolve(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] =
+    object ExceptionKey extends Key[Int, Null] {
+      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] =
         throw new Exception("foo")
 
-      override def fallback(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] =
+      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] =
         throw new Exception("bar")
     }
 
-    implicit val pool: HandlerPool[Int] = new HandlerPool(ExceptionKey)
+    implicit val pool: HandlerPool[Int, Null] = new HandlerPool[Int, Null](ExceptionKey)
     val c0 = CellCompleter()
     val c1 = CellCompleter()
     val c2 = CellCompleter()
@@ -172,18 +173,18 @@ class ExceptionSuite extends FunSuite {
     // A depedent cell receives the failure.
 
     // Define a key that throws exceptions
-    object ExceptionKey extends Key[Int] {
-      override def resolve(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] =
+    object ExceptionKey extends Key[Int, Null] {
+      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] =
         throw new Exception("foo")
 
-      override def fallback(cells: Iterable[Cell[Int]]): Iterable[(Cell[Int], Int)] =
+      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] =
         throw new Exception("bar")
     }
 
-    implicit val pool: HandlerPool[Int] = new HandlerPool(ExceptionKey)
+    implicit val pool: HandlerPool[Int, Null] = new HandlerPool[Int, Null](ExceptionKey)
     val triggerLatch = new CountDownLatch(2)
-    val c0 = CellCompleter[Int](_ => { triggerLatch.countDown(); NoOutcome })
-    val c1 = CellCompleter[Int](_ => { triggerLatch.countDown(); NoOutcome })
+    val c0 = CellCompleter[Int, Null](_ => { triggerLatch.countDown(); NoOutcome })
+    val c1 = CellCompleter[Int, Null](_ => { triggerLatch.countDown(); NoOutcome })
 
     c1.cell.trigger()
     c0.cell.trigger()
@@ -211,7 +212,7 @@ class ExceptionSuite extends FunSuite {
     // after a cell has been completed, an exception in one
     // of its callbacks should be ignored
     val latch = new CountDownLatch(1)
-    implicit val pool: HandlerPool[Int] = new HandlerPool(NaturalNumberKey)
+    implicit val pool: HandlerPool[Int, Null] = new HandlerPool[Int, Null](NaturalNumberKey)
     val c0 = CellCompleter()
     val c1 = CellCompleter()
     val c2 = CellCompleter()
@@ -242,7 +243,7 @@ class ExceptionSuite extends FunSuite {
     // after a cell has been completed with an exception,
     // any subsequent put should be ignored.
     val latch = new CountDownLatch(1)
-    implicit val pool: HandlerPool[Int] = new HandlerPool(NaturalNumberKey)
+    implicit val pool: HandlerPool[Int, Null] = new HandlerPool[Int, Null](NaturalNumberKey)
     val c0 = CellCompleter()
     val c1 = CellCompleter()
     val c2 = CellCompleter()
@@ -277,7 +278,7 @@ class ExceptionSuite extends FunSuite {
     // the respective cell.
     val latch1 = new CountDownLatch(1)
     val latch2 = new CountDownLatch(1)
-    implicit val pool: HandlerPool[Int] = new HandlerPool(NaturalNumberKey, unhandledExceptionHandler = _ => latch1.countDown())
+    implicit val pool: HandlerPool[Int, Null] = new HandlerPool[Int, Null](NaturalNumberKey, unhandledExceptionHandler = _ => latch1.countDown())
     val c0 = CellCompleter()
     val cell = pool.mkCell(c => {
       // build up dependency, throw error, if c0's value changes
