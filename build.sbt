@@ -24,8 +24,7 @@ lazy val core: Project = (project in file("core")).
     name := "reactive-async",
     libraryDependencies += scalaTest,
     libraryDependencies += opalCommon,
-    libraryDependencies += opalAI,
-    libraryDependencies += opalBR,
+    libraryDependencies += opalTAC,
     scalacOptions += "-feature"
   )
 
