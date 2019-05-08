@@ -262,21 +262,14 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
      * Gets, for an ExitNode of the CFG, the DataFlowFacts valid on each CFG edge from a
      * statement to that ExitNode.
      */
-    def collectResult(node: CFGNode)(implicit state: State): Map[Statement, Set[DataFlowFact]] =
-        node.predecessors.foldLeft(Map.empty[Statement, Set[DataFlowFact]]) { (curMap, nextBB: CFGNode) ⇒
-            val bb = nextBB.asBasicBlock
-            if (state.outgoingFacts.get(bb).flatMap(_.get(node)).isDefined) {
-                val index = bb.endPC
-                curMap + (Statement(
-                    state.method,
-                    bb,
-                    state.code(index),
-                    index,
-                    state.code,
-                    state.cfg
-                ) → state.outgoingFacts(bb)(node))
-            } else curMap
-        }
+    def collectResult(node: CFGNode)(implicit state: State): Map[Statement, Set[DataFlowFact]] = {
+        node.predecessors.collect {
+            case basicBlock: BasicBlock if state.outgoingFacts.get(basicBlock).flatMap(_.get(node)).isDefined ⇒
+                val lastIndex = basicBlock.endPC
+                Statement(state.method, basicBlock, state.code(lastIndex), lastIndex, state.code, state.cfg) → state
+                    .outgoingFacts(basicBlock)(node)
+        }.toMap
+    }
 
     /**
      * Creates the analysis result from the current state.
@@ -391,10 +384,6 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
             case Assignment.ASTID | ExprStmt.ASTID ⇒ getExpression(statement).astID match {
                 case StaticFunctionCall.ASTID | NonVirtualFunctionCall.ASTID | VirtualFunctionCall.ASTID ⇒
                     val cs = getCallees(basicBlock, pc)
-                    if(cs.exists(_.name != getExpression(statement).asFunctionCall.name)){
-                        println("strange")
-                        getCallees(basicBlock, pc)
-                    }
                     Some(getCallees(basicBlock, pc))
                 case _ ⇒ None
             }
@@ -539,6 +528,9 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
                         }
                         val exitFacts: Map[Statement, Set[DataFlowFact]] = callFlows match {
                             case FinalOutcome(p) ⇒
+                                val newDependee =
+                                    state.pendingIfdsCallSites.getOrElse(e, Set.empty) - ((basicBlock, call.index))
+                                state.pendingIfdsCallSites = state.pendingIfdsCallSites.updated(e, newDependee)
                                 state.pendingIfdsDependees -= c
                                 p.flows
                             case NextOutcome(p) ⇒
