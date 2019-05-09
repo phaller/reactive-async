@@ -30,6 +30,7 @@ import org.opalj.bytecode
 
 import org.opalj.br.fpcf.PropertyStoreKey
 import org.opalj.br.fpcf.FPCFAnalysesManagerKey
+import org.opalj.ai.domain.l0.PrimitiveTACAIDomain
 import org.opalj.tac.fpcf.analyses.cg.CallGraphDeserializerScheduler
 
 trait Fact extends AbstractIFDSFact
@@ -220,7 +221,7 @@ class TestTaintAnalysis(
             }) {
                 println(s"Found flow: $stmt")
             }
-        if ((callee.descriptor.returnType eq ObjectType.Class) ||
+        if (true||(callee.descriptor.returnType eq ObjectType.Class) ||
             (callee.descriptor.returnType eq ObjectType.Object) ||
             (callee.descriptor.returnType eq ObjectType.String)) {
             in.collect {
@@ -423,6 +424,10 @@ object TestTaintAnalysisRunner extends FunSuite {
                 PropertyStore.updateDebug(false)
                 ps
             }
+        )
+
+        p0.getOrCreateProjectInformationKeyInitializationData(LazyDetachedTACAIKey,
+            (m: Method) ⇒ new PrimitiveTACAIDomain(p0, m)
         )
 
         PerformanceEvaluation.time {
