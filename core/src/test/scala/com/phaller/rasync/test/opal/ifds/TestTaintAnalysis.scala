@@ -410,7 +410,7 @@ object TestTaintAnalysisRunner extends FunSuite {
 
     def main(args: Array[String]): Unit = {
 
-        val p0 = Project(new File("/usr/lib/jvm/java-7-openjdk/jre/lib/rt.jar"))//bytecode.RTJar)
+        val p0 = Project(new File(args(args.length-1)))//bytecode.RTJar)
 
         com.phaller.rasync.pool.SchedulingStrategy
 
@@ -427,7 +427,7 @@ object TestTaintAnalysisRunner extends FunSuite {
 
         PerformanceEvaluation.time {
             val manager = p0.get(FPCFAnalysesManagerKey)
-            manager.runAll(new CallGraphDeserializerScheduler(new File("/home/dominik/Desktop/wala.json")))
+            manager.runAll(new CallGraphDeserializerScheduler(new File(args(args.length-2))))
         } { t ⇒ println(s"CG took ${t.toSeconds}") }
 
         for (
