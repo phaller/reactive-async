@@ -12,7 +12,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import org.opalj.Success
 import org.opalj.br.{ ClassFile, Method }
-import org.opalj.br.analyses.{ BasicReport, DefaultOneStepAnalysis, Project }
+import org.opalj.br.analyses.{ BasicReport, ProjectAnalysisApplication, Project }
 import org.opalj.br.instructions.GETFIELD
 import org.opalj.br.instructions.GETSTATIC
 import org.opalj.br.instructions.PUTFIELD
@@ -64,7 +64,7 @@ object PurityStrategy extends SchedulingStrategy[Purity, Null] {
   }
 }
 
-object PurityAnalysis extends DefaultOneStepAnalysis {
+object PurityAnalysis extends ProjectAnalysisApplication {
 
   override def main(args: Array[String]): Unit = {
     val lib = Project(new java.io.File(JRELibraryFolder.getAbsolutePath))

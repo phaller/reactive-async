@@ -6,11 +6,13 @@ import java.util.concurrent.atomic.AtomicReference
 
 import lattice.Updater
 import pool.HandlerPool
-
 import scala.annotation.tailrec
+
 import scala.collection.mutable
 import scala.concurrent.duration.TimeUnit
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success, Try}
+
+import com.phaller.rasync.util.Counter
 
 trait Cell[V, E >: Null] {
   private[rasync] val completer: CellCompleter[V, E]
@@ -254,6 +256,7 @@ private[rasync] abstract class CellImpl[V, E >: Null](pool: HandlerPool[V, E], u
   }
 
   override def putNext(x: V): Unit = {
+    //Counter.inc("Cell.putNext")
     tryNewState(x)
   }
 

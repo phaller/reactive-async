@@ -25,6 +25,8 @@ import scala.concurrent.duration.Duration
 
 import com.phaller.rasync.test.opal.ifds.AbstractIFDSAnalysis.Statement
 import com.phaller.rasync.test.opal.ifds.AbstractIFDSAnalysis.V
+import com.phaller.rasync.util.Counter
+import org.opalj.bytecode
 
 import org.opalj.br.fpcf.PropertyStoreKey
 import org.opalj.br.fpcf.FPCFAnalysesManagerKey
@@ -33,7 +35,7 @@ import org.opalj.tac.fpcf.analyses.cg.CallGraphDeserializerScheduler
 trait Fact extends AbstractIFDSFact
 
 case class Variable(index: Int) extends Fact
-case class ArrayElement(index: Int, element: Int) extends Fact
+//case class ArrayElement(index: Int, element: Int) extends Fact
 case class StaticField(classType: ObjectType, fieldName: String) extends Fact
 case class InstanceField(index: Int, classType: ObjectType, fieldName: String) extends Fact
 case class FlowFact(flow: ListSet[Method]) extends Fact {
@@ -78,26 +80,28 @@ class TestTaintAnalysis(
         stmt.stmt.astID match {
             case Assignment.ASTID ⇒
                 handleAssignment(stmt, stmt.stmt.asAssignment.expr, in)
-            case ArrayStore.ASTID ⇒
+            /*case ArrayStore.ASTID ⇒
                 val store = stmt.stmt.asArrayStore
                 val definedBy = store.arrayRef.asVar.definedBy
                 val index = getConstValue(store.index, stmt.code)
                 if (isTainted(store.value, in))
                     if (index.isDefined) // Taint known array index
-                    // Instead of using an iterator, we are going to use internal iteration
-                    // in ++ definedBy.iterator.map(ArrayElement(_, index.get))
+                        // Instead of using an iterator, we are going to use internal iteration
+                        // in ++ definedBy.iterator.map(ArrayElement(_, index.get))
                         definedBy.foldLeft(in) { (c, n) ⇒ c + ArrayElement(n, index.get) }
                     else // Taint whole array if index is unknown
-                    // Instead of using an iterator, we are going to use internal iteration:
-                    // in ++ definedBy.iterator.map(Variable)
+                        // Instead of using an iterator, we are going to use internal iteration:
+                        // in ++ definedBy.iterator.map(Variable)
                         definedBy.foldLeft(in) { (c, n) ⇒ c + Variable(n) }
-                else if (index.isDefined && definedBy.size == 1) // Untaint if possible
-                    in - ArrayElement(definedBy.head, index.get)
-                else in
+                else in*/
             case PutStatic.ASTID ⇒
                 val put = stmt.stmt.asPutStatic
                 if (isTainted(put.value, in)) in + StaticField(put.declaringClass, put.name)
                 else in
+            /*case PutField.ASTID ⇒
+                val put = stmt.stmt.asPutField
+                if (isTainted(put.value, in)) in + StaticField(put.declaringClass, put.name)
+                else in*/
             case PutField.ASTID ⇒
                 val put = stmt.stmt.asPutField
                 val definedBy = put.objRef.asVar.definedBy
@@ -113,7 +117,7 @@ class TestTaintAnalysis(
     def isTainted(expr: Expr[V], in: Set[Fact]): Boolean = {
         expr.isVar && in.exists {
             case Variable(index)            ⇒ expr.asVar.definedBy.contains(index)
-            case ArrayElement(index, _)     ⇒ expr.asVar.definedBy.contains(index)
+            //case ArrayElement(index, _)     ⇒ expr.asVar.definedBy.contains(index)
             case InstanceField(index, _, _) ⇒ expr.asVar.definedBy.contains(index)
             case _                          ⇒ false
         }
@@ -122,7 +126,7 @@ class TestTaintAnalysis(
     /**
      * Returns the constant int value of an expression if it exists, None otherwise.
      */
-    def getConstValue(expr: Expr[V], code: Array[Stmt[V]]): Option[Int] = {
+    /*def getConstValue(expr: Expr[V], code: Array[Stmt[V]]): Option[Int] = {
         if (expr.isIntConst) Some(expr.asIntConst.value)
         else if (expr.isVar) {
             // TODO The following looks optimizable!
@@ -139,7 +143,7 @@ class TestTaintAnalysis(
                 constVals.head
             else None
         } else None
-    }
+    }*/
 
     def handleAssignment(stmt: Statement, expr: Expr[V], in: Set[Fact]): Set[Fact] =
         expr.astID match {
@@ -147,12 +151,12 @@ class TestTaintAnalysis(
                 val newTaint = in.collect {
                     case Variable(index) if expr.asVar.definedBy.contains(index) ⇒
                         Some(Variable(stmt.index))
-                    case ArrayElement(index, taintIndex) if expr.asVar.definedBy.contains(index) ⇒
-                        Some(ArrayElement(stmt.index, taintIndex))
+                    /*case ArrayElement(index, taintIndex) if expr.asVar.definedBy.contains(index) ⇒
+                        Some(ArrayElement(stmt.index, taintIndex))*/
                     case _ ⇒ None
                 }.flatten
                 in ++ newTaint
-            case ArrayLoad.ASTID ⇒
+            /*case ArrayLoad.ASTID ⇒
                 val load = expr.asArrayLoad
                 if (in.exists {
                     // The specific array element may be tainted
@@ -166,12 +170,17 @@ class TestTaintAnalysis(
                 })
                     in + Variable(stmt.index)
                 else
-                    in
+                    in*/
             case GetStatic.ASTID ⇒
                 val get = expr.asGetStatic
                 if (in.contains(StaticField(get.declaringClass, get.name)))
                     in + Variable(stmt.index)
                 else in
+            /*case GetField.ASTID ⇒
+                val get = expr.asGetField
+                if (in.contains(StaticField(get.declaringClass, get.name)))
+                    in + Variable(stmt.index)
+                else in*/
             case GetField.ASTID ⇒
                 val get = expr.asGetField
                 if (in.exists {
@@ -189,10 +198,10 @@ class TestTaintAnalysis(
         }
 
     override def callFlow(
-                             stmt:   Statement,
-                             callee: DeclaredMethod,
-                             in:     Set[Fact]
-                         ): Set[Fact] = {
+        stmt:   Statement,
+        callee: DeclaredMethod,
+        in:     Set[Fact]
+    ): Set[Fact] = {
         val allParams = asCall(stmt.stmt).receiverOption ++ asCall(stmt.stmt).params
         if (callee.name == "sink")
             if (in.exists {
@@ -200,7 +209,7 @@ class TestTaintAnalysis(
                     allParams.exists(p ⇒ p.asVar.definedBy.contains(index))
                 case _ ⇒ false
             }) {
-                //println(s"Found flow: $stmt")
+                println(s"Found flow: $stmt")
             }
         if (callee.name == "forName" && (callee.declaringClassType eq ObjectType.Class) &&
             callee.descriptor.parameterTypes == RefArray(ObjectType.String))
@@ -209,9 +218,9 @@ class TestTaintAnalysis(
                     asCall(stmt.stmt).params.exists(p ⇒ p.asVar.definedBy.contains(index))
                 case _ ⇒ false
             }) {
-                //println(s"Found flow: $stmt")
+                println(s"Found flow: $stmt")
             }
-        if ((callee.descriptor.returnType eq ObjectType.Class) ||
+        if (true||(callee.descriptor.returnType eq ObjectType.Class) ||
             (callee.descriptor.returnType eq ObjectType.Object) ||
             (callee.descriptor.returnType eq ObjectType.String)) {
             in.collect {
@@ -221,12 +230,12 @@ class TestTaintAnalysis(
                             Variable(paramToIndex(pIndex, !callee.definedMethod.isStatic))
                     }
 
-                case ArrayElement(index, taintedIndex) ⇒
+                /*case ArrayElement(index, taintedIndex) ⇒
                     // Taint element of formal parameter if element of actual parameter is tainted
                     allParams.zipWithIndex.collect {
                         case (param, pIndex) if param.asVar.definedBy.contains(index) ⇒
                             ArrayElement(paramToIndex(pIndex, !callee.definedMethod.isStatic), taintedIndex)
-                    }
+                    }*/
 
                 case InstanceField(index, declClass, taintedField) ⇒
                     // Taint field of formal parameter if field of actual parameter is tainted
@@ -243,12 +252,12 @@ class TestTaintAnalysis(
     }
 
     override def returnFlow(
-                               stmt:   Statement,
-                               callee: DeclaredMethod,
-                               exit:   Statement,
-                               succ:   Statement,
-                               in:     Set[Fact]
-                           ): Set[Fact] = {
+        stmt:   Statement,
+        callee: DeclaredMethod,
+        exit:   Statement,
+        succ:   Statement,
+        in:     Set[Fact]
+    ): Set[Fact] = {
 
         /**
          * Checks whether the formal parameter is of a reference type, as primitive types are
@@ -271,17 +280,11 @@ class TestTaintAnalysis(
             var flows: Set[Fact] = Set.empty
             for (fact ← in) {
                 fact match {
-                    case Variable(index) if index < 0 && index > -100 && isRefTypeParam(index) ⇒
-                        // Taint actual parameter if formal parameter is tainted
-                        val param =
-                            allParams(paramToIndex(index, !callee.definedMethod.isStatic))
-                        flows ++= param.asVar.definedBy.iterator.map(Variable)
-
-                    case ArrayElement(index, taintedIndex) if index < 0 && index > -100 ⇒
+                    /*case ArrayElement(index, taintedIndex) if index < 0 && index > -100 ⇒
                         // Taint element of actual parameter if element of formal parameter is tainted
                         val param =
                             allParams(paramToIndex(index, !callee.definedMethod.isStatic))
-                        flows ++= param.asVar.definedBy.iterator.map(ArrayElement(_, taintedIndex))
+                        flows ++= param.asVar.definedBy.iterator.map(ArrayElement(_, taintedIndex))*/
 
                     case InstanceField(index, declClass, taintedField) if index < 0 && index > -10 ⇒
                         // Taint field of actual parameter if field of formal parameter is tainted
@@ -292,7 +295,7 @@ class TestTaintAnalysis(
                     case FlowFact(flow) ⇒
                         val newFlow = flow + stmt.method
                         if (entryPoints.contains(declaredMethods(exit.method))) {
-                            println(s"flow: "+newFlow.map(_.toJava).mkString(", "))
+                            //println(s"flow: "+newFlow.map(_.toJava).mkString(", "))
                         } else {
                             flows += FlowFact(newFlow)
                         }
@@ -306,8 +309,8 @@ class TestTaintAnalysis(
                 flows ++= in.collect {
                     case Variable(index) if returnValue.definedBy.contains(index) ⇒
                         Variable(stmt.index)
-                    case ArrayElement(index, taintedIndex) if returnValue.definedBy.contains(index) ⇒
-                        ArrayElement(stmt.index, taintedIndex)
+                    /*case ArrayElement(index, taintedIndex) if returnValue.definedBy.contains(index) ⇒
+                        ArrayElement(stmt.index, taintedIndex)*/
                     case InstanceField(index, declClass, taintedField) if returnValue.definedBy.contains(index) ⇒
                         InstanceField(stmt.index, declClass, taintedField)
                 }
@@ -341,11 +344,11 @@ class TestTaintAnalysis(
                     asCall(stmt.stmt).params.exists(p ⇒ p.asVar.definedBy.contains(index))
                 case _ ⇒ false
             }) {
-                if (entryPoints.contains(declaredMethods(stmt.method))) {
+                /*if (entryPoints.contains(declaredMethods(stmt.method))) {
                     println(s"flow: "+stmt.method.toJava)
                     in
-                } else
-                    in ++ Set(FlowFact(ListSet(stmt.method)))
+                } else*/
+                in ++ Set(FlowFact(ListSet(stmt.method)))
             } else {
                 in
             }
@@ -358,21 +361,21 @@ class TestTaintAnalysis(
      * If forName is called, we add a FlowFact.
      */
     override def nativeCall(statement: Statement, callee: DeclaredMethod, successor: Statement, in: Set[Fact]): Set[Fact] = {
-        val allParams = asCall(statement.stmt).allParams
+       /* val allParams = asCall(statement.stmt).allParams
         if (statement.stmt.astID == Assignment.ASTID && in.exists {
             case Variable(index) ⇒
                 allParams.zipWithIndex.exists {
                     case (param, _) if param.asVar.definedBy.contains(index) ⇒ true
                     case _                                                   ⇒ false
                 }
-            case ArrayElement(index, _) ⇒
+            /*case ArrayElement(index, _) ⇒
                 allParams.zipWithIndex.exists {
                     case (param, _) if param.asVar.definedBy.contains(index) ⇒ true
                     case _                                                   ⇒ false
-                }
+                }*/
             case _ ⇒ false
         }) Set(Variable(statement.index))
-        else Set.empty
+        else*/ Set.empty
     }
 
     val entryPoints: Map[DeclaredMethod, Fact] = (for {
@@ -407,7 +410,7 @@ object TestTaintAnalysisRunner extends FunSuite {
 
     def main(args: Array[String]): Unit = {
 
-        val p0 = Project(new java.io.File(JRELibraryFolder.getAbsolutePath))
+        val p0 = Project(new File("/usr/lib/jvm/java-7-openjdk/jre/lib/rt.jar"))//bytecode.RTJar)
 
         com.phaller.rasync.pool.SchedulingStrategy
 
@@ -424,18 +427,19 @@ object TestTaintAnalysisRunner extends FunSuite {
 
         PerformanceEvaluation.time {
             val manager = p0.get(FPCFAnalysesManagerKey)
-            manager.runAll(new CallGraphDeserializerScheduler(new File("/home/dominik/Desktop/rt2.cg")))
+            manager.runAll(new CallGraphDeserializerScheduler(new File("/home/dominik/Desktop/wala.json")))
         } { t ⇒ println(s"CG took ${t.toSeconds}") }
 
         for (
             scheduling ← List(new DefaultScheduling[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)]);
-            threads ← List(1, 2, 4, 8, 16, 32)
+            threads ← List(1, 2, 4, 8, 10, 16, 20, 32, 40)
         ) {
             var result = 0
             var lastAvg = 0L
             PerformanceEvaluation.time(2, 4, 3, {
 
                 implicit val p: Project[URL] = p0 //.recreate(k ⇒ k == PropertyStoreKey.uniqueId || k == DeclaredMethodsKey.uniqueId)
+                //Counter.reset()
 
                 // From now on, we may access ps for read operations only
                 // We can now start TestTaintAnalysis using IFDS.
@@ -455,6 +459,7 @@ object TestTaintAnalysisRunner extends FunSuite {
                         case _           ⇒
                     }
                 }
+                //println(Counter.toString)
                 println(s"NUM RESULTS =  $result")
             }) { (_, ts) ⇒
                 val sTs = ts.map(_.toSeconds).mkString(", ")
