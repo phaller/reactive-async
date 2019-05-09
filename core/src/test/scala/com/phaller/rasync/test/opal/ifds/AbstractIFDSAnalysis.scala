@@ -246,7 +246,7 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
                         successor.successors.head
                     }).asBasicBlock
 
-                    val nextIn = nextOut.getOrElse(successor, Set.empty)
+                    val nextIn = nextOut.getOrElse(succ, Set.empty)
                     val oldIn = state.incomingFacts.getOrElse(succ, Set.empty)
                     state.incomingFacts = state.incomingFacts.updated(succ, oldIn ++ nextIn)
                     val newIn = nextIn -- oldIn
