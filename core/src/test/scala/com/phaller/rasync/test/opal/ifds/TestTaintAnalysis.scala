@@ -286,7 +286,7 @@ class TestTaintAnalysis(
                             allParams(paramToIndex(index, !callee.definedMethod.isStatic))
                         flows ++= param.asVar.definedBy.iterator.map(ArrayElement(_, taintedIndex))*/
 
-                    case InstanceField(index, declClass, taintedField) if index < 0 && index > -10 ⇒
+                    case InstanceField(index, declClass, taintedField) if index < 0 && index > -255 ⇒
                         // Taint field of actual parameter if field of formal parameter is tainted
                         val param =
                             allParams(paramToIndex(index, !callee.definedMethod.isStatic))
@@ -436,18 +436,20 @@ object TestTaintAnalysisRunner extends FunSuite {
         ) {
             var result = 0
             var lastAvg = 0L
+            var analysis: TestTaintAnalysis = null
+            var entryPoints: Map[DeclaredMethod, Fact] = null
             PerformanceEvaluation.time(2, 4, 3, {
-
                 implicit val p: Project[URL] = p0 //.recreate(k ⇒ k == PropertyStoreKey.uniqueId || k == DeclaredMethodsKey.uniqueId)
                 //Counter.reset()
 
                 // From now on, we may access ps for read operations only
                 // We can now start TestTaintAnalysis using IFDS.
-                val analysis = new TestTaintAnalysis(threads, scheduling)
+                analysis = new TestTaintAnalysis(threads, scheduling)
 
-                val entryPoints = analysis.entryPoints
+                entryPoints = analysis.entryPoints
                 entryPoints.foreach(analysis.forceComputation)
                 analysis.waitForCompletion()
+            }) { (_, ts) ⇒
 
                 result = 0
                 for {
@@ -455,13 +457,13 @@ object TestTaintAnalysisRunner extends FunSuite {
                     fact ← analysis.getResult(e).flows.values.flatten.toSet[Fact]
                 } {
                     fact match {
-                        case FlowFact(_) ⇒ result += 1
+                        case FlowFact(flow) ⇒ result += 1;println(s"flow: "+flow.map(_.toJava).mkString(", "))
                         case _           ⇒
                     }
                 }
                 //println(Counter.toString)
                 println(s"NUM RESULTS =  $result")
-            }) { (_, ts) ⇒
+
                 val sTs = ts.map(_.toSeconds).mkString(", ")
                 val avg = ts.map(_.timeSpan).sum / ts.size
                 if (lastAvg != avg) {
