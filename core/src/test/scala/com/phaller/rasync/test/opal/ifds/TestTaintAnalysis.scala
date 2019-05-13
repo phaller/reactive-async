@@ -411,7 +411,7 @@ object TestTaintAnalysisRunner extends FunSuite {
 
     def main(args: Array[String]): Unit = {
 
-        val p0 = Project(Array(new File(args(args.length - 1)), new File(args(args.length - 3))), Array.empty[File]) //bytecode.RTJar)
+        val p0 = Project(new File(args(args.length - 1))) //bytecode.RTJar)
 
         com.phaller.rasync.pool.SchedulingStrategy
 
@@ -438,7 +438,7 @@ object TestTaintAnalysisRunner extends FunSuite {
 
         for (
             scheduling ← List(/*new DefaultScheduling[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)],*/ new TargetsWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], /*new TargetsWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)],*/ new TargetsWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)]/*, new SourcesWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)]*/);
-            threads ← List(/*1,*/ 2, 4, /*8,*/ 10, /*16,*/ 20, /*32,*/ /*40*/)
+            threads ← List(/*1,*/ 2, 4, /*8,*/ 10, /*16,*/ 20/*, *32,*/ /*40*/)
         ) {
             var result = 0
             var analysis: TestTaintAnalysis = null
