@@ -411,7 +411,7 @@ object TestTaintAnalysisRunner extends FunSuite {
 
     def main(args: Array[String]): Unit = {
 
-        val p0 = Project(new File(args(args.length - 1))) //bytecode.RTJar)
+        val p0 = Project(Array(new File(args(args.length - 1)), new File(args(args.length - 3))), Array.empty[File]) //bytecode.RTJar)
 
         com.phaller.rasync.pool.SchedulingStrategy
 
