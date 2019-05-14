@@ -50,6 +50,7 @@ private[rasync] abstract class CallbackRunnable[V, E >: Null] extends Runnable w
             // will collect all updates and forward them altogether.
             if (oldUpdatedDependees.isEmpty) {
                 pool.execute(this, prio)
+                Counter.inc("CallbackRunnable.addUpdate.triggerExecution")
             } else {
                 Counter.inc("CallbackRunnable.addUpdate.aggregations")
             }
