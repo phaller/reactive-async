@@ -256,7 +256,7 @@ private[rasync] abstract class CellImpl[V, E >: Null](pool: HandlerPool[V, E], u
   }
 
   override def putNext(x: V): Unit = {
-    //Counter.inc("Cell.putNext")
+    Counter.inc("Cell.putNext")
     tryNewState(x)
   }
 

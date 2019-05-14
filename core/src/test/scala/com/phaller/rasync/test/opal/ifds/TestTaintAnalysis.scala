@@ -437,8 +437,8 @@ object TestTaintAnalysisRunner extends FunSuite {
         } { t ⇒ println(s"CG took ${t.toSeconds}") }
 
         for (
-            scheduling ← List(/*new DefaultScheduling[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)],*/ new TargetsWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], /*new TargetsWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)],*/ new TargetsWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)]/*, new SourcesWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)]*/);
-            threads ← List(/*1,*/ 2, 4, /*8,*/ 10, /*16,*/ 20/*, *32,*/ /*40*/)
+            scheduling ← List(new DefaultScheduling[IFDSProperty[Fact], (DeclaredMethod, Fact)], /*new SourcesWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)],*/ new TargetsWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], /*new TargetsWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)]*/);
+            threads ← List(/*1, 2, 4,*/ /*8,*/ 10/*, 16,*/ /*20*/ /*, 32,*/ /*40*/)
         ) {
             var result = 0
             var analysis: TestTaintAnalysis = null
@@ -450,7 +450,7 @@ object TestTaintAnalysisRunner extends FunSuite {
                 } else
                     PerformanceEvaluation.time({
                         implicit val p: Project[URL] = p0 //.recreate(k ⇒ k == PropertyStoreKey.uniqueId || k == DeclaredMethodsKey.uniqueId)
-                        //Counter.reset()
+                        Counter.reset()
 
                         // From now on, we may access ps for read operations only
                         // We can now start TestTaintAnalysis using IFDS.
@@ -472,7 +472,7 @@ object TestTaintAnalysisRunner extends FunSuite {
                                 case _ ⇒
                             }
                         }
-                        //println(Counter.toString)
+                        println(Counter.toString)
                         println(s"NUM RESULTS =  $result")
                         println(s"time = ${t.toSeconds}")
 
