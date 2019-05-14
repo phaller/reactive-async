@@ -437,7 +437,7 @@ object TestTaintAnalysisRunner extends FunSuite {
         } { t ⇒ println(s"CG took ${t.toSeconds}") }
 
         for (
-            scheduling ← List(new DefaultScheduling[IFDSProperty[Fact], (DeclaredMethod, Fact)], /*new SourcesWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)],*/ new TargetsWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], /*new TargetsWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)]*/);
+            scheduling ← List(new DefaultScheduling[IFDSProperty[Fact], (DeclaredMethod, Fact)], /*new SourcesWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)],*/ new TargetsWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)]/*, new TargetsWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new TargetsWithManyTargetsLast[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesFirst[IFDSProperty[Fact], (DeclaredMethod, Fact)], new SourcesWithManySourcesLast[IFDSProperty[Fact], (DeclaredMethod, Fact)]*/);
             threads ← List(/*1, 2, 4,*/ /*8,*/ 10/*, 16,*/ /*20*/ /*, 32,*/ /*40*/)
         ) {
             var result = 0
