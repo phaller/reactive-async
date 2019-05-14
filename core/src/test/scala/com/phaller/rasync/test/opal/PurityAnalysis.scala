@@ -63,6 +63,7 @@ import com.phaller.rasync.pool.TargetsWithManyTargetsLast
 import com.phaller.rasync.test.opal.ifds.Fact
 import com.phaller.rasync.test.opal.ifds.IFDSProperty
 
+import org.opalj.util.PerformanceEvaluation
 import org.opalj.br.DeclaredMethod
 
 // A strategy tailored to PurityAnalysis
@@ -83,11 +84,16 @@ object PurityAnalysis extends ProjectAnalysisApplication {
   override def main(args: Array[String]): Unit = {
     val lib = Project(new java.io.File(JRELibraryFolder.getAbsolutePath))
 
-    for (scheduling ← List(new DefaultScheduling[Purity, Null], new SourcesWithManyTargetsFirst[Purity, Null], new SourcesWithManyTargetsLast[Purity, Null], new TargetsWithManySourcesFirst[Purity, Null], new TargetsWithManySourcesLast[Purity, Null], new TargetsWithManyTargetsFirst[Purity, Null], new TargetsWithManyTargetsLast[Purity, Null], new SourcesWithManySourcesFirst[Purity, Null], new SourcesWithManySourcesLast[Purity, Null], PurityStrategy)) {
+    for {
+      scheduling ← List(new DefaultScheduling[Purity, Null], new SourcesWithManyTargetsFirst[Purity, Null], new SourcesWithManyTargetsLast[Purity, Null], new TargetsWithManySourcesFirst[Purity, Null], new TargetsWithManySourcesLast[Purity, Null], new TargetsWithManyTargetsFirst[Purity, Null], new TargetsWithManyTargetsLast[Purity, Null], new SourcesWithManySourcesFirst[Purity, Null], new SourcesWithManySourcesLast[Purity, Null], PurityStrategy)
+      i ← (0 until 3)
+    } {
       val p = lib.recreate()
       schedulingStrategy = scheduling
-      val report = PurityAnalysis.doAnalyze(p, List.empty, () => false)
-      println(report.toConsoleString.split("\n").slice(0, 2).mkString("\n"))
+      PerformanceEvaluation.time {
+        val report = PurityAnalysis.doAnalyze(p, List.empty, () => false)
+      } { t ⇒ println(s"$scheduling,${t.timeSpan}")}
+      //println(report.toConsoleString.split("\n").slice(0, 2).mkString("\n"))
     }
   }
 
