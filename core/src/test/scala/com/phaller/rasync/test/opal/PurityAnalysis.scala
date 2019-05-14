@@ -6,13 +6,14 @@ import java.net.URL
 
 import com.phaller.rasync.cell._
 import com.phaller.rasync.lattice.Updater
-import com.phaller.rasync.pool.{ HandlerPool, SchedulingStrategy }
-
+import com.phaller.rasync.pool.{HandlerPool, SchedulingStrategy}
 import scala.concurrent.Await
 import scala.concurrent.duration._
+
 import org.opalj.Success
-import org.opalj.br.{ ClassFile, Method }
-import org.opalj.br.analyses.{ BasicReport, ProjectAnalysisApplication, Project }
+
+import org.opalj.br.{ClassFile, Method}
+import org.opalj.br.analyses.{BasicReport, Project, ProjectAnalysisApplication}
 import org.opalj.br.instructions.GETFIELD
 import org.opalj.br.instructions.GETSTATIC
 import org.opalj.br.instructions.PUTFIELD
@@ -48,8 +49,21 @@ import org.opalj.br.instructions.INVOKEINTERFACE
 import org.opalj.br.instructions.MethodInvocationInstruction
 import org.opalj.br.instructions.NonVirtualMethodInvocationInstruction
 import org.opalj.bytecode.JRELibraryFolder
-
 import scala.util.Try
+
+import com.phaller.rasync.pool.DefaultScheduling
+import com.phaller.rasync.pool.SourcesWithManySourcesFirst
+import com.phaller.rasync.pool.SourcesWithManySourcesLast
+import com.phaller.rasync.pool.SourcesWithManyTargetsFirst
+import com.phaller.rasync.pool.SourcesWithManyTargetsLast
+import com.phaller.rasync.pool.TargetsWithManySourcesFirst
+import com.phaller.rasync.pool.TargetsWithManySourcesLast
+import com.phaller.rasync.pool.TargetsWithManyTargetsFirst
+import com.phaller.rasync.pool.TargetsWithManyTargetsLast
+import com.phaller.rasync.test.opal.ifds.Fact
+import com.phaller.rasync.test.opal.ifds.IFDSProperty
+
+import org.opalj.br.DeclaredMethod
 
 // A strategy tailored to PurityAnalysis
 object PurityStrategy extends SchedulingStrategy[Purity, Null] {
@@ -69,12 +83,15 @@ object PurityAnalysis extends ProjectAnalysisApplication {
   override def main(args: Array[String]): Unit = {
     val lib = Project(new java.io.File(JRELibraryFolder.getAbsolutePath))
 
-    for (_ ← 1 to 1) {
+    for (scheduling ← List(new DefaultScheduling[Purity, Null], new SourcesWithManyTargetsFirst[Purity, Null], new SourcesWithManyTargetsLast[Purity, Null], new TargetsWithManySourcesFirst[Purity, Null], new TargetsWithManySourcesLast[Purity, Null], new TargetsWithManyTargetsFirst[Purity, Null], new TargetsWithManyTargetsLast[Purity, Null], new SourcesWithManySourcesFirst[Purity, Null], new SourcesWithManySourcesLast[Purity, Null], PurityStrategy)) {
       val p = lib.recreate()
+      schedulingStrategy = scheduling
       val report = PurityAnalysis.doAnalyze(p, List.empty, () => false)
       println(report.toConsoleString.split("\n").slice(0, 2).mkString("\n"))
     }
   }
+
+  var schedulingStrategy: SchedulingStrategy[Purity, Null] = null
 
   override def doAnalyze(
     project: Project[URL],
@@ -83,7 +100,7 @@ object PurityAnalysis extends ProjectAnalysisApplication {
 
     val startTime = System.currentTimeMillis // Used for measuring execution time
     // 1. Initialization of key data structures (one cell(completer) per method)
-    implicit val pool: HandlerPool[Purity, Null] = new HandlerPool(key = PurityKey, schedulingStrategy = PurityStrategy)
+    implicit val pool: HandlerPool[Purity, Null] = new HandlerPool(key = PurityKey, schedulingStrategy = schedulingStrategy)
     var methodToCell = Map.empty[Method, Cell[Purity, Null]]
     for {
       classFile <- project.allProjectClassFiles
