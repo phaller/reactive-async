@@ -44,7 +44,7 @@ import com.phaller.rasync.test.opal.ifds.AbstractIFDSAnalysis.V
 
 import org.opalj.fpcf.FinalEP
 import org.opalj.br.fpcf.PropertyStoreKey
-import org.opalj.br.fpcf.cg.properties.Callees
+import org.opalj.br.fpcf.properties.cg.Callees
 import org.opalj.tac.LazyDetachedTACAIKey
 import org.opalj.tac.cg.CHACallGraphKey
 import org.opalj.tac.cg.RTACallGraphKey
