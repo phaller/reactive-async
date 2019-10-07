@@ -233,23 +233,33 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
             for (successor ← bb.successors) {
                 if (successor.isExitNode) {
                     // Handle self-dependencies: Propagate new information to self calls
-                    if ((nextOut.getOrElse(successor, Set.empty) -- oldOut.getOrElse(successor, Set.empty)).nonEmpty) {
+                    val nextOutSuccessors = nextOut.get(successor)
+                    if (nextOutSuccessors.isDefined && nextOutSuccessors.get.nonEmpty) {
+                        val oldOutSuccessors = oldOut.get(successor)
+                        if (oldOutSuccessors.isEmpty ||
+                            nextOutSuccessors.get.exists(nos ⇒ !oldOutSuccessors.get.contains(nos))) {
+                            val source = state.source
+                            reAnalyzeCalls(state.pendingIfdsCallSites(source), source._1.definedMethod, Some(source._2))
+                        }
+                    }
+                    /*if ((nextOut.getOrElse(successor, Set.empty) -- oldOut.getOrElse(successor, Set.empty)).nonEmpty) {
                         val source = state.source
                         reAnalyzeCalls(state.pendingIfdsCallSites(source), source._1.definedMethod, Some(source._2))
-                    }
+                    }*/
                 } else {
                     val succ = (if (successor.isBasicBlock) {
                         successor
                     } else { // Skip CatchNodes directly to their handler BasicBlock
-                        assert(successor.isCatchNode)
-                        assert(successor.successors.size == 1)
+                        /*assert(successor.isCatchNode)
+                        assert(successor.successors.size == 1)*/
                         successor.successors.head
                     }).asBasicBlock
 
                     val nextIn = nextOut.getOrElse(succ, Set.empty)
                     val oldIn = state.incomingFacts.getOrElse(succ, Set.empty)
-                    state.incomingFacts = state.incomingFacts.updated(succ, oldIn ++ nextIn)
+                    val mergedIn = if (nextIn.size > oldIn.size) nextIn ++ oldIn else oldIn ++ nextIn
                     val newIn = nextIn -- oldIn
+                    state.incomingFacts = state.incomingFacts.updated(succ, mergedIn)
                     if (newIn.nonEmpty) {
                         worklist.enqueue((succ, newIn, None, None, None))
                     }
@@ -263,12 +273,19 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
      * statement to that ExitNode.
      */
     def collectResult(node: CFGNode)(implicit state: State): Map[Statement, Set[DataFlowFact]] = {
-        node.predecessors.collect {
-            case basicBlock: BasicBlock if state.outgoingFacts.get(basicBlock).flatMap(_.get(node)).isDefined ⇒
-                val lastIndex = basicBlock.endPC
-                Statement(state.method, basicBlock, state.code(lastIndex), lastIndex, state.code, state.cfg) → state
-                    .outgoingFacts(basicBlock)(node)
-        }.toMap
+        var result = Map.empty[Statement, Set[DataFlowFact]]
+        node.predecessors foreach { predecessor ⇒
+            if (predecessor.isBasicBlock) {
+                val basicBlock = predecessor.asBasicBlock
+                // FIXME ... replace flatMap...isDefined by something that doesn't create intermediate data-structures
+                if (state.outgoingFacts.get(basicBlock).flatMap(_.get(node)).isDefined) {
+                    val lastIndex = basicBlock.endPC
+                    val stmt = Statement(state.method, basicBlock, state.code(lastIndex), lastIndex, state.code, state.cfg)
+                    result += stmt → state.outgoingFacts(basicBlock)(node)
+                }
+            }
+        }
+        result
     }
 
     /**
@@ -280,7 +297,7 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
             collectResult(state.cfg.abnormalReturnNode)
         ))
 
-        var dependees = state.pendingIfdsDependees.keys
+        val dependees = state.pendingIfdsDependees.keys
 
         if (dependees.isEmpty) {
             FinalOutcome(propertyValue)
@@ -383,7 +400,6 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
             case StaticMethodCall.ASTID | NonVirtualMethodCall.ASTID | VirtualMethodCall.ASTID ⇒ Some(getCallees(basicBlock, pc))
             case Assignment.ASTID | ExprStmt.ASTID ⇒ getExpression(statement).astID match {
                 case StaticFunctionCall.ASTID | NonVirtualFunctionCall.ASTID | VirtualFunctionCall.ASTID ⇒
-                    val cs = getCallees(basicBlock, pc)
                     Some(getCallees(basicBlock, pc))
                 case _ ⇒ None
             }
@@ -610,7 +626,15 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
     def mergeMaps[S, T](map1: Map[S, Set[T]], map2: Map[S, Set[T]]): Map[S, Set[T]] = {
         var result = map1
         for ((key, values) ← map2) {
-            result = result.updated(key, result.getOrElse(key, Set.empty) ++ values)
+            result.get(key) match {
+                case Some(resultValues) ⇒
+                    if (resultValues.size > values.size)
+                        result = result.updated(key, resultValues ++ values)
+                    else
+                        result = result.updated(key, values ++ resultValues)
+                case None ⇒
+                    result = result.updated(key, values)
+            }
         }
         result
     }

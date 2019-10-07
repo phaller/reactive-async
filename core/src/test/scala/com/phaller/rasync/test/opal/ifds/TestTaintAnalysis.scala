@@ -107,7 +107,9 @@ class TestTaintAnalysis(
                 val put = stmt.stmt.asPutField
                 val definedBy = put.objRef.asVar.definedBy
                 if (isTainted(put.value, in))
-                    in ++ definedBy.iterator.map(InstanceField(_, put.declaringClass, put.name))
+                    definedBy.foldLeft(in) { (in, defSite) ⇒
+                        in + InstanceField(defSite, put.declaringClass, put.name)
+                    }
                 else in
             case _ ⇒ in
         }
@@ -224,11 +226,13 @@ class TestTaintAnalysis(
         if (true || (callee.descriptor.returnType eq ObjectType.Class) ||
             (callee.descriptor.returnType eq ObjectType.Object) ||
             (callee.descriptor.returnType eq ObjectType.String)) {
-            in.collect {
+            var facts = Set.empty[Fact]
+            in.foreach {
                 case Variable(index) ⇒ // Taint formal parameter if actual parameter is tainted
-                    allParams.zipWithIndex.collect {
+                    allParams.iterator.zipWithIndex.foreach {
                         case (param, pIndex) if param.asVar.definedBy.contains(index) ⇒
-                            Variable(paramToIndex(pIndex, !callee.definedMethod.isStatic))
+                            facts += Variable(paramToIndex(pIndex, !callee.definedMethod.isStatic))
+                        case _ ⇒ // Nothing to do
                     }
 
                 /*case ArrayElement(index, taintedIndex) ⇒
@@ -241,14 +245,16 @@ class TestTaintAnalysis(
                 case InstanceField(index, declClass, taintedField) ⇒
                     // Taint field of formal parameter if field of actual parameter is tainted
                     // Only if the formal parameter is of a type that may have that field!
-                    asCall(stmt.stmt).allParams.zipWithIndex.collect {
+                    allParams.iterator.zipWithIndex.foreach {
                         case (param, pIndex) if param.asVar.definedBy.contains(index) &&
                             (paramToIndex(pIndex, !callee.definedMethod.isStatic) != -1 ||
                                 classHierarchy.isSubtypeOf(declClass, callee.declaringClassType)) ⇒
-                            InstanceField(paramToIndex(pIndex, !callee.definedMethod.isStatic), declClass, taintedField)
+                            facts += InstanceField(paramToIndex(pIndex, !callee.definedMethod.isStatic), declClass, taintedField)
+                        case _ ⇒ // Nothing to do
                     }
                 case sf: StaticField ⇒ Set(sf)
-            }.flatten
+            }
+            facts
         } else Set.empty
     }
 
@@ -259,61 +265,54 @@ class TestTaintAnalysis(
         succ:   Statement,
         in:     Set[Fact]
     ): Set[Fact] = {
-
-        /**
-         * Checks whether the formal parameter is of a reference type, as primitive types are
-         * call-by-value.
-         */
-        def isRefTypeParam(index: Int): Boolean =
-            if (index == -1) true
-            else {
-                callee.descriptor.parameterType(
-                    paramToIndex(index, includeThis = false)
-                ).isReferenceType
-            }
-
         if (callee.name == "source" && stmt.stmt.astID == Assignment.ASTID)
             Set(Variable(stmt.index))
         else if (callee.name == "sanitize")
             Set.empty
         else {
-            val allParams = (asCall(stmt.stmt).receiverOption ++ asCall(stmt.stmt).params).toSeq
+            val call = asCall(stmt.stmt)
+            val allParams = call.allParams
             var flows: Set[Fact] = Set.empty
-            for (fact ← in) {
-                fact match {
-                    /*case ArrayElement(index, taintedIndex) if index < 0 && index > -100 ⇒
+            in.foreach {
+                /*case ArrayElement(index, taintedIndex) if index < 0 && index > -100 ⇒
                         // Taint element of actual parameter if element of formal parameter is tainted
                         val param =
                             allParams(paramToIndex(index, !callee.definedMethod.isStatic))
                         flows ++= param.asVar.definedBy.iterator.map(ArrayElement(_, taintedIndex))*/
 
-                    case InstanceField(index, declClass, taintedField) if index < 0 && index > -255 ⇒
-                        // Taint field of actual parameter if field of formal parameter is tainted
-                        val param =
-                            allParams(paramToIndex(index, !callee.definedMethod.isStatic))
-                        flows ++= param.asVar.definedBy.iterator.map(InstanceField(_, declClass, taintedField))
-                    case sf: StaticField ⇒ flows += sf
-                    case FlowFact(flow) ⇒
-                        val newFlow = flow + stmt.method
-                        if (entryPoints.contains(declaredMethods(exit.method))) {
-                            //println(s"flow: "+newFlow.map(_.toJava).mkString(", "))
-                        } else {
-                            flows += FlowFact(newFlow)
-                        }
-                    case _ ⇒
-                }
+                case InstanceField(index, declClass, taintedField) if index < 0 && index > -255 ⇒
+                    // Taint field of actual parameter if field of formal parameter is tainted
+                    val param = allParams(paramToIndex(index, !callee.definedMethod.isStatic))
+                    param.asVar.definedBy.foreach { defSite ⇒
+                        flows += InstanceField(defSite, declClass, taintedField)
+                    }
+
+                case sf: StaticField ⇒
+                    flows += sf
+
+                case FlowFact(flow) ⇒
+                    val newFlow = flow + stmt.method
+                    if (entryPoints.contains(declaredMethods(exit.method))) {
+                        //println(s"flow: "+newFlow.map(_.toJava).mkString(", "))
+                    } else {
+                        flows += FlowFact(newFlow)
+                    }
+
+                case _ ⇒
             }
 
             // Propagate taints of the return value
             if (exit.stmt.astID == ReturnValue.ASTID && stmt.stmt.astID == Assignment.ASTID) {
                 val returnValue = exit.stmt.asReturnValue.expr.asVar
-                flows ++= in.collect {
+                in.foreach {
                     case Variable(index) if returnValue.definedBy.contains(index) ⇒
-                        Variable(stmt.index)
+                        flows += Variable(stmt.index)
                     /*case ArrayElement(index, taintedIndex) if returnValue.definedBy.contains(index) ⇒
                         ArrayElement(stmt.index, taintedIndex)*/
                     case InstanceField(index, declClass, taintedField) if returnValue.definedBy.contains(index) ⇒
-                        InstanceField(stmt.index, declClass, taintedField)
+                        flows += InstanceField(stmt.index, declClass, taintedField)
+
+                    case _ ⇒ // nothing to do
                 }
             }
 
