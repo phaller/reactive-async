@@ -6,14 +6,14 @@ import java.net.URL
 
 import com.phaller.rasync.cell._
 import com.phaller.rasync.lattice.Updater
-import com.phaller.rasync.pool.{HandlerPool, SchedulingStrategy}
+import com.phaller.rasync.pool.{ HandlerPool, SchedulingStrategy }
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
 import org.opalj.Success
 
-import org.opalj.br.{ClassFile, Method}
-import org.opalj.br.analyses.{BasicReport, Project, ProjectAnalysisApplication}
+import org.opalj.br.{ ClassFile, Method }
+import org.opalj.br.analyses.{ BasicReport, Project, ProjectAnalysisApplication }
 import org.opalj.br.instructions.GETFIELD
 import org.opalj.br.instructions.GETSTATIC
 import org.opalj.br.instructions.PUTFIELD
@@ -92,7 +92,7 @@ object PurityAnalysis extends ProjectAnalysisApplication {
       schedulingStrategy = scheduling
       PerformanceEvaluation.time {
         val report = PurityAnalysis.doAnalyze(p, List.empty, () => false)
-      } { t ⇒ println(s"$scheduling,${t.timeSpan}")}
+      } { t ⇒ println(s"$scheduling,${t.timeSpan}") }
       //println(report.toConsoleString.split("\n").slice(0, 2).mkString("\n"))
     }
   }

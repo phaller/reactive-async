@@ -8,17 +8,17 @@ import org.opalj.tac.DUVar
 trait IFDSPropertyMetaInformation[DataFlowFact] extends PropertyMetaInformation
 
 abstract class IFDSProperty[DataFlowFact] extends Property
-    with IFDSPropertyMetaInformation[DataFlowFact] {
+  with IFDSPropertyMetaInformation[DataFlowFact] {
 
-    /** The type of the TAC domain. */
-    type V = DUVar[KnownTypedValue]
+  /** The type of the TAC domain. */
+  type V = DUVar[KnownTypedValue]
 
-    def flows: Map[AbstractIFDSAnalysis.Statement, Set[DataFlowFact]]
+  def flows: Map[AbstractIFDSAnalysis.Statement, Set[DataFlowFact]]
 
-    override def equals(that: Any): Boolean = that match {
-        case other: IFDSProperty[DataFlowFact] ⇒ flows == other.flows
-        case _                                 ⇒ false
-    }
+  override def equals(that: Any): Boolean = that match {
+    case other: IFDSProperty[DataFlowFact] ⇒ flows == other.flows
+    case _ ⇒ false
+  }
 
-    override def hashCode(): Int = flows.hashCode()
+  override def hashCode(): Int = flows.hashCode()
 }

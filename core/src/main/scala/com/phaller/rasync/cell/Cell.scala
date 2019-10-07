@@ -10,7 +10,7 @@ import scala.annotation.tailrec
 
 import scala.collection.mutable
 import scala.concurrent.duration.TimeUnit
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 import com.phaller.rasync.util.Counter
 
