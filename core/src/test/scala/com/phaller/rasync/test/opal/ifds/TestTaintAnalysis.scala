@@ -252,7 +252,8 @@ class TestTaintAnalysis(
                             facts += InstanceField(paramToIndex(pIndex, !callee.definedMethod.isStatic), declClass, taintedField)
                         case _ ⇒ // Nothing to do
                     }
-                case sf: StaticField ⇒ Set(sf)
+                case sf: StaticField ⇒
+                    facts += sf
             }
             facts
         } else Set.empty
