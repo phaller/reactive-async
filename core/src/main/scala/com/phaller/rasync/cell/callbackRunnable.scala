@@ -23,9 +23,6 @@ private[rasync] abstract class CallbackRunnable[V, E >: Null] extends Runnable w
 
   protected val dependentCompleter: CellCompleter[V, E]
 
-  /** The cell that triggers the callback. */
-  protected val dependees: Iterable[Cell[V, E]]
-
   /** The callback to be called. It retrieves an updated value of otherCell and returns an Outcome for dependentCompleter. */
   protected val callback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] ⇒ Outcome[V]
 
@@ -112,7 +109,7 @@ private[rasync] abstract class CallbackRunnable[V, E >: Null] extends Runnable w
 /**
  * Run a callback concurrently, if a value in a cell changes.
  */
-private[rasync] class ConcurrentCallbackRunnable[V, E >: Null](override val pool: HandlerPool[V, E], override val dependentCompleter: CellCompleter[V, E], override val dependees: Iterable[Cell[V, E]], override val callback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] ⇒ Outcome[V]) extends CallbackRunnable[V, E] {
+private[rasync] class ConcurrentCallbackRunnable[V, E >: Null](override val pool: HandlerPool[V, E], override val dependentCompleter: CellCompleter[V, E], override val callback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] ⇒ Outcome[V]) extends CallbackRunnable[V, E] {
   override def run(): Unit =
     callCallback()
 }
@@ -120,7 +117,7 @@ private[rasync] class ConcurrentCallbackRunnable[V, E >: Null](override val pool
 /**
  * Run a callback sequentially (for a dependent cell), if a value in another cell changes.
  */
-private[rasync] class SequentialCallbackRunnable[V, E >: Null](override val pool: HandlerPool[V, E], override val dependentCompleter: CellCompleter[V, E], override val dependees: Iterable[Cell[V, E]], override val callback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] ⇒ Outcome[V]) extends CallbackRunnable[V, E] {
+private[rasync] class SequentialCallbackRunnable[V, E >: Null](override val pool: HandlerPool[V, E], override val dependentCompleter: CellCompleter[V, E], override val callback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] ⇒ Outcome[V]) extends CallbackRunnable[V, E] {
   override def run(): Unit =
     dependentCompleter.sequential(callCallback _, prio)
 }
