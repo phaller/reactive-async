@@ -67,7 +67,7 @@ private[rasync] abstract class CallbackRunnable[V, E >: Null] extends Runnable w
       try {
         // Remove all updates from the list of updates that need to be handled – they will now be handled
         val dependees = updatedDependees.getAndSet(Set.empty)
-        val propagations = dependees.map(c ⇒ (c, c.getState()))
+        val propagations = dependees.iterator.map(c ⇒ (c, c.getState())).toIterable
 
         val depsRemoved = // see below for depsRemoved
           callback(propagations) match {
@@ -91,10 +91,10 @@ private[rasync] abstract class CallbackRunnable[V, E >: Null] extends Runnable w
         // or a Failuare has been propagated, i.e. the dependee had been completed
         // and cannot change later
         if (!depsRemoved) {
-          val toRemove = propagations.filter({
+          val toRemove = propagations.iterator.filter({
             case (_, Success(NextOutcome(_))) ⇒ false
             case _ ⇒ true
-          }).map(_._1)
+          }).map(_._1).toIterable
           dependentCompleter.cell.removeDependeeCells(toRemove)
         }
       } catch {
