@@ -442,10 +442,7 @@ object TestTaintAnalysisRunner extends FunSuite {
       var analysis: TestTaintAnalysis = null
       var entryPoints: Map[DeclaredMethod, Fact] = null
       var ts: List[Long] = List.empty
-      for (i ← (0 until 3)) {
-        if (i == 2 && ts.head > 900000000000L) {
-
-        } else
+      for (i ← (0 until 5)) {
           PerformanceEvaluation.time({
             implicit val p: Project[URL] = p0 //.recreate(k ⇒ k == PropertyStoreKey.uniqueId || k == DeclaredMethodsKey.uniqueId)
             Counter.reset()
@@ -476,7 +473,6 @@ object TestTaintAnalysisRunner extends FunSuite {
 
             ts ::= t.timeSpan
           }
-      }
       val lastAvg = ts.sum / ts.size
       println(s"AVG,${scheduling.getClass.getSimpleName},$threads,$lastAvg")
     }
