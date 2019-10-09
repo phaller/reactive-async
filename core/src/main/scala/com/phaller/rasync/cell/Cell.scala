@@ -51,9 +51,13 @@ trait Cell[V, E >: Null] {
    * }}}
    *
    * @param valueCallback  Callback that receives the new value of `other` and returns an `Outcome` for `this` cell.
-   * @param other*  Cells that `this` Cell depends on.
+   * @param other  Cells that `this` Cell depends on.
    */
-  def when(other: Cell[V, E]*)(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit
+  def when(other: Iterable[Cell[V, E]])(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit
+
+  // Convenience methods for one or two other cells
+  def when(other: Cell[V, E])(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit
+  def when(other1: Cell[V, E], other2: Cell[V, E])(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit
 
   // internal API
 
@@ -311,8 +315,16 @@ private[rasync] abstract class CellImpl[V, E >: Null](pool: HandlerPool[V, E], u
     tryComplete(value, Some(dontCall))
   }
 
+  override final def when(other: Cell[V, E])(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit = {
+    when(Iterable(other))(valueCallback)
+  }
+
+  override final def when(other1: Cell[V, E], other2: Cell[V, E])(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit = {
+    when(Iterable(other1, other2))(valueCallback)
+  }
+
   @tailrec
-  override final def when(other: Cell[V, E]*)(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit = state.get match {
+  override final def when(other: Iterable[Cell[V, E]])(valueCallback: Iterable[(Cell[V, E], Try[ValueOutcome[V]])] => Outcome[V]): Unit = state.get match {
     case _: FinalState[V] => // completed with final result
     // do not add dependency
     // in fact, do nothing
@@ -322,13 +334,13 @@ private[rasync] abstract class CellImpl[V, E >: Null](pool: HandlerPool[V, E], u
         if (sequential) new SequentialCallbackRunnable[V, E](pool, this, other, valueCallback)
         else new ConcurrentCallbackRunnable[V, E](pool, this, other, valueCallback)
 
-      val newState = new IntermediateState[V, E](current.res, current.tasksActive, current.dependees ++ other.map(_ → newCallback), current.dependers)
+      val newState = new IntermediateState[V, E](current.res, current.tasksActive, current.dependees ++ other.iterator.map(_ → newCallback), current.dependers)
       if (state.compareAndSet(current, newState)) {
         other.foreach(c => {
           c.addDependentCell(this)
           pool.triggerExecution(c)
         })
-      } else when(other: _*)(valueCallback)
+      } else when(other)(valueCallback)
   }
 
   @tailrec
