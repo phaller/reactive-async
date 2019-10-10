@@ -202,7 +202,7 @@ class TestTaintAnalysis(
     stmt: Statement,
     callee: DeclaredMethod,
     in: Set[Fact]): Set[Fact] = {
-    val allParams = asCall(stmt.stmt).receiverOption ++ asCall(stmt.stmt).params
+    val allParams = asCall(stmt.stmt).allParams
     if (callee.name == "sink")
       if (in.exists {
         case Variable(index) ⇒
@@ -443,36 +443,38 @@ object TestTaintAnalysisRunner extends FunSuite {
       var entryPoints: Map[DeclaredMethod, Fact] = null
       var ts: List[Long] = List.empty
       for (i ← (0 until 5)) {
-          PerformanceEvaluation.time({
-            implicit val p: Project[URL] = p0 //.recreate(k ⇒ k == PropertyStoreKey.uniqueId || k == DeclaredMethodsKey.uniqueId)
-            Counter.reset()
+        PerformanceEvaluation.time({
+          implicit val p: Project[URL] = p0 //.recreate(k ⇒ k == PropertyStoreKey.uniqueId || k == DeclaredMethodsKey.uniqueId)
+          Counter.reset()
 
-            // From now on, we may access ps for read operations only
-            // We can now start TestTaintAnalysis using IFDS.
-            analysis = new TestTaintAnalysis(threads, scheduling)
+          // From now on, we may access ps for read operations only
+          // We can now start TestTaintAnalysis using IFDS.
+          analysis = new TestTaintAnalysis(threads, scheduling)
 
-            entryPoints = analysis.entryPoints
-            entryPoints.foreach(analysis.forceComputation)
-            analysis.waitForCompletion()
-          }) { t ⇒
+          entryPoints = analysis.entryPoints
+          entryPoints.foreach(analysis.forceComputation)
+          analysis.waitForCompletion()
+        }) { t ⇒
 
-            result = 0
-            for {
-              e ← entryPoints
-              fact ← analysis.getResult(e).flows.values.flatten.toSet[Fact]
-            } {
-              fact match {
-                case FlowFact(flow) ⇒
-                  result += 1; println(s"flow: " + flow.map(_.toJava).mkString(", "))
-                case _ ⇒
-              }
+          result = 0
+          for {
+            e ← entryPoints
+            fact ← analysis.getResult(e).flows.values.flatten.toSet[Fact]
+          } {
+            fact match {
+              case FlowFact(flow) ⇒
+                result += 1; println(s"flow: " + flow.map(_.toJava).mkString(", "))
+              case _ ⇒
             }
-            println(Counter.toString)
-            println(s"NUM RESULTS =  $result")
-            println(s"time = ${t.toSeconds}")
-
-            ts ::= t.timeSpan
           }
+          println(Counter.toString)
+          println(s"NUM RESULTS =  $result")
+          println(s"time = ${t.toSeconds}")
+
+          ts ::= t.timeSpan
+        }
+      }
+    }
       val lastAvg = ts.sum / ts.size
       println(s"AVG,${scheduling.getClass.getSimpleName},$threads,$lastAvg")
     }
