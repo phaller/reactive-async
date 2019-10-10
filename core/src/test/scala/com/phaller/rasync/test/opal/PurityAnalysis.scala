@@ -96,8 +96,19 @@ object PurityAnalysis extends ProjectAnalysisApplication {
 
 
         for {
-            scheduling ← List(new DefaultScheduling[Purity, Null], new SourcesWithManyTargetsFirst[Purity, Null], new SourcesWithManyTargetsLast[Purity, Null], new TargetsWithManySourcesFirst[Purity, Null], new TargetsWithManySourcesLast[Purity, Null], new TargetsWithManyTargetsFirst[Purity, Null], new TargetsWithManyTargetsLast[Purity, Null], new SourcesWithManySourcesFirst[Purity, Null], new SourcesWithManySourcesLast[Purity, Null], PurityStrategy)
-            i ← (0 until 3)
+            scheduling ← List(
+                new DefaultScheduling[Purity, Null],
+                new SourcesWithManyTargetsFirst[Purity, Null],
+                new SourcesWithManyTargetsLast[Purity, Null],
+                new TargetsWithManySourcesFirst[Purity, Null],
+                new TargetsWithManySourcesLast[Purity, Null],
+                new TargetsWithManyTargetsFirst[Purity, Null],
+                new TargetsWithManyTargetsLast[Purity, Null],
+                new SourcesWithManySourcesFirst[Purity, Null],
+                new SourcesWithManySourcesLast[Purity, Null],
+                PurityStrategy
+            )
+            i ← (0 until 5)
         } {
             val p = lib.recreate()
             schedulingStrategy = scheduling
