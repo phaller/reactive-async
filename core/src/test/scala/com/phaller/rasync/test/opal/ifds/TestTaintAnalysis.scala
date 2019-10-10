@@ -474,7 +474,6 @@ object TestTaintAnalysisRunner extends FunSuite {
           ts ::= t.timeSpan
         }
       }
-    }
       val lastAvg = ts.sum / ts.size
       println(s"AVG,${scheduling.getClass.getSimpleName},$threads,$lastAvg")
     }
