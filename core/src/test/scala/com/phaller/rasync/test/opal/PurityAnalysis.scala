@@ -81,8 +81,12 @@ object PurityStrategy extends SchedulingStrategy[Purity, Null] {
 
 object PurityAnalysis extends ProjectAnalysisApplication {
 
+  var parl: Int = 10
+
   override def main(args: Array[String]): Unit = {
     val lib = Project(new java.io.File(args(args.length - 1))) //JRELibraryFolder.getAbsolutePath))
+
+    parl = Integer.parseInt(args(args.length - 2))
 
     println("Heap size: " + Runtime.getRuntime().maxMemory())
 
@@ -103,7 +107,7 @@ object PurityAnalysis extends ProjectAnalysisApplication {
         new SourcesWithManySourcesFirst[Purity, Null],
         new SourcesWithManySourcesLast[Purity, Null],
         PurityStrategy)
-      i ← (0 until 5)
+      i ← (0 until 7)
     } {
       val p = lib.recreate()
       schedulingStrategy = scheduling
@@ -123,7 +127,7 @@ object PurityAnalysis extends ProjectAnalysisApplication {
 
     val startTime = System.currentTimeMillis // Used for measuring execution time
     // 1. Initialization of key data structures (one cell(completer) per method)
-    implicit val pool: HandlerPool[Purity, Null] = new HandlerPool(key = PurityKey, parallelism = 10, schedulingStrategy = schedulingStrategy)
+    implicit val pool: HandlerPool[Purity, Null] = new HandlerPool(key = PurityKey, parallelism = parl, schedulingStrategy = schedulingStrategy)
     var methodToCell = Map.empty[Method, Cell[Purity, Null]]
     for {
       classFile <- project.allProjectClassFiles

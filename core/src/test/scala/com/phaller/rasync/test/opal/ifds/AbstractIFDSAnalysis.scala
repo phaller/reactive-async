@@ -3,7 +3,7 @@ package com.phaller.rasync.test.opal.ifds
 
 import java.util.concurrent.ConcurrentHashMap
 
-import com.phaller.rasync.lattice.{ Key, Lattice }
+import com.phaller.rasync.lattice.{ Key, PartialOrderingWithBottom, Updater }
 import com.phaller.rasync.cell._
 import com.phaller.rasync.pool.{ HandlerPool, SchedulingStrategy }
 import scala.collection.{ Set ⇒ SomeSet }
@@ -82,18 +82,17 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
   object TheKey extends Key[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)] {
     override def resolve(cells: Iterable[Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)]]): Iterable[(Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)], IFDSProperty[DataFlowFact])] = {
       val p = createProperty(Map.empty)
-      cells.map((_, p))
+      cells.map(c ⇒ (c, c.getResult()))
     }
 
     override def fallback(cells: Iterable[Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)]]): Iterable[(Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)], IFDSProperty[DataFlowFact])] = {
       val p = createProperty(Map.empty)
-      cells.map((_, p))
+      cells.map(c ⇒ (c, c.getResult()))
     }
   }
 
-  implicit object TheLattice extends Lattice[IFDSProperty[DataFlowFact]] {
-    override def join(v1: IFDSProperty[DataFlowFact], v2: IFDSProperty[DataFlowFact]): IFDSProperty[DataFlowFact] =
-      createProperty(mergeMaps(v1.flows, v2.flows))
+  implicit object TheLattice extends PartialOrderingWithBottom[IFDSProperty[DataFlowFact]] {
+    override def lteq(v1: IFDSProperty[DataFlowFact], v2: IFDSProperty[DataFlowFact]): Boolean = v1.flows.size <= v2.flows.size
 
     override val bottom: IFDSProperty[DataFlowFact] = createProperty(Map.empty)
   }
@@ -171,7 +170,7 @@ abstract class AbstractIFDSAnalysis[DataFlowFact <: AbstractIFDSFact](parallelis
   /** Map (method, fact) pairs to cells. A new cell is created, if it does not exist yet. See also mf() for the reverse direction. */
   private def cell(source: (DeclaredMethod, DataFlowFact)): Cell[IFDSProperty[DataFlowFact], (DeclaredMethod, DataFlowFact)] = {
     // Can performance be improved if we first check, if mfToCell.isDefinedAt(source) first?
-    val c = pool.mkSequentialCell(c ⇒ performAnalysis(source), source)
+    val c = pool.mkSequentialCell(c ⇒ performAnalysis(source), source)(Updater.partialOrderingToUpdater)
     mfToCell.putIfAbsent(source, c)
       .getOrElse(c)
   }
