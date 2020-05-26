@@ -3,8 +3,10 @@ package test
 
 import java.util.concurrent.CountDownLatch
 
+import com.phaller.rasync.cell.{ Cell, FinalOutcome, NextOutcome, NoOutcome }
 import com.phaller.rasync.lattice.{ DefaultKey, Updater }
-import com.phaller.rasync.test.lattice.{ StringIntKey, StringIntUpdater }
+import com.phaller.rasync.pool.HandlerPool
+import com.phaller.rasync.test.lattice.{ IntUpdater, StringIntKey }
 import org.scalatest.FunSuite
 
 import scala.concurrent.Await
@@ -12,12 +14,12 @@ import scala.concurrent.duration._
 
 class LazySuite extends FunSuite {
 
-  implicit val stringIntUpdater: Updater[Int] = new StringIntUpdater
+  implicit val stringIntUpdater: Updater[Int] = new IntUpdater
 
   test("lazy init") {
     val latch = new CountDownLatch(1)
-    val pool = new HandlerPool()
-    val cell = pool.mkCell[StringIntKey, Int]("cell", _ => {
+    val pool = new HandlerPool[Int, Null]
+    val cell = pool.mkCell(_ => {
       FinalOutcome(1)
     })
     cell.onComplete(_ => latch.countDown())
@@ -35,18 +37,19 @@ class LazySuite extends FunSuite {
 
   test("trigger dependees") {
     val latch = new CountDownLatch(2)
-    val pool = new HandlerPool()
+    val pool = new HandlerPool[Int, Null]
 
-    var cell1: Cell[StringIntKey, Int] = null
-    var cell2: Cell[StringIntKey, Int] = null
+    var cell1: Cell[Int, Null] = null
+    var cell2: Cell[Int, Null] = null
 
-    cell1 = pool.mkCell[StringIntKey, Int]("cell1", _ => {
+    cell1 = pool.mkCell(_ => {
       FinalOutcome(1)
     })
 
-    cell2 = pool.mkCell[StringIntKey, Int]("cell2", _ => {
-      cell2.whenComplete(cell1, _ => {
-        FinalOutcome(3)
+    cell2 = pool.mkCell(_ => {
+      cell2.when(cell1)(it => {
+        if (it.head._2.get.isInstanceOf[FinalOutcome[_]]) FinalOutcome(3)
+        else NoOutcome
       })
       NextOutcome(2)
     })
@@ -71,17 +74,17 @@ class LazySuite extends FunSuite {
 
   test("do not trigger unneeded cells") {
     val latch = new CountDownLatch(1)
-    val pool = new HandlerPool()
+    val pool = new HandlerPool[Int, Null]
 
-    var cell1: Cell[StringIntKey, Int] = null
-    var cell2: Cell[StringIntKey, Int] = null
+    var cell1: Cell[Int, Null] = null
+    var cell2: Cell[Int, Null] = null
 
-    cell1 = pool.mkCell[StringIntKey, Int]("cell1", _ => {
+    cell1 = pool.mkCell(_ => {
       assert(false)
       FinalOutcome(-11)
     })
 
-    cell2 = pool.mkCell[StringIntKey, Int]("cell2", _ => {
+    cell2 = pool.mkCell(_ => {
       FinalOutcome(2)
     })
 
@@ -100,21 +103,24 @@ class LazySuite extends FunSuite {
   test("cycle deps") {
     val latch1 = new CountDownLatch(2)
     val latch2 = new CountDownLatch(2)
-    val pool = new HandlerPool()
+    val pool = new HandlerPool[Int, Null]
 
-    var cell1: Cell[StringIntKey, Int] = null
-    var cell2: Cell[StringIntKey, Int] = null
+    var cell1: Cell[Int, Null] = null
+    var cell2: Cell[Int, Null] = null
 
-    cell1 = pool.mkCell[StringIntKey, Int]("cell1", _ => {
-      cell1.whenComplete(cell2, _ => {
-        FinalOutcome(3)
+    cell1 = pool.mkCell(_ => {
+      cell1.when(cell2)(it => {
+        if (it.head._2.get.isInstanceOf[FinalOutcome[_]]) FinalOutcome(3)
+        else NoOutcome
+
       })
       NextOutcome(1)
     })
 
-    cell2 = pool.mkCell[StringIntKey, Int]("cell2", _ => {
-      cell2.whenComplete(cell1, _ => {
-        FinalOutcome(3)
+    cell2 = pool.mkCell(_ => {
+      cell2.when(cell1)(it => {
+        if (it.head._2.get.isInstanceOf[FinalOutcome[_]]) FinalOutcome(3)
+        else NoOutcome
       })
       NextOutcome(2)
     })
@@ -128,43 +134,41 @@ class LazySuite extends FunSuite {
     cell2.trigger()
     latch1.await()
 
-    val fut = pool.quiescentResolveCycles
-    val ready = Await.ready(fut, 2.seconds)
+    val fut = pool.quiescentResolveCell
+    Await.ready(fut, 2.seconds)
 
     latch2.await()
 
     assert(cell1.isComplete)
-    assert(cell1.getResult() == 0)
+    assert(cell1.getResult() == 1)
 
     assert(cell2.isComplete)
-    assert(cell2.getResult() == 0)
+    assert(cell2.getResult() == 2)
 
     pool.shutdown()
   }
 
-  test("cycle deps with outgoing dep") {
-    val theKey = new DefaultKey[Int]()
-
+  test("cycle deps with incoming dep") {
     val latch1 = new CountDownLatch(2)
     val latch2 = new CountDownLatch(3)
-    val pool = new HandlerPool()
+    val pool = new HandlerPool[Int, Null]
 
-    var cell1: Cell[theKey.type, Int] = null
-    var cell2: Cell[theKey.type, Int] = null
-    var cell3: Cell[theKey.type, Int] = null
+    var cell1: Cell[Int, Null] = null
+    var cell2: Cell[Int, Null] = null
+    var cell3: Cell[Int, Null] = null
 
-    cell1 = pool.mkCell[theKey.type, Int](theKey, _ => {
-      cell1.whenComplete(cell2, _ => NextOutcome(-1))
+    cell1 = pool.mkCell(_ => {
+      cell1.when(cell2)(_ => NextOutcome(-1))
       NextOutcome(101)
     })
 
-    cell2 = pool.mkCell[theKey.type, Int](theKey, _ => {
-      cell2.whenComplete(cell1, _ => NextOutcome(-1))
+    cell2 = pool.mkCell(_ => {
+      cell2.when(cell1)(_ => NextOutcome(-1))
       NextOutcome(102)
     })
 
-    cell3 = pool.mkCell[theKey.type, Int](theKey, _ => {
-      cell3.whenComplete(cell1, _ => FinalOutcome(103))
+    cell3 = pool.mkCell(_ => {
+      cell3.when(cell1)(_ => FinalOutcome(103))
       NextOutcome(-1)
     })
 
@@ -181,8 +185,8 @@ class LazySuite extends FunSuite {
     cell3.trigger()
     latch1.await()
 
-    val fut = pool.quiescentResolveCycles
-    val ready = Await.ready(fut, 2.seconds)
+    val fut = pool.quiescentResolveCell
+    Await.ready(fut, 2.seconds)
 
     latch2.await()
 
@@ -192,27 +196,27 @@ class LazySuite extends FunSuite {
     pool.shutdown()
   }
 
-  test("cycle deps with outgoing dep, resolve cycle first") {
-    val theKey = new DefaultKey[Int]()
+  test("cycle deps with incoming dep, resolve cycle first") {
+    val theKey = new DefaultKey[Int, Null]()
 
     val latch1 = new CountDownLatch(2)
     val latch2 = new CountDownLatch(2)
     val latch3 = new CountDownLatch(1)
-    val pool = new HandlerPool()
+    val pool = new HandlerPool[Int, Null](theKey)
 
-    var cell1: Cell[theKey.type, Int] = null
-    var cell2: Cell[theKey.type, Int] = null
-    var cell3: Cell[theKey.type, Int] = null
+    var cell1: Cell[Int, Null] = null
+    var cell2: Cell[Int, Null] = null
+    var cell3: Cell[Int, Null] = null
 
-    cell1 = pool.mkCell[theKey.type, Int](theKey, c => {
-      c.whenComplete(cell2, _ => {
+    cell1 = pool.mkCell(c => {
+      c.when(cell2)(_ => {
         NextOutcome(-111)
       })
       NextOutcome(11)
     })
 
-    cell2 = pool.mkCell[theKey.type, Int](theKey, c => {
-      c.whenComplete(cell1, _ => {
+    cell2 = pool.mkCell(c => {
+      c.when(cell1)(_ => {
         NextOutcome(-222)
       })
       NextOutcome(22)
@@ -227,13 +231,13 @@ class LazySuite extends FunSuite {
     cell2.trigger()
     latch1.await()
 
-    val fut = pool.quiescentResolveCycles
-    val ready = Await.ready(fut, 2.seconds)
+    val fut = pool.quiescentResolveCell
+    Await.ready(fut, 2.seconds)
 
     latch2.await()
 
-    cell3 = pool.mkCell[theKey.type, Int](theKey, c => {
-      c.whenComplete(cell1, _ => {
+    cell3 = pool.mkCell(c => {
+      c.when(cell1)(_ => {
         FinalOutcome(333)
       })
       NextOutcome(-3)
@@ -251,15 +255,15 @@ class LazySuite extends FunSuite {
   }
 
   test("cycle does not get resolved, if not triggered") {
-    val pool = new HandlerPool()
-    var c1: Cell[StringIntKey, Int] = null
-    var c2: Cell[StringIntKey, Int] = null
-    c1 = pool.mkCell[StringIntKey, Int]("cell1", _ => {
-      c1.whenNext(c2, _ => FinalOutcome(-2))
+    val pool = new HandlerPool[Int, Null]
+    var c1: Cell[Int, Null] = null
+    var c2: Cell[Int, Null] = null
+    c1 = pool.mkCell(_ => {
+      c1.when(c2)(_ => FinalOutcome(-2))
       FinalOutcome(-1)
     })
-    c2 = pool.mkCell[StringIntKey, Int]("cell2", _ => {
-      c2.whenNext(c1, _ => FinalOutcome(-2))
+    c2 = pool.mkCell(_ => {
+      c2.when(c1)(_ => FinalOutcome(-2))
       FinalOutcome(-1)
     })
 
@@ -273,10 +277,10 @@ class LazySuite extends FunSuite {
 
     pool.shutdown()
   }
-
+  //
   test("cell does not get resolved, if not triggered") {
-    val pool = new HandlerPool()
-    val c = pool.mkCell[StringIntKey, Int]("cell1", _ => FinalOutcome(-1))
+    val pool = new HandlerPool[Int, Null]
+    val c = pool.mkCell(_ => FinalOutcome(-1))
 
     val fut2 = pool.quiescentResolveCell
     Await.ready(fut2, 2.seconds)
@@ -286,10 +290,10 @@ class LazySuite extends FunSuite {
 
     pool.shutdown()
   }
-
+  //
   test("cell gets resolved, if triggered") {
-    val pool = new HandlerPool()
-    val cell = pool.mkCell[StringIntKey, Int]("cell1", _ => {
+    val pool = new HandlerPool[Int, Null](new StringIntKey(""))
+    val cell = pool.mkCell(_ => {
       NextOutcome(-1)
     })
     cell.trigger()
@@ -303,3 +307,4 @@ class LazySuite extends FunSuite {
     pool.shutdown()
   }
 }
+

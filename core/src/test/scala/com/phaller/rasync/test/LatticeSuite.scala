@@ -1,8 +1,8 @@
 package com.phaller.rasync
 package test
 
+import com.phaller.rasync.lattice._
 import com.phaller.rasync.lattice.lattices.NaturalNumberLattice
-import com.phaller.rasync.lattice.{ Lattice, PartialOrderingWithBottom }
 import org.scalatest.FunSuite
 
 class LatticeSuite extends FunSuite {
@@ -123,5 +123,35 @@ class LatticeSuite extends FunSuite {
     assert(L.join(Bottom, Top) == Top)
     assert(L.join(Top, Bottom) == Top)
     assert(L.join(A, A) == A)
+  }
+
+  test("PurityUpdater: successful updated") {
+    val updater = Updater.partialOrderingToUpdater(Purity.PurityOrdering)
+
+    val purity = updater.update(UnknownPurity, Pure)
+    assert(purity == Pure)
+
+    val newPurity = updater.update(purity, Pure)
+    assert(newPurity == Pure)
+  }
+
+  test("PurityUpdater: failed updates") {
+    val updater = Updater.partialOrderingToUpdater(Purity.PurityOrdering)
+
+    try {
+      val newPurity = updater.update(Impure, Pure)
+      assert(false)
+    } catch {
+      case lve: NotMonotonicException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
+
+    try {
+      val newPurity = updater.update(Pure, Impure)
+      assert(false)
+    } catch {
+      case lve: NotMonotonicException[_] => assert(true)
+      case e: Exception => assert(false)
+    }
   }
 }

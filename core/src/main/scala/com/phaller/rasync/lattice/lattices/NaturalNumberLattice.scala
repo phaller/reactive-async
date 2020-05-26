@@ -2,7 +2,7 @@ package com.phaller.rasync.lattice.lattices
 
 import com.phaller.rasync.lattice.{ DefaultKey, Lattice }
 
-object NaturalNumberKey extends DefaultKey[Int]
+object NaturalNumberKey extends DefaultKey[Int, Null]
 
 class NaturalNumberLattice extends Lattice[Int] {
   override def join(v1: Int, v2: Int): Int = {

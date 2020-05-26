@@ -24,7 +24,7 @@ lazy val core: Project = (project in file("core")).
     name := "reactive-async",
     libraryDependencies += scalaTest,
     libraryDependencies += opalCommon,
-    libraryDependencies += opalAI % Test,
+    libraryDependencies += opalTAC,
     scalacOptions += "-feature"
   )
 
@@ -45,7 +45,7 @@ lazy val bench: Project = (project in file("bench")).
     name := "reactive-async-bench",
     libraryDependencies += scalaTest,
     libraryDependencies += opalCommon,
-    libraryDependencies += opalAI % Test,
+//    libraryDependencies += opalAI % Test,
     libraryDependencies += scalaMeter,
     testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework"),
     skip in publish := true
@@ -55,3 +55,5 @@ lazy val bench: Project = (project in file("bench")).
     inConfig(Benchmark)(Defaults.testSettings): _*
   ).
   dependsOn(core)
+
+javaOptions in ThisBuild ++= Seq("-Xmx27G", "-Xms1024m", "-XX:ThreadStackSize=2048")

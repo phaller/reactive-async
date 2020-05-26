@@ -1,20 +1,22 @@
-package com.phaller.rasync
+package com.phaller.rasync.cell
 
-import scala.util.Try
-import lattice.{ DefaultKey, Key, Updater }
+import com.phaller.rasync.lattice.Updater
+import com.phaller.rasync.pool.HandlerPool
+
+import scala.util.{ Failure, Try }
 
 /**
  * Interface trait for programmatically completing a cell. Analogous to `Promise[V]`.
  */
-trait CellCompleter[K <: Key[V], V] {
+private[rasync] trait CellCompleter[V, E >: Null] {
 
   /**
    * The cell associated with this completer.
    */
-  val cell: Cell[K, V]
+  val cell: Cell[V, E]
 
   /** A method to call */
-  private[rasync] val init: (Cell[K, V]) => Outcome[V]
+  private[rasync] val init: (Cell[V, E]) => Outcome[V]
 
   /**
    * Update `this` cells value with `x` and freeze it.
@@ -38,27 +40,26 @@ trait CellCompleter[K <: Key[V], V] {
   /** Complete the cell without changing its value. */
   def freeze(): Unit
 
-  private[rasync] def tryNewState(value: V): Boolean
-  def tryComplete(value: Try[V], dontCall: Option[Seq[Cell[K, V]]]): Boolean
+  def putFailure(e: Failure[V]): Unit
 
-  private[rasync] def removeCompleteDepentCell(cell: Cell[K, V]): Unit
-  private[rasync] def removeNextDepentCell(cell: Cell[K, V]): Unit
+  private[rasync] def tryNewState(value: V): Unit
+  private[rasync] def tryComplete(value: Try[V], dontCall: Option[Seq[Cell[V, E]]]): Unit
 
   /**
    * Run code for `this` cell sequentially.
-   * @return The result of `f`.
    */
-  def sequential[T](f: => T): T
+  private[rasync] def sequential(f: () => _, prio: Int): Unit
 }
 
 object CellCompleter {
-
   /**
    * Create a completer for a cell holding values of type `V`
    * given a `HandlerPool` and a `Key[V]`.
    */
-  def apply[K <: Key[V], V](key: K, init: (Cell[K, V]) => Outcome[V] = (_: Cell[K, V]) => NoOutcome)(implicit updater: Updater[V], pool: HandlerPool): CellCompleter[K, V] = {
-    val impl = new CellImpl[K, V](pool, key, updater, init)
+  def apply[V, E >: Null](init: (Cell[V, E]) => Outcome[V] = (_: Cell[V, E]) => NoOutcome, sequential: Boolean = false, entity: E = null)(implicit updater: Updater[V], pool: HandlerPool[V, E]): CellCompleter[V, E] = {
+    val impl =
+      if (sequential) new SequentialCellImpl[V, E](pool, updater, init, entity)
+      else new ConcurrentCellImpl[V, E](pool, updater, init, entity)
     pool.register(impl)
     impl
   }
@@ -69,8 +70,8 @@ object CellCompleter {
    * Note: there is no `K` type parameter, since we always use type
    * `DefaultKey[V]`, no other key would make sense.
    */
-  def completed[V](result: V)(implicit updater: Updater[V], pool: HandlerPool): CellCompleter[DefaultKey[V], V] = {
-    val impl = new CellImpl[DefaultKey[V], V](pool, new DefaultKey[V], updater, _ => NoOutcome)
+  def completed[V, E >: Null](result: V, entity: E = null)(implicit updater: Updater[V], pool: HandlerPool[V, E]): CellCompleter[V, E] = {
+    val impl = new ConcurrentCellImpl[V, E](pool, updater, _ => NoOutcome, entity)
     pool.register(impl)
     impl.putFinal(result)
     impl
