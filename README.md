@@ -13,20 +13,31 @@ value of a given cell, and (b) explicit and optimized handling of
 complete implementation of the Reactive Async programming model in and
 for Scala.
 
-Talk at Scala Days 2016: [video](https://www.youtube.com/watch?v=S9xxhyDYoZk),
-[slides](https://speakerdeck.com/phaller/programming-with-futures-lattices-and-quiescence)
+Talks:
 
-Talk at ACM SIGPLAN Scala Symposium 2016:
-[slides](https://speakerdeck.com/phaller/reactive-async-expressive-deterministic-concurrency)
+- Talk at Scala Days 2016: [video](https://www.youtube.com/watch?v=S9xxhyDYoZk),
+  [slides](https://speakerdeck.com/phaller/programming-with-futures-lattices-and-quiescence)
 
-Paper: Philipp Haller, Simon Geries, Michael Eichberg, and Guido Salvaneschi.
-       [Reactive Async: Expressive Deterministic Concurrency](http://www.csc.kth.se/~phaller/doc/haller16-scala.pdf).
-       Proc. ACM SIGPLAN Scala Symposium. ACM, 2016. [[ACM DL](http://dl.acm.org/citation.cfm?id=2998396)]
+- Talk at ACM SIGPLAN Scala Symposium 2016:
+  [slides](https://speakerdeck.com/phaller/reactive-async-expressive-deterministic-concurrency)
 
-Master's thesis: Simon Geries. [Reactive Async: Safety and efficiency
-of new abstractions for reactive, asynchronous
-programming](http://urn.kb.se/resolve?urn=urn%3Anbn%3Ase%3Akth%3Adiva-191330). KTH,
-School of Computer Science and Communication (CSC). 2016.
+- Talk at ISSTA 2020:
+  [video](https://www.youtube.com/watch?v=ejueBIa6FBY&t=1313)
+
+Papers and thesis:
+
+- Dominik Helm, Florian K&uuml;bler, Jan Thomas K&ouml;lzer, Philipp Haller, Michael Eichberg, Guido Salvaneschi and Mira Mezini.
+  [A programming model for semi-implicit parallelization of static analyses](http://www.csc.kth.se/~phaller/doc/helm20-issta.pdf).
+  Proc. ACM SIGSOFT International Symposium on Software Testing and Analysis. ACM, 2020. [[ACM DL](https://dl.acm.org/doi/10.1145/3395363.3397367)]
+
+- Philipp Haller, Simon Geries, Michael Eichberg, and Guido Salvaneschi.
+  [Reactive Async: Expressive Deterministic Concurrency](http://www.csc.kth.se/~phaller/doc/haller16-scala.pdf).
+  Proc. ACM SIGPLAN Scala Symposium. ACM, 2016. [[ACM DL](http://dl.acm.org/citation.cfm?id=2998396)]
+
+- Master's thesis: Simon Geries. [Reactive Async: Safety and efficiency
+  of new abstractions for reactive, asynchronous
+  programming](http://urn.kb.se/resolve?urn=urn%3Anbn%3Ase%3Akth%3Adiva-191330). KTH,
+  School of Computer Science and Communication (CSC). 2016.
 
 ## Contributing
 
