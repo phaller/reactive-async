@@ -12,16 +12,14 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
-/**
- * Tests where cylces or independent cells
- * need to be resolved via a Key.
- * This tests contains cycles that only constist
- * of a single type of Cells and do not mix
- * SequentialCells and ConcurrentCells.
- * For the mixedcase, see MixedKeyResolutionsuite
- */
+/** Tests where cylces or independent cells need to be resolved via a Key. This tests contains
+  * cycles that only constist of a single type of Cells and do not mix SequentialCells and
+  * ConcurrentCells. For the mixedcase, see MixedKeyResolutionsuite
+  */
 class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
-  def forwardAsNext[E >: Null](upd: Iterable[(Cell[Int, E], Try[ValueOutcome[Int]])]): Outcome[Int] = {
+  def forwardAsNext[E >: Null](
+      upd: Iterable[(Cell[Int, E], Try[ValueOutcome[Int]])]
+  ): Outcome[Int] = {
     val c = upd.head._2
     NextOutcome(c.get.value)
   }
@@ -67,9 +65,11 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       val RESOLVEDINCYCLE = 5
       val RESOLVEDASINDPENDENT = 10
 
-      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDINCYCLE))
+      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] =
+        cells.map((_, RESOLVEDINCYCLE))
 
-      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDASINDPENDENT))
+      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] =
+        cells.map((_, RESOLVEDASINDPENDENT))
     }
 
     implicit val pool = new HandlerPool[Int, Null](ConstantKey)
@@ -90,15 +90,16 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
-      case FinalOutcome(_) =>
-        NoOutcome
-      case NextOutcome(-1) =>
-        NoOutcome
-      case _ =>
-        assert(false)
-        NextOutcome(-2)
-    }
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] =
+      upd.head._2.get match {
+        case FinalOutcome(_) =>
+          NoOutcome
+        case NextOutcome(-1) =>
+          NoOutcome
+        case _ =>
+          assert(false)
+          NextOutcome(-2)
+      }
 
     cell1.when(cell2)(c)
     cell1.when(cell3)(c)
@@ -132,9 +133,11 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
       val RESOLVEDINCYCLE = 5
       val RESOLVEDASINDPENDENT = 10
 
-      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDINCYCLE))
+      override def resolve(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] =
+        cells.map((_, RESOLVEDINCYCLE))
 
-      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = cells.map((_, RESOLVEDASINDPENDENT))
+      override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] =
+        cells.map((_, RESOLVEDASINDPENDENT))
     }
 
     implicit val pool = new HandlerPool[Int, Null](ConstantKey)
@@ -155,15 +158,16 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
-      case FinalOutcome(_) =>
-        NoOutcome
-      case NextOutcome(-1) =>
-        NoOutcome
-      case _ =>
-        assert(false)
-        NextOutcome(-2)
-    }
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] =
+      upd.head._2.get match {
+        case FinalOutcome(_) =>
+          NoOutcome
+        case NextOutcome(-1) =>
+          NoOutcome
+        case _ =>
+          assert(false)
+          NextOutcome(-2)
+      }
 
     cell1.when(cell2)(c)
     cell1.when(cell3)(c)
@@ -211,15 +215,16 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
-      case FinalOutcome(_) =>
-        NoOutcome
-      case NextOutcome(-1) =>
-        NoOutcome
-      case _ =>
-        assert(false)
-        NextOutcome(-2)
-    }
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] =
+      upd.head._2.get match {
+        case FinalOutcome(_) =>
+          NoOutcome
+        case NextOutcome(-1) =>
+          NoOutcome
+        case _ =>
+          assert(false)
+          NextOutcome(-2)
+      }
 
     cell1.when(cell2)(c)
     cell1.when(cell3)(c)
@@ -267,15 +272,16 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     completer4.putNext(-1)
 
     // create a cSCC, assert that none of the callbacks get called again.
-    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = upd.head._2.get match {
-      case FinalOutcome(_) =>
-        NoOutcome
-      case NextOutcome(-1) =>
-        NoOutcome
-      case _ =>
-        assert(false)
-        NextOutcome(-2)
-    }
+    def c(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] =
+      upd.head._2.get match {
+        case FinalOutcome(_) =>
+          NoOutcome
+        case NextOutcome(-1) =>
+          NoOutcome
+        case _ =>
+          assert(false)
+          NextOutcome(-2)
+      }
 
     cell1.when(cell2)(c)
     cell1.when(cell3)(c)
@@ -371,12 +377,15 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     case object ShouldNotHappen extends Value
 
     implicit object ValueUpdater extends Updater[Value] {
-      override def update(v1: Value, v2: Value): Value = if (v1 == Bottom) v2 else v1 // TODO or throw?
+      override def update(v1: Value, v2: Value): Value =
+        if (v1 == Bottom) v2 else v1 // TODO or throw?
       override val bottom: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value, Null] {
-      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def resolve(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, OK))
       }
     }
@@ -409,12 +418,15 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     case object ShouldNotHappen extends Value
 
     implicit object ValueUpdater extends Updater[Value] {
-      override def update(v1: Value, v2: Value): Value = if (v1 == Bottom) v2 else v1 // TODO or throw?
+      override def update(v1: Value, v2: Value): Value =
+        if (v1 == Bottom) v2 else v1 // TODO or throw?
       override val bottom: Value = Bottom
     }
 
     object TheKey extends DefaultKey[Value, Null] {
-      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def resolve(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, OK))
       }
     }
@@ -454,10 +466,14 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     }
 
     object TheKey extends DefaultKey[Value, Null] {
-      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def resolve(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def fallback(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
@@ -501,10 +517,14 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     }
 
     object TheKey extends DefaultKey[Value, Null] {
-      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def resolve(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def fallback(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Fallback))
       }
     }
@@ -548,10 +568,14 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     }
 
     object TheKey extends DefaultKey[Value, Null] {
-      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def resolve(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def fallback(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         Seq()
       }
     }
@@ -592,10 +616,14 @@ class MixedKeyResolutionSuite extends FunSuite with MixedCompleterFactory {
     }
 
     object TheKey extends Key[Value, Null] {
-      override def resolve(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def resolve(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         cells.map(cell => (cell, Resolved))
       }
-      override def fallback(cells: Iterable[Cell[Value, Null]]): Iterable[(Cell[Value, Null], Value)] = {
+      override def fallback(
+          cells: Iterable[Cell[Value, Null]]
+      ): Iterable[(Cell[Value, Null], Value)] = {
         Seq()
       }
     }

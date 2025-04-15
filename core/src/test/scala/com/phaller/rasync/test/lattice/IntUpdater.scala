@@ -29,4 +29,3 @@ class IntUpdater extends Updater[Int] {
 
   override val bottom: Int = 0
 }
-

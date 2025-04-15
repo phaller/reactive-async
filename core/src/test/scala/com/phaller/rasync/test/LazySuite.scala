@@ -307,4 +307,3 @@ class LazySuite extends FunSuite {
     pool.shutdown()
   }
 }
-

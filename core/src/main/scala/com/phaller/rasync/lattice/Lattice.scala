@@ -4,12 +4,10 @@ package lattice
 import scala.annotation.implicitNotFound
 
 trait PartialOrderingWithBottom[V] extends PartialOrdering[V] {
-  /**
-   * Result of comparing x with operand y. Returns None if operands are not comparable. If operands are comparable, returns Some(r) where
-   * r < 0 iff x < y
-   * r == 0 iff x == y
-   * r > 0 iff x > y
-   */
+
+  /** Result of comparing x with operand y. Returns None if operands are not comparable. If operands
+    * are comparable, returns Some(r) where r < 0 iff x < y r == 0 iff x == y r > 0 iff x > y
+    */
   override def tryCompare(x: V, y: V): Option[Int] =
     if (lt(x, y)) Some(-1)
     else if (gt(x, y)) Some(1)
@@ -31,9 +29,9 @@ object PartialOrderingWithBottom {
 
 @implicitNotFound("type ${V} does not have a Lattice instance")
 trait Lattice[V] extends PartialOrderingWithBottom[V] {
-  /**
-   * Return the join of v1 and v2 wrt. the lattice.
-   */
+
+  /** Return the join of v1 and v2 wrt. the lattice.
+    */
   def join(v1: V, v2: V): V
 
   override def lteq(v1: V, v2: V): Boolean = {

@@ -14,8 +14,7 @@ class SingleValueDistribution(value: Double) extends Distribution {
   override def getMin(): Double = value
 }
 
-class TriangleDistribution(min: Double, likely: Double, max: Double)
-  extends Distribution {
+class TriangleDistribution(min: Double, likely: Double, max: Double) extends Distribution {
 
   assert(max >= likely)
   assert(likely >= min)

@@ -82,7 +82,7 @@
 //    }
 //
 //    override def fallback[K <: Key[Int]](cells: Iterable[Cell[K, Int]]): Iterable[(Cell[K, Int], Int)] = {
-//      cells.map(cell ⇒ (cell, cell.getResult()))
+//      cells.map(cell => (cell, cell.getResult()))
 //    }
 //
 //    override def toString = "ReactivePropertyStoreKey"

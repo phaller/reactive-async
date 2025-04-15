@@ -22,7 +22,7 @@
 //  override def doAnalyze(
 //    project: Project[URL],
 //    parameters: Seq[String] = List.empty,
-//    isInterrupted: () ⇒ Boolean): BasicReport = {
+//    isInterrupted: () => Boolean): BasicReport = {
 //    // Run ClassExtensibilityAnalysis
 //    val projectStore = project.get(PropertyStoreKey)
 //    val manager = project.get(FPCFAnalysesManagerKey)
@@ -70,10 +70,10 @@
 //    // All classes that do not have complete superclass information are mutable
 //    // due to the lack of knowledge.
 //    val typesForWhichItMayBePossibleToComputeTheMutability = allSubtypes(ObjectType.Object, reflexive = true)
-//    val unexpectedRootTypes = rootTypes.filter(rt ⇒ (rt ne ObjectType.Object) && !isInterface(rt).isNo)
-//    unexpectedRootTypes.map(rt ⇒ allSubtypes(rt, reflexive = true)).flatten.view.
-//      filter(ot ⇒ !typesForWhichItMayBePossibleToComputeTheMutability.contains(ot)).
-//      foreach(ot ⇒ project.classFile(ot) foreach { cf ⇒
+//    val unexpectedRootTypes = rootTypes.filter(rt => (rt ne ObjectType.Object) && !isInterface(rt).isNo)
+//    unexpectedRootTypes.map(rt => allSubtypes(rt, reflexive = true)).flatten.view.
+//      filter(ot => !typesForWhichItMayBePossibleToComputeTheMutability.contains(ot)).
+//      foreach(ot => project.classFile(ot) foreach { cf =>
 //        classFileToObjectTypeCellCompleter(cf)._1.putFinal(Mutable)
 //      })
 //
@@ -171,10 +171,10 @@
 //    // All classes that do not have complete superclass information are mutable
 //    // due to the lack of knowledge.
 //    val typesForWhichItMayBePossibleToComputeTheMutability = allSubtypes(ObjectType.Object, reflexive = true)
-//    val unexpectedRootTypes = rootTypes.filter(rt ⇒ (rt ne ObjectType.Object) && !isInterface(rt).isNo)
-//    unexpectedRootTypes.map(rt ⇒ allSubtypes(rt, reflexive = true)).flatten.view.
-//      filter(ot ⇒ !typesForWhichItMayBePossibleToComputeTheMutability.contains(ot)).
-//      foreach(ot ⇒ project.classFile(ot) foreach { cf ⇒
+//    val unexpectedRootTypes = rootTypes.filter(rt => (rt ne ObjectType.Object) && !isInterface(rt).isNo)
+//    unexpectedRootTypes.map(rt => allSubtypes(rt, reflexive = true)).flatten.view.
+//      filter(ot => !typesForWhichItMayBePossibleToComputeTheMutability.contains(ot)).
+//      foreach(ot => project.classFile(ot) foreach { cf =>
 //        classFileToObjectTypeCellCompleter(cf)._1.putFinal(Mutable)
 //      })
 //
@@ -317,13 +317,13 @@
 //            case ConditionallyImmutable => NextOutcome(ConditionallyImmutable)
 //          })
 //      } else {
-//        val unavailableSubtype = directSubtypes.find(t ⇒ project.classFile(t).isEmpty)
+//        val unavailableSubtype = directSubtypes.find(t => project.classFile(t).isEmpty)
 //        if (unavailableSubtype.isDefined)
 //          cellCompleter.putFinal(Mutable)
 //
 //        if (!cellCompleter.cell.isComplete) {
 //          // Check subclasses to determine TypeImmutability
-//          val directSubclasses = directSubtypes map { subtype ⇒ project.classFile(subtype).get }
+//          val directSubclasses = directSubtypes map { subtype => project.classFile(subtype).get }
 //          directSubclasses foreach { subclass =>
 //            cellCompleter.cell.whenNext(
 //              classFileToObjectTypeCellCompleter(subclass)._2.cell,

@@ -19,10 +19,14 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
 
   implicit val intUpdater: Updater[Int] = new IntUpdater
 
-  def if10thenFinal20[E >: Null](updates: Iterable[(Cell[Int, E], Try[ValueOutcome[Int]])]): Outcome[Int] =
+  def if10thenFinal20[E >: Null](
+      updates: Iterable[(Cell[Int, E], Try[ValueOutcome[Int]])]
+  ): Outcome[Int] =
     ifXthenFinalY[E](10, 20)(updates)
 
-  def ifXthenFinalY[E >: Null](x: Int, y: Int)(upd: Iterable[(Cell[Int, E], Try[ValueOutcome[Int]])]): Outcome[Int] = {
+  def ifXthenFinalY[E >: Null](x: Int, y: Int)(
+      upd: Iterable[(Cell[Int, E], Try[ValueOutcome[Int]])]
+  ): Outcome[Int] = {
     val c = upd.head._2
     if (c.get.value == x) FinalOutcome(y) else NoOutcome
   }
@@ -77,7 +81,7 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       assert(true)
     } catch {
       case ise: IllegalStateException => assert(false)
-      case e: Exception => assert(false)
+      case e: Exception               => assert(false)
     }
 
     pool.onQuiescenceShutdown()
@@ -324,7 +328,7 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
 
     completer1.cell.when(completer2.cell)(_.head._2 match {
       case Success(NextOutcome(Mutable)) => NextOutcome(Mutable)
-      case _ => NoOutcome
+      case _                             => NoOutcome
     })
 
     completer1.putFinal(Immutable)
@@ -370,9 +374,11 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       val cell1 = completer1.cell
       cell1.trigger()
 
-      pool.execute(() => cell1.when(completer2.cell)(_ => {
-        NoOutcome
-      }))
+      pool.execute(() =>
+        cell1.when(completer2.cell)(_ => {
+          NoOutcome
+        })
+      )
 
       pool.execute(() => completer2.putFinal(Mutable))
 
@@ -392,10 +398,12 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
     for (_ <- 1 to 1000) {
       val completer1 = mkCompleter[Immutability, Null]
       val completer2 = mkCompleter[Immutability, Null]
-      completer1.cell.when(completer2.cell)(it => it.head._2.get.value match {
-        case Immutable | ConditionallyImmutable => NoOutcome
-        case Mutable => NextOutcome(Mutable)
-      })
+      completer1.cell.when(completer2.cell)(it =>
+        it.head._2.get.value match {
+          case Immutable | ConditionallyImmutable => NoOutcome
+          case Mutable                            => NextOutcome(Mutable)
+        }
+      )
 
       assert(completer1.cell.numDependencies == 1)
 
@@ -422,10 +430,12 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
 
       val cell1 = completer1.cell
 
-      pool.execute(() => cell1.when(completer2.cell)(it => {
-        if (it.head._2.get.value == Mutable) NextOutcome(Mutable)
-        else NoOutcome
-      }))
+      pool.execute(() =>
+        cell1.when(completer2.cell)(it => {
+          if (it.head._2.get.value == Mutable) NextOutcome(Mutable)
+          else NoOutcome
+        })
+      )
       pool.execute(() => completer2.putNext(Mutable))
 
       val fut = pool.quiescentResolveCell
@@ -468,7 +478,7 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       completer1.putNext(50)
     } catch {
       case _: IllegalStateException => assert(false)
-      case _: Exception => assert(false)
+      case _: Exception             => assert(false)
     }
 
     pool.onQuiescenceShutdown()
@@ -552,7 +562,7 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       val x = it.head._2
       x.get match {
         case FinalOutcome(_) => x.get // complete, if completer2 is completed
-        case _ => NoOutcome
+        case _               => NoOutcome
       }
     })
 
@@ -857,13 +867,13 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
     }
     val key = DefaultKey[Int]
 
-    implicit val pool = new HandlerPool[Int, Null](key, unhandledExceptionHandler = { t => /* do nothing */ })
+    implicit val pool =
+      new HandlerPool[Int, Null](key, unhandledExceptionHandler = { t => /* do nothing */ })
     val completer = mkCompleter[Int, Null]
 
     pool.execute { () =>
       // NOTE: This will print a stacktrace, but that is fine (not a bug).
-      throw new Exception(
-        "Even if this happens, quiescent handlers should still run.")
+      throw new Exception("Even if this happens, quiescent handlers should still run.")
     }
 
     try {
@@ -902,17 +912,20 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       completer1.putFinal(5)
 
       // put a higher value
-      try completer1.putFinal(6) catch {
+      try completer1.putFinal(6)
+      catch {
         case _: IllegalStateException => /* ignore */
       }
 
       // put a lower value
-      try completer1.putFinal(4) catch {
+      try completer1.putFinal(4)
+      catch {
         case _: IllegalStateException => /* ignore */
       }
 
       // put the same value
-      try completer1.putFinal(5) catch {
+      try completer1.putFinal(5)
+      catch {
         case _: IllegalStateException => /* ignore */
       }
 
@@ -965,7 +978,7 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
       }
 
       override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = {
-        cells.map(cell ⇒ (cell, cell.getResult()))
+        cells.map(cell => (cell, cell.getResult()))
       }
 
       override def toString = "ReactivePropertyStoreKey"
@@ -1072,7 +1085,7 @@ abstract class BaseSuite extends FunSuite with CompleterFactory {
     }
 
     override def fallback(cells: Iterable[Cell[Int, Null]]): Iterable[(Cell[Int, Null], Int)] = {
-      cells.map(cell ⇒ (cell, 43))
+      cells.map(cell => (cell, 43))
     }
   }
 }

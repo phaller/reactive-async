@@ -29,9 +29,12 @@ object Counter {
     val counters = s"\tCounters\n" +
       f"\t\t${"Number"}%10s  ${"Name"}%-90s\n" +
       f"\t\t${"------"}%10s  ${"----"}%-90s\n" +
-      profilingCounter.toSeq.sortBy(x ⇒ x._1).map { x ⇒
-        f"\t\t${x._2.get}%10s  ${x._1}%-90s\n"
-      }.mkString
+      profilingCounter.toSeq
+        .sortBy(x => x._1)
+        .map { x =>
+          f"\t\t${x._2.get}%10s  ${x._1}%-90s\n"
+        }
+        .mkString
 
     counters
   }

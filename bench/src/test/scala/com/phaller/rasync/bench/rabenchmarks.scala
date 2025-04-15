@@ -13,10 +13,8 @@ import scala.concurrent.duration._
 
 object ReactiveAsyncBenchmarks extends PerformanceTest.Microbenchmark {
   /* configuration */
-  override def executor = LocalExecutor(
-    new Executor.Warmer.Default,
-    Aggregator.min,
-    new Measurer.Default)
+  override def executor =
+    LocalExecutor(new Executor.Warmer.Default, Aggregator.min, new Measurer.Default)
   override def reporter = new LoggingReporter
   override def persistor = Persistor.None
 
@@ -30,49 +28,43 @@ object ReactiveAsyncBenchmarks extends PerformanceTest.Microbenchmark {
   /* creation of cells/cell completers */
   performance of "Cells" in {
     measure method "creating" in {
-      using(size) config (
-        exec.benchRuns -> 9) in {
-          r =>
-            {
-              implicit val pool = new HandlerPool(NaturalNumberKey, nrOfThreads)
-              for (i <- 1 to r)
-                pool.execute(() => { CellCompleter[Int, Null]() }: Unit)
-              waitUntilQuiescent(pool)
-            }
+      using(size) config (exec.benchRuns := 9) in { r =>
+        {
+          implicit val pool = new HandlerPool(NaturalNumberKey, nrOfThreads)
+          for (i <- 1 to r)
+            pool.execute(() => { CellCompleter[Int, Null]() }: Unit)
+          waitUntilQuiescent(pool)
         }
+      }
     }
   }
 
   /* completion of cells */
   performance of "Cells" in {
     measure method "create and putFinal" in {
-      using(size) config (
-        exec.benchRuns -> 9) in {
-          r =>
-            {
-              implicit val pool = new HandlerPool(NaturalNumberKey, nrOfThreads)
-              for (i <- 1 to r) {
-                pool.execute(() => {
-                  val cellCompleter = CellCompleter[Int, Null]()
-                  cellCompleter.putFinal(1)
-                })
-              }
-              waitUntilQuiescent(pool)
-            }
+      using(size) config (exec.benchRuns := 9) in { r =>
+        {
+          implicit val pool = new HandlerPool(NaturalNumberKey, nrOfThreads)
+          for (i <- 1 to r) {
+            pool.execute(() => {
+              val cellCompleter = CellCompleter[Int, Null]()
+              cellCompleter.putFinal(1)
+            })
+          }
+          waitUntilQuiescent(pool)
         }
+      }
     }
   }
 
   performance of "Cells" in {
     measure method "putNext" in {
-      using(Gen.unit(s"$nrOfCells cells")) config (
-        exec.benchRuns -> 9) in {
-          (Unit) =>
-            implicit val pool = new HandlerPool(NaturalNumberKey, nrOfThreads)
-            val cellCompleter = CellCompleter[Int, Null]()
-            for (i <- 1 to nrOfCells) pool.execute(() => cellCompleter.putNext(i))
-            waitUntilQuiescent(pool)
-        }
+      using(Gen.unit(s"$nrOfCells cells")) config (exec.benchRuns := 9) in { (Unit) =>
+        implicit val pool = new HandlerPool(NaturalNumberKey, nrOfThreads)
+        val cellCompleter = CellCompleter[Int, Null]()
+        for (i <- 1 to nrOfCells) pool.execute(() => cellCompleter.putNext(i))
+        waitUntilQuiescent(pool)
+      }
     }
   }
 

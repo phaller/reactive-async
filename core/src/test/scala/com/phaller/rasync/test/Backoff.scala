@@ -60,7 +60,8 @@ private object Random {
     seed
   }
   def scale(seed: Long, max: Int): Int = {
-    if (max <= 0) max else {
+    if (max <= 0) max
+    else {
       val r = (seed % max).toInt
       if (r < 0) -r else r
     }

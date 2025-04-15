@@ -7,14 +7,18 @@ import com.phaller.rasync.lattice.{ Key, Lattice }
 
 object ImmutabilityKey extends Key[Immutability, Null] {
 
-  def resolve(cells: Iterable[Cell[Immutability, Null]]): Iterable[(Cell[Immutability, Null], Immutability)] = {
+  def resolve(
+      cells: Iterable[Cell[Immutability, Null]]
+  ): Iterable[(Cell[Immutability, Null], Immutability)] = {
     val conditionallyImmutableCells = cells.filter(_.getResult() == ConditionallyImmutable)
     if (conditionallyImmutableCells.nonEmpty)
       cells.map(cell => (cell, ConditionallyImmutable))
     else
       cells.map(cell => (cell, Immutable))
   }
-  def fallback(cells: Iterable[Cell[Immutability, Null]]): Iterable[(Cell[Immutability, Null], Immutability)] = {
+  def fallback(
+      cells: Iterable[Cell[Immutability, Null]]
+  ): Iterable[(Cell[Immutability, Null], Immutability)] = {
     cells.map(cell => (cell, Immutable))
   }
 
@@ -36,7 +40,7 @@ object Immutability {
 
     override def lteq(lhs: Immutability, rhs: Immutability): Boolean = {
       lhs == rhs || lhs == Immutable ||
-        (lhs == ConditionallyImmutable && rhs != Immutable)
+      (lhs == ConditionallyImmutable && rhs != Immutable)
     }
 
     override val bottom: Immutability = Immutable

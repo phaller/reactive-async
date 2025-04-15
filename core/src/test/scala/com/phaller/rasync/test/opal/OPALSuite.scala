@@ -32,7 +32,8 @@ class OPALSuite extends FunSuite {
       "pureness.Demo{ static int scc0(int) }",
       "pureness.Demo{ static int scc1(int) }",
       "pureness.Demo{ static int scc2(int) }",
-      "pureness.Demo{ static int scc3(int) }")
+      "pureness.Demo{ static int scc3(int) }"
+    )
 
     val finalRes = pureMethods.filter(!report.contains(_))
 
@@ -60,7 +61,8 @@ class OPALSuite extends FunSuite {
       "static int cpureCalleeCallee1(int)",
       "static int cpureCalleeCallee2(int)",
       "static int cpureCalleeCalleeCallee(int)",
-      "static int cpureCalleeCalleeCalleeCallee(int)")
+      "static int cpureCalleeCalleeCalleeCallee(int)"
+    )
 
     val finalRes = impureMethods.filter(report.contains(_))
 

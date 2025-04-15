@@ -25,7 +25,8 @@ class ExceptionSuite extends FunSuite {
    * behave correclty wrt. exceptions in dependencies and keys.
    */
 
-  implicit val naturalNumberUpdater: Updater[Int] = Updater.latticeToUpdater(new NaturalNumberLattice)
+  implicit val naturalNumberUpdater: Updater[Int] =
+    Updater.latticeToUpdater(new NaturalNumberLattice)
   implicit def strToIntKey(s: String): NaturalNumberKey.type = NaturalNumberKey
 
   test("exception in init") {
@@ -159,7 +160,7 @@ class ExceptionSuite extends FunSuite {
     pool.onQuiescenceShutdown()
 
     // check for exceptions in all cells of the cycle
-    for (c ← List(c0, c1, c2, c3, c4))
+    for (c <- List(c0, c1, c2, c3, c4))
       c.cell.getTry() match {
         case Success(_) => assert(false)
         case Failure(e) => assert(e.getMessage == "foo")
@@ -278,7 +279,10 @@ class ExceptionSuite extends FunSuite {
     // the respective cell.
     val latch1 = new CountDownLatch(1)
     val latch2 = new CountDownLatch(1)
-    implicit val pool: HandlerPool[Int, Null] = new HandlerPool[Int, Null](NaturalNumberKey, unhandledExceptionHandler = _ => latch1.countDown())
+    implicit val pool: HandlerPool[Int, Null] = new HandlerPool[Int, Null](
+      NaturalNumberKey,
+      unhandledExceptionHandler = _ => latch1.countDown()
+    )
     val c0 = CellCompleter()
     val cell = pool.mkCell(c => {
       // build up dependency, throw error, if c0's value changes

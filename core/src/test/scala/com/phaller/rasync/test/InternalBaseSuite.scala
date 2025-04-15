@@ -16,7 +16,9 @@ class InternalBaseSuite extends FunSuite {
   def if10thenFinal20(updates: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] =
     ifXthenFinalY(10, 20)(updates)
 
-  def ifXthenFinalY(x: Int, y: Int)(upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]): Outcome[Int] = {
+  def ifXthenFinalY(x: Int, y: Int)(
+      upd: Iterable[(Cell[Int, Null], Try[ValueOutcome[Int]])]
+  ): Outcome[Int] = {
     val c = upd.head._2
     if (c.get.value == x) FinalOutcome(y) else NoOutcome
   }

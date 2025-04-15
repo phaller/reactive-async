@@ -143,7 +143,7 @@ class LatticeSuite extends FunSuite {
       assert(false)
     } catch {
       case lve: NotMonotonicException[_] => assert(true)
-      case e: Exception => assert(false)
+      case e: Exception                  => assert(false)
     }
 
     try {
@@ -151,7 +151,7 @@ class LatticeSuite extends FunSuite {
       assert(false)
     } catch {
       case lve: NotMonotonicException[_] => assert(true)
-      case e: Exception => assert(false)
+      case e: Exception                  => assert(false)
     }
   }
 }

@@ -1,7 +1,11 @@
 lib/target/
-project/target/
 target/
 reactive-async.iws
 reactive-async.ipr
 .idea
 *~
+
+.metals/
+.bloop/
+.bsp/
+project/metals.sbt
